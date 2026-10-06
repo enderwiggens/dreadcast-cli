@@ -85,7 +85,7 @@ enum SceneCommand {
         var frames = 0
         Console.write(TerminalControl.clearScreen)
         while true {
-            if let current = TerminalInfo.windowSize(), current != size {
+            if let current = TerminalInfo.windowSize(), current != size || raw.takeResumed() {
                 size = current
                 previous = nil
                 previousText = []

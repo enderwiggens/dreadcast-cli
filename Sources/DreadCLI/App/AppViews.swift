@@ -43,6 +43,14 @@ class ScrollingView: AppView {
         ["", "  " + f.ctx.styler.paint("Loading \(what)…", Theme.faint)]
     }
 
+    /// Pixel art needs 256 colors; with fewer (or NO_COLOR), say so instead of drawing
+    /// uncolored blocks.
+    static func needsColor(_ f: AppFrame) -> [String]? {
+        guard f.ctx.styler.mode < .ansi256 else { return nil }
+        return ["", "  This view draws pixel art, which needs a terminal with 256 colors or more.",
+                "  Colors are off here (NO_COLOR, --no-color, or a basic terminal). The other views still work."]
+    }
+
     /// The width text views lay themselves out in.
     static func textWidth(_ f: AppFrame, maximum: Int = 100) -> Int { min(f.width - 1, maximum) }
 }
@@ -52,6 +60,8 @@ class ScrollingView: AppView {
 /// The quick look: your scene, conditions, alerts, the next two hours and five days.
 final class NowView: ScrollingView {
     override var interval: Double { 1 }
+    /// When the scene first appeared, for the wordmark that greets you.
+    var greeted: Double?
 
     override func content(_ f: AppFrame) -> [String] {
         let snapshot = f.snapshot
@@ -59,10 +69,13 @@ final class NowView: ScrollingView {
             return Self.loading("conditions", f)
         }
         // The banner appears once the body has room for it and everything below it.
+        let since = f.elapsed - (greeted ?? f.elapsed)
+        if greeted == nil { greeted = f.elapsed }
         return NowCommand.pretty(place: f.place, weather: weather, alerts: alerts,
                                  lightning: snapshot.lightningConfigured ? snapshot.lightning : nil,
                                  nowcast: snapshot.nowcast?.value, ctx: f.ctx, width: Self.textWidth(f, maximum: 96),
-                                 rows: f.height + 5, sceneTime: (f.elapsed / 4).rounded(.down) * 4)
+                                 rows: f.height + 5, sceneTime: (f.elapsed / 4).rounded(.down) * 4,
+                                 wordmark: Wordmark.opacity(after: since))
     }
 }
 
@@ -197,7 +210,7 @@ final class LightningView: ScrollingView {
         let st = f.ctx.styler
         guard f.snapshot.lightningConfigured else {
             return ["", "  " + st.paint("LIGHTNING", Theme.porcelain, bold: true), "",
-                    "  Lightning uses your own Xweather account; dreadcast has no server of its own.",
+                    "  Lightning uses your own Xweather account.",
                     "  Add credentials with " + st.paint("dread auth xweather", Theme.lamp) + ", then strikes appear here,",
                     "  on the Now and Radar tabs, and in Systems."]
         }
@@ -252,6 +265,7 @@ final class RadarView: AppView, @unchecked Sendable {
     static let hudRows = 3
 
     func body(_ f: AppFrame) -> AppBody {
+        if let note = ScrollingView.needsColor(f) { return .lines(note) }
         let rows = max(4, f.height - Self.hudRows)
         let place = Context.placeKey(f.place)
         let key = "\(place) \(f.width)x\(rows)x\(range)"
@@ -357,6 +371,7 @@ final class SceneView: AppView {
     var hints: [(String, String)] { [("←/→", "scene"), ("t", "time of day"), ("space", paused ? "play" : "pause")] }
 
     func body(_ f: AppFrame) -> AppBody {
+        if let note = ScrollingView.needsColor(f) { return .lines(note) }
         let chosen = scene ?? SceneCommand.configuredScene(f.ctx, timeZone: f.zone)
         scene = chosen
         let period = fixedPeriod ?? ScenePeriod.at(f.ctx.now, timeZone: f.zone)

@@ -27,7 +27,10 @@ public final class Context: @unchecked Sendable {
     public let cache: DiskCache
     /// Created on first use so fast commands like `prompt` skip the tile directory.
     public lazy var tiles = DiskTileStore(directory: paths.cacheDirectory.appendingPathComponent("radar", isDirectory: true))
-    public private(set) var now: Date
+    private let clockLock = NSLock()
+    private var clock: Date
+    /// The time for this run. Background fetches read it while the app's loop advances it.
+    public var now: Date { clockLock.withLock { clock } }
 
     public init(arguments: Arguments,
                 environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -55,10 +58,10 @@ public final class Context: @unchecked Sendable {
         styler = Styler(mode: colors)
         self.http = http
         cache = DiskCache(directory: paths.cacheDirectory)
-        self.now = now
+        self.clock = now
     }
 
-    public func refreshClock() { now = Date() }
+    public func refreshClock() { clockLock.withLock { clock = Date() } }
 
     // MARK: Preferences
 
@@ -97,18 +100,39 @@ public final class Context: @unchecked Sendable {
 
     // MARK: Output
 
+    /// Collects output instead of writing it, for tests.
+    public final class OutputBuffer: @unchecked Sendable {
+        private let lock = NSLock()
+        private var out = "", err = ""
+        public init() {}
+        public var text: String { lock.withLock { out } }
+        public var errors: String { lock.withLock { err } }
+        func append(_ text: String, error: Bool) { lock.withLock { if error { err += text } else { out += text } } }
+    }
+
+    /// When set, output goes here instead of standard output and standard error.
+    public var output: OutputBuffer?
+
+    func emit(_ text: String) {
+        if let output { output.append(text, error: false) } else { Console.write(text) }
+    }
+
+    func emitError(_ text: String) {
+        if let output { output.append(text, error: true) } else { Console.writeError(text) }
+    }
+
     public func write(_ lines: [String]) {
-        Console.write(lines.joined(separator: "\n") + "\n")
+        emit(lines.joined(separator: "\n") + "\n")
     }
 
     public func write(_ line: String) {
-        Console.write(line + "\n")
+        emit(line + "\n")
     }
 
     public func writeJSON<T: Encodable>(_ value: T) {
         let encoder = JSONEncoder.dreadcast
         guard let data = try? encoder.encode(value), let text = String(data: data, encoding: .utf8) else { return }
-        Console.write(text + "\n")
+        emit(text + "\n")
     }
 
     public func fail(_ message: String, code: ExitCode) -> ExitCode {
@@ -116,7 +140,7 @@ public final class Context: @unchecked Sendable {
             struct ErrorBody: Encodable { let error: String; let code: Int32 }
             writeJSON(ErrorBody(error: message, code: code.rawValue))
         } else {
-            Console.writeError(styler.paint("dread: ", Theme.faint) + message + "\n")
+            emitError(styler.paint("dread: ", Theme.faint) + message + "\n")
         }
         return code
     }

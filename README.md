@@ -3,9 +3,9 @@
 **Weather and radar for the command line.** *There’s a lot in the forecast.*
 
 `dread` is a standalone, open-source companion to **Dreadcast: Weather & Radar**, the
-Mac menu-bar weather app. It doesn’t need the app, an account or a server: it reads
-forecasts, radar and alerts straight from public providers, with the source and age of
-every reading attached. It draws animated radar in your terminal, tells you when rain
+Mac menu-bar weather app. It doesn’t need the app or an account. It reads forecasts,
+radar and alerts from public weather providers, with the source and age of every
+reading attached. It draws animated radar in your terminal, tells you when rain
 will arrive, lists active warnings in full, fits a forecast into your shell prompt, and
 brings Dreadcast’s scenes along as pixel art.
 
@@ -32,6 +32,10 @@ curl -sSL https://github.com/enderwiggens/dreadcast-cli/releases/latest/download
 unzip dread.zip && sudo mv dread /usr/local/bin/
 dread setup
 ```
+
+The binary isn’t notarized yet. Downloads made with `curl` or Homebrew run as is; if you
+download the zip in a browser, macOS blocks it until you clear the quarantine flag with
+`xattr -d com.apple.quarantine dread`.
 
 ### Linux
 
@@ -83,14 +87,15 @@ The screenshots below are real runs, captured from the terminal.
 
 ### The app: `dread`
 
-`dread` opens a full-screen app with a tab for each view: **Now**, **Systems**,
-**Radar**, **Forecast**, **Alerts**, **Outlook**, **Lightning** and **Scene**. Tab,
-Shift-Tab or 1–8 switch views, ↑/↓ scroll or select, `r` refreshes and `q` quits.
-Every tab reads the same live data, and each source refreshes on its own schedule and
-fails on its own, so switching tabs never waits on the network. A new alert shows in
-the header whichever tab is open, with a count on the Alerts tab.
+`dread` opens a full-screen app with a tab for each view: **1 Now**, **2 Radar**,
+**3 Systems**, **4 Forecast**, **5 Alerts**, **6 Outlook**, **7 Lightning** and
+**8 Scene**. Tab, Shift-Tab or the number keys switch views, ↑/↓ scroll or select, `r`
+refreshes, Ctrl-Z suspends and `q` quits. Every tab reads the same live data, and each
+source refreshes on its own schedule and fails on its own, so switching tabs never
+waits on the network. A new alert shows in the header whichever tab is open, with a
+count on the Alerts tab. The app needs a window at least 60 columns by 16 rows.
 
-Save more than one place and a ninth tab, **Places**, lists them all with conditions,
+Save more than one place and a ninth tab, **9 Places**, lists them all with conditions,
 alerts, rain timing and today’s range. `[` and `]` switch places from any tab, Enter
 on a row shows that place in full, and an alert at any place shows in the header with
 its name; `a` jumps to it.
@@ -126,7 +131,7 @@ palettes and used for timing. The basemap is Natural Earth data built into the b
 
 ### Alerts: `dread alerts`
 
-![dread alerts showing an active NWS Flood Watch in full](docs/images/alerts.png)
+![dread alerts showing an active NWS Flood Warning in full](docs/images/alerts.png)
 
 Active NWS watches, warnings and advisories for your location, in full, with the
 official instructions. `--follow` streams changes; `--fail-on` sets exit codes for
@@ -163,7 +168,7 @@ The place you’re viewing gets everything, from radar to wildfires and lightnin
 switching places shows it in full within moments. Up to eight places; each is sent to
 Open-Meteo and the NWS on those refreshes, rounded to about 1 km.
 
-### Systems: the app’s second tab
+### Systems: the app’s third tab
 
 ![The Systems tab listing nearby weather systems like processes](docs/images/top.png)
 
@@ -247,7 +252,7 @@ when = true
 
 | Command | What it does |
 | --- | --- |
-| `dread` | The app: Now, Systems, Radar, Forecast, Alerts, Outlook, Lightning and Scene tabs |
+| `dread` | The app: Now, Radar, Systems, Forecast, Alerts, Outlook, Lightning and Scene tabs |
 | `dread now`, `dread weather` | A quick look: your scene, conditions, alerts, the next two hours, lightning and five days |
 | `dread radar` | Animated radar loop with ranges, palettes and lightning ages |
 | `dread alerts` | Active NWS watches, warnings and advisories in full |
@@ -260,7 +265,7 @@ when = true
 | `dread lightning` | Strike map in Braille dots (needs your own Xweather account) |
 | `dread prompt` | A cached segment for shell prompts and status lines |
 | `dread setup` | Choose a location: ZIP code, place name or `lat,lon` |
-| `dread auth xweather` | Save optional lightning credentials to the Keychain |
+| `dread auth xweather` | Save optional lightning credentials (the Keychain on macOS, a private file on Linux) |
 | `dread config` | Show or change preferences |
 | `dread credits` | Data sources and licenses |
 
@@ -274,15 +279,32 @@ Run `dread help <command>` for options. Every command accepts `--location`,
 | Exit | Meaning |
 | --- | --- |
 | 0 | Nothing at or above the `--fail-on` level |
-| 1 | An alert at or above the level is active |
+| 1 | An alert at or above the level is active (with `--all`, at any saved place) |
 | 2 | Usage error |
-| 3 | Data unavailable or stale. Never reported as all clear |
+| 3 | Data unavailable or stale (with `--all`, for any US place). Never reported as all clear |
 | 4 | No location yet; run `dread setup` |
 
 ```sh
 dread alerts --fail-on severe && ./start-field-crew.sh
 dread alerts --follow --json | jq -r '"\(.type): \(.alert.event)"'
+dread alerts --all --follow --json | jq -r '"\(.place): \(.type) \(.alert.event)"'
+dread now --all --json | jq -r '.places[] | "\(.name) \(.now.conditions.temperature)"'
 ```
+
+Other commands exit 0 on success, 2 on a usage error, 3 when their data is unavailable
+and 4 before setup.
+
+### Environment
+
+| Variable | Effect |
+| --- | --- |
+| `DREADCAST_LOCATION` | A location for this run: a saved place's name, ZIP code, place name or `lat,lon` |
+| `DREADCAST_CONFIG_DIR`, `DREADCAST_CACHE_DIR` | Where preferences and the cache live (otherwise `XDG_CONFIG_HOME` and `XDG_CACHE_HOME`, then the platform defaults) |
+| `DREADCAST_XWEATHER_CLIENT_ID`, `DREADCAST_XWEATHER_CLIENT_SECRET` | Lightning credentials, instead of saved ones (`XWEATHER_CLIENT_ID` and `XWEATHER_CLIENT_SECRET` also work) |
+| `DREADCAST_CREDENTIAL_STORE=none` | Ignore saved credentials, for CI and tests |
+| `NO_COLOR` | No color. `FORCE_COLOR` or `CLICOLOR_FORCE` keep it when piped |
+| `DREAD_GRAPHICS` | Force a graphics protocol for radar: `kitty`, `iterm2` or `none` |
+| `DREAD_REDUCE_MOTION=1` | Still frames instead of animation (macOS also follows Reduce Motion) |
 
 ## How it draws
 
@@ -306,9 +328,9 @@ readable only by you, instead of the macOS Keychain.
 
 ## Data and privacy
 
-dreadcast has no account, no server and no analytics. Requests go directly from your
-machine to each provider, and coordinates are rounded to two decimal places (about
-1 km) before they are stored or sent. See [docs/PRIVACY.md](docs/PRIVACY.md) and
+dreadcast needs no account and has no analytics. This version requests data directly
+from each provider, and coordinates are rounded to two decimal places (about 1 km)
+before they are stored or sent. See [docs/PRIVACY.md](docs/PRIVACY.md) and
 [docs/DATA_PROVIDERS.md](docs/DATA_PROVIDERS.md).
 
 | Data | Provider |
@@ -332,7 +354,7 @@ the outlook work worldwide.
 ## Development
 
 ```sh
-scripts/test.sh                  # deterministic tests; no network
+scripts/test.sh                  # the test suite; never touches the network
 swift run dread --location 33602 # try it
 scripts/build-basemap.py         # regenerate the embedded Natural Earth basemap
 scripts/docs-images/capture.sh   # regenerate the README screenshots from live runs
@@ -340,8 +362,13 @@ scripts/docs-images/capture.sh   # regenerate the README screenshots from live r
 
 The package has three libraries: `DreadcastKit` (providers, decoders, models),
 `DreadTerminal` (capabilities, color, rasters, pixel art, image protocols) and
-`DreadCLI` (commands, scenes, configuration, cache, output). See
+`DreadCLI` (commands, the app, scenes, configuration, cache, output). See
 [CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md).
+
+The test suite covers provider decoding, rendering, the app's views and keys, and every
+main command end to end, from argument parsing to exit codes, with provider responses
+stubbed. It runs on macOS and Linux in CI, which also builds and smoke-tests the
+static Linux binaries.
 
 ## License and trademark
 

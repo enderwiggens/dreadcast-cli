@@ -73,13 +73,13 @@ enum NowCommand {
     /// animates the banner in slow steps instead of a still frame.
     static func pretty(place: Place, weather: Fetched<WeatherReport>, alerts: Fetched<[WeatherAlert]>,
                        lightning: Fetched<LightningSnapshot>?, nowcast: Nowcast?, ctx: Context,
-                       width requested: Int? = nil, rows: Int? = nil, sceneTime: Double? = nil) -> [String] {
+                       width requested: Int? = nil, rows: Int? = nil, sceneTime: Double? = nil, wordmark: Double = 0) -> [String] {
         let s = ctx.styler
         let width = requested ?? min(max(ctx.terminal.columns - 2, 60), 86)
         let report = weather.value
         let fmt = Formatter(units: ctx.units, timeZone: report?.timeZone ?? ctx.timeZone(for: place))
         var lines: [String] = [""]
-        let art = banner(place: place, alerts: alerts, report: report, ctx: ctx, width: width, rows: rows, sceneTime: sceneTime)
+        let art = banner(place: place, alerts: alerts, report: report, ctx: ctx, width: width, rows: rows, sceneTime: sceneTime, wordmark: wordmark)
         if !art.isEmpty { lines.append(contentsOf: art + [""]) }
 
         let brand = "  " + s.paint("DREADCAST", Theme.porcelain, bold: true) + s.paint("  ·  ", Theme.faint) + place.name
@@ -162,7 +162,7 @@ enum NowCommand {
     /// Your scene as a strip above the readings. It is decorative, so it steps aside
     /// for active or unknown alerts, plain output and short terminals.
     static func banner(place: Place, alerts: Fetched<[WeatherAlert]>, report: WeatherReport?, ctx: Context, width: Int,
-                       rows: Int? = nil, sceneTime: Double? = nil) -> [String] {
+                       rows: Int? = nil, sceneTime: Double? = nil, wordmark: Double = 0) -> [String] {
         guard ctx.styler.mode >= .ansi256, !ctx.arguments.has("no-scene"), width >= 50,
               (rows ?? ctx.terminal.rows) >= bannerMinimumRows else { return [] }
         if place.isUnitedStates, alerts.value?.isEmpty != true { return [] }
@@ -170,9 +170,10 @@ enum NowCommand {
         guard ctx.config.sceneBanner else { return [] }
         let scene = SceneCommand.configuredScene(ctx, timeZone: zone)
         let period = ScenePeriod.at(ctx.now, timeZone: zone)
-        let strip = ScenePainter(scene: scene, period: period, time: sceneTime ?? 0, still: sceneTime == nil || ctx.terminal.reduceMotion,
+        var strip = ScenePainter(scene: scene, period: period, time: sceneTime ?? 0, still: sceneTime == nil || ctx.terminal.reduceMotion,
                                  moon: LunarPhase(at: ctx.now), layout: .strip)
             .paint(width: width - 2, height: 20)
+        Wordmark.draw(on: &strip, opacity: wordmark)
         return HalfBlockFrame(raster: strip).lines(styler: ctx.styler).map { "  " + $0 }
     }
 

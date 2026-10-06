@@ -7,10 +7,11 @@
 - Linux support (x86_64 and arm64), with fully static release binaries.
 - A release workflow that builds the macOS universal binary and the Linux binaries for
   each tag.
-- `dread` opens a full-screen app with tabs for Now, Systems, Radar, Forecast, Alerts,
+- `dread` opens a full-screen app with tabs for Now, Radar, Systems, Forecast, Alerts,
   Outlook, Lightning and Scene. Every tab shares one set of live data, refreshed per
   source, and a new alert shows in the header whichever tab is open. `dread top <view>`
-  opens on a view by name or number.
+  opens on a view by name or number. The DREADCAST wordmark greets you in the Now tab's
+  scene, then fades. Ctrl-Z suspends the app and `fg` brings it back redrawn.
 - Saved places: `dread places add|remove|default|rename`, up to eight, each usable as
   `--location <name>`. The app watches all of them, alerts every 2 minutes and
   conditions every 10, and gives the place you're viewing every source. A Places tab
@@ -30,6 +31,12 @@
 - `dread weather` as another name for `dread`.
 - README examples of every main command, captured from live runs, and the script that
   regenerates them.
+- Install instructions for macOS and Linux: Homebrew, release downloads and building
+  from source. `scripts/homebrew-formula.sh` writes the formula for a release.
+- End-to-end command tests that run each main command with provider responses
+  stubbed, covering output, JSON shapes, exit codes, offline behavior and rounding of
+  coordinates in requests.
+- `DREADCAST_CREDENTIAL_STORE=none` ignores saved lightning credentials, for CI.
 
 ### Changed
 
@@ -47,6 +54,11 @@
 ### Fixed
 
 - The `dread eta` footer wraps to the terminal width.
+- Full-screen views no longer quit when an arrow key's escape sequence arrives split, as
+  it can over SSH, or when Alt is held with a key.
+- Keys that arrive together, from key repeat or a paste, are no longer dropped.
+- A window smaller than the app needs shows a note instead of wrapped output, and the
+  pixel-art views explain themselves when colors are off.
 
 ## 0.1.0 — 2026-10-06
 

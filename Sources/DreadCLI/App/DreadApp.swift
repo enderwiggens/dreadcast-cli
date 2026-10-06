@@ -4,13 +4,13 @@ import DreadTerminal
 
 /// The app's views, one tab each.
 enum AppTab: Int, CaseIterable, Sendable {
-    case now, systems, radar, forecast, alerts, outlook, lightning, scene, places
+    case now, radar, systems, forecast, alerts, outlook, lightning, scene, places
 
     var title: String {
         switch self {
         case .now: "Now"
-        case .systems: "Systems"
         case .radar: "Radar"
+        case .systems: "Systems"
         case .forecast: "Forecast"
         case .alerts: "Alerts"
         case .outlook: "Outlook"
@@ -99,6 +99,8 @@ extension AppView {
 enum DreadApp {
     static let headerRows = 3
     static let footerRows = 2
+    /// The smallest window the app draws in; below it, it asks for more room.
+    static let minimumSize = (columns: 60, rows: 16)
 
     static func run(_ ctx: Context, tab start: AppTab) async throws -> ExitCode {
         let primary = try await ctx.resolveLocation()
@@ -133,10 +135,12 @@ enum DreadApp {
         var lastDraw = Date.distantPast
         Console.write(TerminalControl.clearScreen)
 
+        func windowSize() -> (Int, Int) { TerminalInfo.windowSize() ?? (ctx.terminal.columns, ctx.terminal.rows) }
         func frame() -> AppFrame {
-            let size = TerminalInfo.windowSize() ?? (ctx.terminal.columns, ctx.terminal.rows)
-            return AppFrame(ctx: ctx, place: places[selected].place, snapshot: states[selected].snapshot, width: max(60, size.0),
-                            height: max(4, max(12, size.1) - headerRows - footerRows), elapsed: Date().timeIntervalSince(started),
+            let size = windowSize()
+            return AppFrame(ctx: ctx, place: places[selected].place, snapshot: states[selected].snapshot,
+                            width: max(minimumSize.columns, size.0),
+                            height: max(minimumSize.rows, size.1) - headerRows - footerRows, elapsed: Date().timeIntervalSince(started),
                             places: places.count > 1 ? zip(places, states).map { Watched(saved: $0, snapshot: $1.snapshot) } : [],
                             selected: selected)
         }
@@ -160,9 +164,18 @@ enum DreadApp {
                                     only: sources(for: i, selected: selected, tab: tab, highlighted: placesView.highlighted))
             }
             let view = views[tab]!
+            // Back from Ctrl-Z: the screen was handed back, so draw all of it again.
+            if raw.takeResumed() {
+                screen.reset()
+                lastDraw = .distantPast
+            }
             if Date().timeIntervalSince(lastDraw) >= view.interval {
-                let current = frame()
-                Console.write(screen.draw(tab: tab, view: view, frame: current, styler: ctx.styler))
+                let size = windowSize()
+                if size.0 < minimumSize.columns || size.1 < minimumSize.rows {
+                    Console.write(screen.tooSmall(columns: size.0, rows: size.1, styler: ctx.styler))
+                } else {
+                    Console.write(screen.draw(tab: tab, view: view, frame: frame(), styler: ctx.styler))
+                }
                 lastDraw = Date()
             }
             guard let key = raw.readKey(timeout: min(0.2, view.interval)) else { continue }
@@ -277,6 +290,19 @@ struct AppScreen {
     mutating func reset() {
         rows = []
         pixels = nil
+    }
+
+    /// A short note in place of the app while the window is too small, drawn once per size.
+    mutating func tooSmall(columns: Int, rows height: Int, styler s: Styler) -> String {
+        let note = "\u{0}small \(columns)x\(height)"
+        guard rows != [note] else { return "" }
+        rows = [note]
+        pixels = nil
+        let need = "\(DreadApp.minimumSize.columns)×\(DreadApp.minimumSize.rows)"
+        let lines = ["dread needs a window at least \(need).", "This one is \(columns)×\(height). q quits."]
+        return Styler.reset + TerminalControl.clearScreen + lines.enumerated().map { i, line in
+            TerminalControl.moveTo(row: i + 1, column: 1) + s.paint(TextWidth.truncate(line, to: max(1, columns - 1)), i == 0 ? Theme.porcelain : Theme.faint)
+        }.joined()
     }
 
     mutating func draw(tab: AppTab, view: AppView, frame f: AppFrame, styler s: Styler) -> String {

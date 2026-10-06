@@ -240,8 +240,7 @@ enum CreditsCommand {
             lines.append("  " + s.bold(TextWidth.pad(name, to: 24)) + detail)
             lines.append("  " + String(repeating: " ", count: 24) + s.paint(url, Theme.faint))
         }
-        lines.append(contentsOf: ["", "  Requests go straight from this machine to each provider. dreadcast has no",
-                                  "  account, server or analytics. Locations are rounded to two decimals first.", ""])
+        lines.append(contentsOf: ["", "  Locations are rounded to two decimals (about 1 km) before they're stored or sent.", ""])
         ctx.write(lines)
         return .ok
     }

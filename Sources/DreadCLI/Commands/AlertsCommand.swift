@@ -74,7 +74,7 @@ enum AlertsCommand {
                 var message = "\(worst.event)"
                 if let end = worst.endsOrExpires { message += " until \(fmt.until(end, now: ctx.now)) \(fmt.zoneAbbreviation(end))" }
                 if let sender = worst.sender { message += " (\(sender))" }
-                Console.writeError(ctx.styler.paint("dread: ", Theme.faint) + ctx.styler.paint(message, NowCommand.alertColor(worst)) + ". Exit 1.\n")
+                ctx.emitError(ctx.styler.paint("dread: ", Theme.faint) + ctx.styler.paint(message, NowCommand.alertColor(worst)) + ". Exit 1.\n")
             }
             return .alertActive
         }
@@ -173,7 +173,7 @@ enum AlertsCommand {
                     let fmt = Formatter(units: ctx.units, timeZone: ctx.timeZone(for: saved.place))
                     var message = "\(worst.event) at \(saved.name) (\(saved.place.name))"
                     if let end = worst.endsOrExpires { message += " until \(fmt.until(end, now: ctx.now)) \(fmt.zoneAbbreviation(end))" }
-                    Console.writeError(ctx.styler.paint("dread: ", Theme.faint) + ctx.styler.paint(message, NowCommand.alertColor(worst)) + ". Exit 1.\n")
+                    ctx.emitError(ctx.styler.paint("dread: ", Theme.faint) + ctx.styler.paint(message, NowCommand.alertColor(worst)) + ". Exit 1.\n")
                 }
                 return .alertActive
             }
@@ -255,7 +255,7 @@ enum AlertsCommand {
             let encoder = JSONEncoder.dreadcast
             encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
             if let data = try? encoder.encode(Event(type: kind, at: ctx.now, place: place, alert: AlertJSON(alert))), let text = String(data: data, encoding: .utf8) {
-                Console.write(text + "\n")
+                ctx.emit(text + "\n")
             }
         case .plain:
             ctx.write("\(fmt.time(ctx.now)) \(kind): " + (place.map { "\($0): " } ?? "") + alert.event

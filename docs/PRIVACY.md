@@ -1,7 +1,7 @@
 # Privacy
 
-dreadcast runs entirely on your machine. It has no account, no server, no analytics
-and no crash reporting.
+dreadcast runs on your machine. This version has no account, analytics or crash
+reporting, and it requests data directly from each provider below.
 
 ## What is sent, and where
 

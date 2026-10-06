@@ -17,6 +17,8 @@ public enum Credentials {
         if let id, let secret, !id.isEmpty, !secret.isEmpty {
             return LightningCredentials(clientID: id, clientSecret: secret)
         }
+        // DREADCAST_CREDENTIAL_STORE=none ignores saved credentials, for tests and CI.
+        guard environment["DREADCAST_CREDENTIAL_STORE"] != "none" else { return nil }
         guard let storedID = read(idAccount), let storedSecret = read(secretAccount),
               !storedID.isEmpty, !storedSecret.isEmpty else { return nil }
         return LightningCredentials(clientID: storedID, clientSecret: storedSecret)

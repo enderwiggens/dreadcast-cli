@@ -123,6 +123,21 @@ struct RenderingTests {
         #expect(RawTerminal.parse([27, 91, 54, 126]) == .pageDown)
         #expect(RawTerminal.parse([27, 91, 72]) == .home)
     }
+
+    /// Several keys can arrive in one read: key repeat, fast typing or a paste.
+    @Test func inputSplitsIntoKeys() {
+        #expect(RawTerminal.keys(Array("jj".utf8)) == [.character("j"), .character("j")])
+        #expect(RawTerminal.keys([27, 91, 66, 27, 91, 66]) == [.down, .down])
+        #expect(RawTerminal.keys([27, 91, 53, 126, 113]) == [.pageUp, .character("q")])
+        #expect(RawTerminal.keys(Array("é]".utf8)) == [.character("é"), .character("]")])
+        // SS3 arrows, from terminals in application mode.
+        #expect(RawTerminal.keys([27, 79, 65]) == [.up])
+        // Alt with a key never reads as Esc, which would quit.
+        #expect(RawTerminal.keys([27, 113]) == [.character("q")])
+        #expect(RawTerminal.keys([27]) == [.escape])
+        #expect(RawTerminal.keys([9, 13, 3]) == [.tab, .enter, .interrupt])
+        #expect(RawTerminal.keys([]) == [])
+    }
 }
 
 @Suite("Compression")

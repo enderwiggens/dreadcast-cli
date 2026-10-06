@@ -15,7 +15,8 @@ not yet notarized; Homebrew installs them without a Gatekeeper prompt.
    git push origin v0.2.0
    ```
 
-   `.github/workflows/release.yml` builds:
+   `.github/workflows/release.yml` builds these and attaches each, with a `.sha256`
+   checksum, to the GitHub release:
 
    - `dread-macos-universal.zip` (Apple silicon and Intel)
    - `dread-linux-x86_64.tar.gz` and `dread-linux-arm64.tar.gz` (fully static, built with
@@ -23,11 +24,16 @@ not yet notarized; Homebrew installs them without a Gatekeeper prompt.
 
    File names carry no version, so `releases/latest/download/<file>` links stay valid;
    the tag in each URL identifies the release.
+4. Once all six files are on the release, generate the formula from their checksums
+   and commit it to [homebrew-dreadcast](https://github.com/enderwiggens/homebrew-dreadcast):
 
-   and attaches each file with a `.sha256` checksum to the GitHub release.
-4. Update `Formula/dreadcast.rb` in
-   [homebrew-dreadcast](https://github.com/enderwiggens/homebrew-dreadcast) with the new
-   version, URLs and checksums, and check that `brew install` and `brew test` pass.
+   ```sh
+   scripts/homebrew-formula.sh 0.2.0 > ../homebrew-dreadcast/Formula/dreadcast.rb
+   brew install --build-from-source ../homebrew-dreadcast/Formula/dreadcast.rb && brew test dreadcast
+   ```
+
+   The formula installs the universal binary on macOS and the matching static binary on
+   Linux (x86_64 or arm64).
 
 ## Building locally
 

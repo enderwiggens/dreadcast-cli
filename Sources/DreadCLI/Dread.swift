@@ -12,7 +12,12 @@ public enum Dread {
             Console.writeError("dread: \(error.userMessage)\n")
             return .usage
         }
-        let context = Context(arguments: arguments)
+        return await dispatch(Context(arguments: arguments))
+    }
+
+    /// Runs the command named in the context's arguments.
+    static func dispatch(_ context: Context) async -> ExitCode {
+        let arguments = context.arguments
         if arguments.has("help") || arguments.command == "help" {
             let topic = arguments.command == "help" ? arguments.positionals.first : arguments.command
             context.write(Help.text(for: topic, styler: context.styler))
@@ -140,7 +145,7 @@ enum Help {
             \(title) — the app
 
               dread                        opens on Now
-              dread top [view]             opens on a view: now, systems, radar, forecast,
+              dread top [view]             opens on a view: now, radar, systems, forecast,
                                            alerts, outlook, lightning, scene or places (or 1–9)
               dread -l <name>              opens on a saved place
 
@@ -204,7 +209,7 @@ enum Help {
             \(title) — weather and radar for the command line. \(styler.paint("There’s a lot in the forecast.", Theme.lamp, italic: true))
 
             \(styler.bold("Every day"))
-              dread                        the app: now, systems, radar, forecast, alerts,
+              dread                        the app: now, radar, systems, forecast, alerts,
                                            outlook, lightning and your scene, one tab each
               dread now                    a quick look: your scene, conditions, alerts, the
                                            next two hours and five days (also: dread weather)
@@ -230,8 +235,8 @@ enum Help {
               --location <query>           ZIP code, place name or lat,lon
               --units imperial|metric      --json   --plain   --no-color   --ascii
 
-            Run `dread help <command>` for details. Readings come straight from public
-            providers; dreadcast has no account and no server.
+            Run `dread help <command>` for details. Every reading shows its source and age,
+            and `dread credits` lists the providers.
             """
         }
     }
