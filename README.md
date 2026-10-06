@@ -1,4 +1,4 @@
-# dreadcast
+# Dreadcast cli
 
 **Weather and radar for the command line.** *There’s a lot in the forecast.*
 
