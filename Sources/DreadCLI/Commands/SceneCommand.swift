@@ -189,7 +189,7 @@ enum SceneCommand {
     static func still(scene: SceneID, period: ScenePeriod, readings: Readings, ctx: Context) -> [String] {
         let width = min(max(40, ctx.terminal.columns - 4), 132)
         let rows = max(8, Int((Double(width) / 6).rounded()))
-        let raster = ScenePainter(scene: scene, period: period, time: 0, still: true, moon: LunarPhase(at: ctx.now))
+        let raster = ScenePainter(scene: scene, period: period, time: 0, still: true, moon: LunarPhase(at: ctx.now), layout: .panorama)
             .paint(width: width, height: rows * 2)
         var lines = [""] + HalfBlockFrame(raster: raster).lines(styler: ctx.styler).map { "  " + $0 }
         lines.append("")
@@ -208,7 +208,16 @@ enum SceneCommand {
             columns = parts[0]
             rows = parts[1]
         }
-        let raster = ScenePainter(scene: scene, period: period, time: 0, still: true, moon: LunarPhase(at: ctx.now))
+        var layout = SceneLayout.window
+        if let name = ctx.arguments.value("layout") {
+            guard let chosen = SceneLayout(rawValue: name.lowercased()) else {
+                return ctx.fail("--layout must be window, panorama or strip.", code: .usage)
+            }
+            layout = chosen
+        }
+        let at = ctx.arguments.double("at")
+        let raster = ScenePainter(scene: scene, period: period, time: at ?? 0, still: at == nil, moon: LunarPhase(at: ctx.now),
+                                  layout: layout)
             .paint(width: columns, height: rows * 2)
         // Each pixel becomes an 8×8 block, so the file looks like the terminal.
         let scale = 8

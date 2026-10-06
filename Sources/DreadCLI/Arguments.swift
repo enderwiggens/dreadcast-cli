@@ -15,7 +15,7 @@ public struct Arguments: Sendable {
 
     static let valueOptions: Set<String> = [
         "location", "units", "range", "palette", "renderer", "frames", "loops", "hours", "fail-on",
-        "radius", "format", "min-dbz", "interval", "width", "client-id", "client-secret", "time", "size", "png"
+        "radius", "format", "min-dbz", "interval", "width", "client-id", "client-secret", "time", "size", "png", "layout", "at"
     ]
 
     static let booleanFlags: Set<String> = [

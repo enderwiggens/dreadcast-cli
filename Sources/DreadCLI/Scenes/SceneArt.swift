@@ -12,16 +12,58 @@ public struct ScenePainter: Sendable {
     /// A composed frame for still output: brief accents such as lightning are posed, not timed.
     public let still: Bool
     public let moon: LunarPhase
+    public let layout: SceneLayout
 
-    public init(scene: SceneID, period: ScenePeriod, time: Double = 0, still: Bool = true, moon: LunarPhase) {
+    public init(scene: SceneID, period: ScenePeriod, time: Double = 0, still: Bool = true, moon: LunarPhase,
+                layout: SceneLayout = .window) {
         self.scene = scene
         self.period = period
         self.time = time
         self.still = still
         self.moon = moon
+        self.layout = layout
+    }
+
+    /// Scenes rebuilt for the terminal with the scene kit; the rest use the original painter.
+    static func kit(_ scene: SceneID) -> ((inout Stage) -> Void)? {
+        switch scene {
+        case .asteroid: AsteroidWatch.draw
+        case .uap: UAPInvasion.draw
+        default: nil
+        }
     }
 
     public func paint(width: Int, height: Int) -> Raster {
+        if let draw = Self.kit(scene) {
+            let scale = layout == .window ? Stage.scale(width: width, height: height) : 1
+            var stage = Stage(width: max(1, width / scale), height: max(1, height / scale), layout: layout,
+                              period: period, time: time, still: still, moon: moon)
+            draw(&stage)
+            guard scale > 1 else { return stage.raster }
+            var large = Raster(width: width, height: height)
+            for y in 0..<height {
+                for x in 0..<width { large[x, y] = stage.raster[min(x / scale, stage.w - 1), min(y / scale, stage.h - 1)] }
+            }
+            return large
+        }
+        if layout == .strip { return legacyStrip(width: width, height: height) }
+        return legacy(width: width, height: height)
+    }
+
+    /// The original painter has no strip composition: draw its 3:1 panorama and keep a
+    /// band around the scene's focus.
+    func legacyStrip(width: Int, height: Int) -> Raster {
+        let fullHeight = max(height, Int((Double(width) / 3).rounded()))
+        let full = legacy(width: width, height: fullHeight)
+        let top = max(0, min(fullHeight - height, Int(Double(fullHeight) * scene.bannerFocus) - height / 2))
+        var crop = Raster(width: width, height: height)
+        for y in 0..<height {
+            for x in 0..<width { crop[x, y] = full[x, top + y] }
+        }
+        return crop
+    }
+
+    func legacy(width: Int, height: Int) -> Raster {
         var canvas = SceneCanvas(width: width, height: height, time: time, period: period, still: still, moon: moon)
         switch scene {
         case .asteroid: canvas.asteroidWatch()

@@ -138,7 +138,8 @@ enum Help {
               --time <auto|dawn|day|dusk|night>
                                            auto follows the local hour, as in the app
               --still                      one composed frame, inline
-              --png <file>                 save the artwork as a PNG (--size 120x40)
+              --png <file>                 save the artwork as a PNG (--size 120x40,
+                                           --layout window|panorama|strip, --at <seconds>)
 
             Keys: ←/→ change scene, t cycles the time of day, i hides the readings,
             space pauses, q quits. Scenes are decorative and never describe the weather;

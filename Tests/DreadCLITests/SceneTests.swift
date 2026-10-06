@@ -46,14 +46,17 @@ struct SceneTests {
     }
 
     @Test func everySceneDrawsAtEverySize() {
-        let sizes = [(20, 8), (20, 10), (40, 14), (84, 20), (96, 32), (133, 82), (220, 120)]
+        let sizes = [(20, 8), (20, 10), (40, 14), (84, 20), (96, 32), (133, 82), (220, 120), (400, 180)]
         for scene in SceneID.allCases {
             for period in ScenePeriod.allCases {
                 for (width, height) in sizes {
-                    for time in [0.0, 13.7] {
-                        let raster = ScenePainter(scene: scene, period: period, time: time, still: time == 0, moon: Self.moon)
-                            .paint(width: width, height: height)
-                        #expect(raster.width == width && raster.height == height)
+                    for layout in SceneLayout.allCases {
+                        for time in [0.0, 13.7] {
+                            let raster = ScenePainter(scene: scene, period: period, time: time, still: time == 0, moon: Self.moon,
+                                                      layout: layout)
+                                .paint(width: width, height: height)
+                            #expect(raster.width == width && raster.height == height)
+                        }
                     }
                 }
             }

@@ -123,18 +123,9 @@ enum NowCommand {
         let zone = report?.timeZone ?? ctx.timeZone(for: place)
         guard let scene = SceneCommand.configuredScene(ctx, timeZone: zone) else { return [] }
         let period = ScenePeriod.at(ctx.now, timeZone: zone)
-        let artWidth = width - 2
-        let band = 20
-        // Draw the full 3:1 panorama, then keep a band around the scene's focus.
-        let fullHeight = max(band, Int((Double(artWidth) / 3).rounded()))
-        let full = ScenePainter(scene: scene, period: period, time: 0, still: true, moon: LunarPhase(at: ctx.now))
-            .paint(width: artWidth, height: fullHeight)
-        let top = max(0, min(fullHeight - band, Int(Double(fullHeight) * scene.bannerFocus) - band / 2))
-        var crop = Raster(width: artWidth, height: band)
-        for y in 0..<band {
-            for x in 0..<artWidth { crop[x, y] = full[x, top + y] }
-        }
-        return HalfBlockFrame(raster: crop).lines(styler: ctx.styler).map { "  " + $0 }
+        let strip = ScenePainter(scene: scene, period: period, time: 0, still: true, moon: LunarPhase(at: ctx.now), layout: .strip)
+            .paint(width: width - 2, height: 20)
+        return HalfBlockFrame(raster: strip).lines(styler: ctx.styler).map { "  " + $0 }
     }
 
     /// The banner adds eleven lines; below this height the readings would scroll away.
