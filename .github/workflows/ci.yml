@@ -46,5 +46,7 @@ jobs:
           swift build -c release --swift-sdk aarch64-swift-linux-musl
       - name: Smoke test
         run: |
-          ./.build/x86_64-swift-linux-musl/release/dread version
-          ./.build/x86_64-swift-linux-musl/release/dread help > /dev/null
+          BIN="$(swift build -c release --swift-sdk x86_64-swift-linux-musl --show-bin-path)"
+          file "$BIN/dread" || true
+          "$BIN/dread" version
+          "$BIN/dread" help > /dev/null
