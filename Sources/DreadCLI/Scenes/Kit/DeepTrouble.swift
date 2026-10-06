@@ -44,7 +44,7 @@ enum DeepTrouble {
     static func draw(_ s: inout Stage) {
         let tones = tones(s.period)
         let strip = s.layout == .strip
-        let water = strip ? 6 : (s.layout == .window ? 20 : 11)
+        let water = strip ? 6 : (s.fit == .window ? 20 : 11)
         let sea = s.h - water
         s.bands(tones.sky, bottom: sea + 1)
 
@@ -66,7 +66,7 @@ enum DeepTrouble {
         case .night:
             light = (s.w * 4 / 5, max(3, sea / 5))
             s.stars(above: sea - 3, density: 0.014, seed: 114)
-            s.moonDisc(x: light.x, y: light.y, radius: s.layout == .window ? 2 : 1)
+            s.moonDisc(x: light.x, y: light.y, radius: s.fit == .window ? 2 : 1)
         }
 
         // Cliffs across the bay, then the town on its hill.
@@ -93,7 +93,7 @@ enum DeepTrouble {
     /// Houses climbing the hill on the left, a church at the top. Returns lit window columns.
     static func town(_ s: inout Stage, sea: Int, tones: Tones, strip: Bool) -> [Int] {
         let width = Int(Double(s.w) * 0.32)
-        let peak = strip ? 5 : (s.layout == .window ? 18 : 10)
+        let peak = strip ? 5 : (s.fit == .window ? 18 : 10)
         func ground(_ x: Int) -> Int { sea - Int(Double(peak) * pow(max(0, 1 - Double(x) / Double(width)), 0.8)) }
         for x in 0..<width {
             for y in stride(from: ground(x), through: sea, by: 1) { s.raster.plot(x, y, tones.hill) }
@@ -171,7 +171,7 @@ enum DeepTrouble {
 
     static func creature(_ s: inout Stage, sea: Int, tones: Tones, strip: Bool) {
         let x = Int(Double(s.w) * 0.56)
-        let size = strip ? 0.5 : (s.layout == .window ? 1 : 0.7)
+        let size = strip ? 0.5 : (s.fit == .window ? 1 : 0.7)
         switch s.period {
         case .dawn:
             ripples(&s, x: x, y: sea + 3, size: size)

@@ -41,8 +41,8 @@ enum ClearForNow {
     static func draw(_ s: inout Stage) {
         let tones = tones(s.period)
         let strip = s.layout == .strip
-        let beach = strip ? 4 : (s.layout == .window ? 11 : 7)
-        let sea = strip ? 5 : (s.layout == .window ? 11 : 7)
+        let beach = strip ? 4 : (s.fit == .window ? 11 : 7)
+        let sea = strip ? 5 : (s.fit == .window ? 11 : 7)
         let shore = s.h - beach
         let horizon = shore - sea
         s.bands(tones.sky, bottom: horizon + 1)
@@ -66,11 +66,11 @@ enum ClearForNow {
         case .night:
             light = (s.w * 7 / 10, max(3, horizon / 4))
             s.stars(above: horizon - 2, density: 0.016, seed: 54)
-            s.moonDisc(x: light.x, y: light.y, radius: s.layout == .window ? 2 : 1)
+            s.moonDisc(x: light.x, y: light.y, radius: s.fit == .window ? 2 : 1)
         }
 
         // Headlands either side of the bay.
-        let tall = strip ? 3 : (s.layout == .window ? 8 : 5)
+        let tall = strip ? 3 : (s.fit == .window ? 8 : 5)
         for x in 0..<s.w {
             let left = 1 - Double(x) / (Double(s.w) * 0.3)
             let right = (Double(x) - Double(s.w) * 0.74) / (Double(s.w) * 0.26)

@@ -72,6 +72,10 @@ struct Stage {
         height >= 150 || width >= 360 ? 2 : 1
     }
 
+    /// The composition to size things for: a short window uses the panorama's
+    /// proportions so nothing is cut off or squashed.
+    var fit: SceneLayout { layout == .window && h < 48 ? .panorama : layout }
+
     var isNight: Bool { period == .night }
     var isEvening: Bool { period == .dusk || period == .night }
 

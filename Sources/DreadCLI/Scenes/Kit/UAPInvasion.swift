@@ -49,7 +49,7 @@ enum UAPInvasion {
         let tones = tones(s.period)
         let strip = s.layout == .strip
         let fenceHeight = strip ? 3 : 5
-        let fieldDepth = strip ? 4 : (s.layout == .window ? 9 : 6)
+        let fieldDepth = strip ? 4 : (s.fit == .window ? 9 : 6)
         let fenceTop = s.h - fenceHeight
         let horizon = fenceTop - fieldDepth
         s.bands(tones.sky, bottom: horizon + 1)
@@ -66,11 +66,11 @@ enum UAPInvasion {
             s.driftingClouds(max(1, s.w / 45), top: 2, bottom: horizon / 2, light: 0xF08A80, mid: 0x8A4A72, shade: 0x4E3062, seed: 43)
         case .night:
             s.stars(above: horizon - 4, density: 0.016, seed: 44)
-            s.moonDisc(x: s.w * 2 / 5, y: max(3, horizon / 5), radius: s.layout == .window ? 2 : 1)
+            s.moonDisc(x: s.w * 2 / 5, y: max(3, horizon / 5), radius: s.fit == .window ? 2 : 1)
         }
 
         // Distant ridge, fields with crop rows, then the farm on the left.
-        let ridgeMax = strip ? 3 : (s.layout == .window ? 7 : 4)
+        let ridgeMax = strip ? 3 : (s.fit == .window ? 7 : 4)
         for x in 0..<s.w {
             let f = Double(x) / 37
             let height = Int((Double(ridgeMax) * (0.55 + 0.3 * sin(f * 1.7 + 0.6) + 0.15 * sin(f * 4.3))).rounded())

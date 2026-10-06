@@ -57,7 +57,7 @@ print "  $OUT/scene.png"
 # Every free scene at dusk.
 items=()
 for scene in asteroid deep-trouble ai-uprising solar-tantrum fallout superstorm clear-for-now uap; do
-  $BIN scene $scene --time dusk --png $WORK/$scene.png --size 96x16 > /dev/null
+  $BIN scene $scene --time dusk --png $WORK/$scene.png --size 96x16 --layout panorama > /dev/null
   items+=("$($BIN scene $scene --json | ${=PYTHON} -c 'import json,sys; print(json.load(sys.stdin)["title"])')=$WORK/$scene.png")
 done
 $T2P gallery $OUT/scenes.png "${items[@]}"

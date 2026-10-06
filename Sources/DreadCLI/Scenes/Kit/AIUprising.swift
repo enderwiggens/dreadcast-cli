@@ -44,7 +44,7 @@ enum AIUprising {
     static func draw(_ s: inout Stage) {
         let tones = tones(s.period)
         let strip = s.layout == .strip
-        let water = strip ? 3 : (s.layout == .window ? 9 : 5)
+        let water = strip ? 3 : (s.fit == .window ? 9 : 5)
         let horizon = s.h - water - 2
         s.bands(tones.sky, bottom: horizon + 1)
 
@@ -59,7 +59,7 @@ enum AIUprising {
             s.sun(x: s.w / 5, y: horizon - 6, radius: 3, core: 0xFFB06A, glow: 0xF07C5C)
         case .night:
             s.stars(above: horizon - 8, density: 0.012, seed: 103)
-            s.moonDisc(x: s.w / 4, y: max(3, horizon / 6), radius: s.layout == .window ? 2 : 1)
+            s.moonDisc(x: s.w / 4, y: max(3, horizon / 6), radius: s.fit == .window ? 2 : 1)
         }
 
         // The machine rises behind the city at dusk; by day it's only a shape in the haze.
@@ -95,7 +95,7 @@ enum AIUprising {
     /// Stepped machine blocks with red optic strips and one wide visor.
     /// Returns the visor's row.
     static func machine(_ s: inout Stage, x center: Int, base: Int, tones: Tones, strip: Bool) -> Int {
-        let scale = strip ? 0.55 : (s.layout == .window ? 1 : 0.7)
+        let scale = strip ? 0.55 : (s.fit == .window ? 1 : 0.7)
         let night = s.isNight, evening = s.isEvening
         func px(_ v: Double) -> Int { max(1, Int((v * scale).rounded())) }
         let bodyW = px(16), bodyH = min(base - 4, px(34))

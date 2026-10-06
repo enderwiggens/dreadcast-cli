@@ -33,7 +33,7 @@ enum AsteroidWatch {
 
     static func draw(_ s: inout Stage) {
         let tones = tones(s.period)
-        let ground = s.layout == .strip ? 2 : (s.layout == .window ? 5 : 3)
+        let ground = s.layout == .strip ? 2 : (s.fit == .window ? 5 : 3)
         let horizon = s.h - ground
         s.bands(tones.sky, bottom: horizon + 1)
 
@@ -50,7 +50,7 @@ enum AsteroidWatch {
             s.driftingClouds(max(1, s.w / 50), top: 2, bottom: horizon / 2, light: 0xF6A48A, mid: 0x9C5A78, shade: 0x5E3A62, seed: 13)
         case .night:
             s.stars(above: horizon - 6)
-            s.moonDisc(x: s.w / 4, y: max(3, horizon / 5), radius: s.layout == .window ? 2 : 1)
+            s.moonDisc(x: s.w / 4, y: max(3, horizon / 5), radius: s.fit == .window ? 2 : 1)
         }
 
         let rock = hero(s, horizon: horizon)
@@ -71,7 +71,7 @@ enum AsteroidWatch {
             .dusk: [.window: 6, .panorama: 4.6, .strip: 3],
             .night: [.window: 8.5, .panorama: 6.2, .strip: 3.6],
         ]
-        let radius = sizes[s.period]?[s.layout] ?? 3
+        let radius = sizes[s.period]?[s.fit] ?? 3
         let height: [ScenePeriod: Double] = [.dawn: 0.32, .day: 0.36, .dusk: 0.42, .night: 0.46]
         let y = Int(Double(horizon) * (height[s.period] ?? 0.4))
         return (Int(Double(s.w) * 0.66), max(Int(radius) + 1, y), radius)

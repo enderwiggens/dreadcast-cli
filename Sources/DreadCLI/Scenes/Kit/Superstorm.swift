@@ -41,7 +41,7 @@ enum Superstorm {
     static func draw(_ s: inout Stage) {
         let tones = tones(s.period)
         let strip = s.layout == .strip
-        let ground = strip ? 3 : (s.layout == .window ? 8 : 5)
+        let ground = strip ? 3 : (s.fit == .window ? 8 : 5)
         let horizon = s.h - ground
         // The shelf hangs low at dawn and fills the sky by dusk.
         let fill: [ScenePeriod: Double] = [.dawn: 0.72, .day: 0.52, .dusk: 0.42, .night: 0.42]
@@ -82,7 +82,7 @@ enum Superstorm {
     @discardableResult
     static func shelf(_ s: inout Stage, base: Int, tones: Tones, flashAt: Int? = nil) -> [Int] {
         let roll = s.tick(2.5, frames: 1000)
-        let rollHeight = s.layout == .window ? 6 : (s.layout == .panorama ? 4 : 3)
+        let rollHeight = s.fit == .window ? 6 : (s.fit == .panorama ? 4 : 3)
         let mass = [Raster.mix(tones.tiers[0], 0x000000, 0.3), tones.tiers[0]]
         var lips: [Int] = []
         for x in 0..<s.w {

@@ -26,7 +26,7 @@ enum SolarTantrum {
     static func draw(_ s: inout Stage) {
         let tones = tones(s.period)
         let strip = s.layout == .strip
-        let horizon = s.h - (strip ? 7 : (s.layout == .window ? 16 : 11))
+        let horizon = s.h - (strip ? 7 : (s.fit == .window ? 16 : 11))
         s.bands(tones.sky, bottom: horizon + 1)
 
         switch s.period {
@@ -49,15 +49,15 @@ enum SolarTantrum {
         let farLine = s.ridgeLine(base: horizon, height: strip ? 2 : 4, seed: 65, wavelength: 45)
         s.fill(below: farLine, to: s.h, color: tones.far)
         districts(&s, line: farLine, tones: tones)
-        let midBase = horizon + (strip ? 3 : (s.layout == .window ? 6 : 4))
+        let midBase = horizon + (strip ? 3 : (s.fit == .window ? 6 : 4))
         let midLine = s.ridgeLine(base: midBase, height: strip ? 2 : 4, seed: 66, wavelength: 30)
-        let towers = strip ? 7 : (s.layout == .window ? 15 : 11)
+        let towers = strip ? 7 : (s.fit == .window ? 15 : 11)
         for (k, fx) in [0.2, 0.47, 0.74].enumerated() {
             let x = Int(Double(s.w) * fx)
             turbine(&s, x: x, base: midLine[min(s.w - 1, x)], height: towers - (k % 2) * 2, tones: tones, phase: k)
         }
         s.fill(below: midLine, to: s.h, color: tones.mid)
-        let nearBase = s.h - (strip ? 2 : (s.layout == .window ? 5 : 3))
+        let nearBase = s.h - (strip ? 2 : (s.fit == .window ? 5 : 3))
         let nearLine = s.ridgeLine(base: nearBase, height: strip ? 1 : 3, seed: 67, wavelength: 26)
         s.fill(below: nearLine, to: s.h, color: tones.near)
         if !strip { pylons(&s, line: nearLine, tones: tones) }

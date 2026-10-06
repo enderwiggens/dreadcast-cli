@@ -36,7 +36,7 @@ enum FalloutOutlook {
     static func draw(_ s: inout Stage) {
         let tones = tones(s.period)
         let strip = s.layout == .strip
-        let horizon = s.h - (strip ? 2 : (s.layout == .window ? 5 : 3))
+        let horizon = s.h - (strip ? 2 : (s.fit == .window ? 5 : 3))
         s.bands(tones.sky, bottom: horizon + 1)
         switch s.period {
         case .dawn: s.sun(x: s.w / 5, y: horizon, radius: 2, core: 0xFFE2A8, glow: 0xF8A27C)
