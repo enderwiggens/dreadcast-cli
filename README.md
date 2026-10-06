@@ -27,8 +27,28 @@ $ dread
 
 ## Install
 
-dreadcast is macOS-first and builds with Swift 6 (Xcode 16 or later). It has no
-dependencies beyond the Swift toolchain.
+dreadcast runs on macOS 13 or later and on Linux (x86_64 and arm64).
+
+**Homebrew** (macOS, and Linux from 0.2.0):
+
+```sh
+brew install enderwiggens/dreadcast/dreadcast
+dread setup
+```
+
+**Linux binary.** Each release includes fully static binaries that run on any
+distribution:
+
+```sh
+curl -sSL https://github.com/enderwiggens/dreadcast-cli/releases/latest/download/dread-linux-x86_64.tar.gz | tar xz
+sudo mv dread /usr/local/bin/
+```
+
+Use `linux-arm64` for ARM machines.
+
+**From source** with Swift 6 (Xcode 16 or later on macOS, or a
+[swift.org toolchain](https://www.swift.org/install/linux/) on Linux). There are no
+other dependencies:
 
 ```sh
 git clone https://github.com/enderwiggens/dreadcast-cli.git
@@ -37,9 +57,6 @@ swift build -c release
 cp .build/release/dread /usr/local/bin/   # or anywhere on your PATH
 dread setup
 ```
-
-A Homebrew tap with signed, notarized binaries is planned. See
-[docs/RELEASING.md](docs/RELEASING.md).
 
 ## Commands
 
@@ -143,7 +160,11 @@ dreadcast detects what your terminal supports and uses the best renderer availab
 
 Force a renderer with `--renderer`, or with `dread config set renderer halfblock`.
 Inside tmux, graphics protocols are off by default. dreadcast honors `NO_COLOR` and the
-macOS Reduce Motion setting; `--still` stops animation.
+macOS Reduce Motion setting; on Linux set `DREAD_REDUCE_MOTION=1`, and `--still` stops
+animation anywhere.
+
+On Linux, lightning credentials are saved to `~/.config/dreadcast/credentials.json`,
+readable only by you, instead of the macOS Keychain.
 
 ## Data and privacy
 

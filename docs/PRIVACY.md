@@ -30,7 +30,7 @@ Each provider also sees your IP address, as with any internet request.
 | --- | --- |
 | Preferences and saved location | `~/.config/dreadcast/config.json` (or `$XDG_CONFIG_HOME/dreadcast`) |
 | Cached readings and radar tiles | `~/Library/Caches/dreadcast` on macOS, `~/.cache/dreadcast` elsewhere |
-| Xweather credentials | The login Keychain, service `dreadcast-cli` |
+| Xweather credentials | macOS: the login Keychain, service `dreadcast-cli`. Linux: `~/.config/dreadcast/credentials.json`, created readable only by you |
 
 Radar tiles older than three hours are pruned automatically. Delete the cache folder
 at any time; dreadcast rebuilds it. `dread auth remove` deletes saved credentials.

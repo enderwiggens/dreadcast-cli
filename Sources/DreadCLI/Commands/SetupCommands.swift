@@ -5,6 +5,8 @@ import DreadTerminal
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif canImport(Musl)
+import Musl
 #endif
 
 /// Reads one line from standard input, optionally without echo (for secrets).
@@ -104,8 +106,12 @@ enum AuthCommand {
                 guard ctx.terminal.isInputTTY else {
                     return ctx.fail("Run this in a terminal, or set DREADCAST_XWEATHER_CLIENT_ID and DREADCAST_XWEATHER_CLIENT_SECRET.", code: .usage)
                 }
-                ctx.write(["", "  Lightning uses your own Xweather account (https://www.xweather.com/).",
-                           "  Credentials are stored in the login Keychain and never written to files or output.", ""])
+                #if canImport(Security)
+                let storage = "  Credentials are stored in the login Keychain and never written to files or output."
+                #else
+                let storage = "  Credentials are stored in \(Credentials.credentialsFile.path), readable only by you."
+                #endif
+                ctx.write(["", "  Lightning uses your own Xweather account (https://www.xweather.com/).", storage, ""])
                 id = Prompt.ask("  Client ID: ")
                 secret = Prompt.ask("  Client secret (hidden): ", secret: true)
             }

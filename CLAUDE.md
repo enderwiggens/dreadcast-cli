@@ -51,6 +51,10 @@ scripts/build-basemap.py          # regenerate BasemapData.swift
 ## Conventions
 
 - Swift 6 language mode. No external dependencies.
+- macOS and Linux are both supported. Don't use Apple-only frameworks in
+  `DreadcastKit` or `DreadTerminal`; guard platform code with `canImport` (`Darwin`,
+  `Glibc`, and `Musl` for the static Linux SDK) and `FoundationNetworking` /
+  `FoundationXML` on Linux. CI builds and tests both platforms.
 - Network work goes through `HTTPClient` with the identifying User-Agent, timeouts and
   size limits.
 - New data sources get a cached loader in `Context` with an honest refresh interval,

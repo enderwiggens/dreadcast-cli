@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0 — unreleased
+
+### Added
+
+- Linux support (x86_64 and arm64), with fully static release binaries.
+- Release workflow that builds the macOS universal binary and Linux binaries for each tag.
+
+### Changed
+
+- PNG compression and decompression are now portable Swift, replacing Apple's
+  Compression framework.
+- On Linux, `dread auth xweather` saves credentials to a file only you can read.
+- Release archives are now named without a version (`dread-macos-universal.zip`,
+  `dread-linux-x86_64.tar.gz`, `dread-linux-arm64.tar.gz`) and contain only the binary.
+
 ## 0.1.0 — 2026-10-06
 
 First release: phases 1 and 2.
