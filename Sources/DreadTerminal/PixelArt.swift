@@ -1,15 +1,5 @@
 import Foundation
 
-/// Ordered dithering, the classic way pixel art blends two colors without new ones.
-public enum Dither {
-    private static let bayer: [Double] = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]
-        .map { (Double($0) + 0.5) / 16 }
-
-    /// A 4×4 Bayer threshold in (0, 1) for the pixel at (x, y).
-    @inline(__always)
-    public static func threshold(_ x: Int, _ y: Int) -> Double { bayer[(y & 3) << 2 | (x & 3)] }
-}
-
 /// Small deterministic noise for procedural art: the same inputs always give the same picture.
 public enum PixelNoise {
     /// A value in [0, 1) for integer coordinates and a seed.
@@ -31,13 +21,6 @@ public extension Raster {
         pixels[y * width + x] = color
     }
 
-    /// Sets the pixel when `coverage` beats its dither threshold, so 0.5 draws a checkerboard.
-    @inline(__always)
-    mutating func plot(_ x: Int, _ y: Int, _ color: UInt32, coverage: Double) {
-        guard coverage > Dither.threshold(x, y) else { return }
-        plot(x, y, color)
-    }
-
     func pixel(_ x: Int, _ y: Int) -> UInt32? {
         guard x >= 0, y >= 0, x < width, y < height else { return nil }
         return pixels[y * width + x]
@@ -48,23 +31,6 @@ public extension Raster {
         guard x0 < x1, y0 < y1 else { return }
         for py in y0..<y1 {
             for px in x0..<x1 { blend(x: px, y: py, color: color, alpha: alpha) }
-        }
-    }
-
-    /// Fills rows `top..<bottom` through `stops`, holding each color as a band and
-    /// dithering only near band edges. `softness` is the dithered share of each band.
-    mutating func ditheredGradient(_ stops: [UInt32], top: Int, bottom: Int, softness: Double = 0.5) {
-        guard !stops.isEmpty, bottom > top else { return }
-        let span = Double(bottom - top)
-        for y in max(0, top)..<min(height, bottom) {
-            let t = (Double(y - top) + 0.5) / span * Double(stops.count - 1)
-            let index = min(stops.count - 1, Int(t))
-            let next = min(stops.count - 1, index + 1)
-            let fraction = t - Double(index)
-            let edge = softness <= 0 ? (fraction < 0.5 ? 0 : 1) : min(1, max(0, (fraction - 0.5) / softness + 0.5))
-            for x in 0..<width {
-                pixels[y * width + x] = edge > Dither.threshold(x, y) ? stops[next] : stops[index]
-            }
         }
     }
 
@@ -104,22 +70,6 @@ public extension Raster {
                 guard d < 1 else { continue }
                 let level = ceil((1 - d) * Double(rings)) / Double(rings)
                 blend(x: x, y: y, color: color, alpha: strength * level * level)
-            }
-        }
-    }
-
-    /// A soft glow drawn with dithering instead of transparency, so it stays pixel art.
-    mutating func ditheredGlow(cx: Double, cy: Double, radius: Double, color: UInt32, strength: Double = 1) {
-        guard radius > 0 else { return }
-        let minY = max(0, Int(floor(cy - radius))), maxY = min(height - 1, Int(ceil(cy + radius)))
-        let minX = max(0, Int(floor(cx - radius))), maxX = min(width - 1, Int(ceil(cx + radius)))
-        guard minY <= maxY, minX <= maxX else { return }
-        for y in minY...maxY {
-            for x in minX...maxX {
-                let dx = Double(x) + 0.5 - cx, dy = Double(y) + 0.5 - cy
-                let d = (dx * dx + dy * dy).squareRoot() / radius
-                guard d < 1 else { continue }
-                plot(x, y, color, coverage: (1 - d) * (1 - d) * strength)
             }
         }
     }

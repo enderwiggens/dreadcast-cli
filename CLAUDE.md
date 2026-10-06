@@ -34,7 +34,8 @@ Sources/
 ├── DreadTerminal/  terminal capabilities, color, text width, rasters, pixel-art helpers,
 │                   frame diffing, image protocols
 ├── DreadCLI/       commands, arguments, config, cache, formatting, brand copy
-│   └── Scenes/     the pixel-art scenes: model, painter, readings beneath them
+│   └── Scenes/     the scenes: model, painter, readings beneath them
+│       └── Kit/    the scene kit (stage, sprites, shared scenery) and one file per scene
 └── dread/          the executable entry point
 Tests/              Swift Testing suites with inline fixtures; no network
 scripts/            basemap generator, tests, release build, README screenshots
@@ -66,9 +67,11 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
   versioned (`dreadcast.<command>/1`); change the version for breaking changes.
 - Generated files (`BasemapData.swift`, `RainViewerColorTable.swift`,
   `ViridisSamples.swift`, `docs/images`) are not edited by hand.
-- Scenes are drawn in code on a pixel grid: shapes, flat stepped light and ordered
-  dithering, no anti-aliasing. Keep every scene drawing at any size; the scene tests
-  paint each one across a range of sizes.
+- Scenes are designed for the terminal with the scene kit: hand-drawn sprites at one
+  pixel scale, flat banded skies, stepped light, no anti-aliasing, and a deliberate
+  window, panorama and strip composition for each. Larger terminals show more sky;
+  very large ones double every pixel. Animate in slow steps (a few per second at most)
+  so frames stay small. The scene tests paint every scene in every layout and size.
 - Never print, log or commit credentials. Never put them in fixtures.
 
 ## Definition of done

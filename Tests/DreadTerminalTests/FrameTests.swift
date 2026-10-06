@@ -56,7 +56,7 @@ struct FrameTests {
         raster.blendStepped(-1, -1, 0xFFFFFF, alpha: 1)
         raster.plot(99, 99, 0xFFFFFF)
         #expect(raster[0, 0] != 0)
-        raster.ditheredGradient([0x000000, 0xFFFFFF], top: 0, bottom: 4)
-        #expect(raster[0, 0] == 0x000000 && raster[0, 3] == 0xFFFFFF)
+        raster.fillEllipse(cx: 3, cy: 2, rx: 1, ry: 1, color: 0x00FF00)
+        #expect(raster[2, 1] == 0x00FF00 && raster.pixel(-1, 0) == nil)
     }
 }

@@ -38,17 +38,6 @@ public enum SceneID: String, CaseIterable, Sendable {
         }
     }
 
-    /// Where a short banner crops the panorama, as a fraction of its height.
-    var bannerFocus: Double {
-        switch self {
-        case .asteroid, .fallout: 0.5
-        case .aiUprising: 0.52
-        case .uap: 0.4
-        case .superstorm: 0.62
-        default: 0.575
-        }
-    }
-
     /// One approved line per time of day, from the brand guide's scene copy and taglines.
     public func line(for period: ScenePeriod) -> String {
         switch (self, period) {

@@ -194,7 +194,7 @@ enum AsteroidWatch {
         for py in box.1...box.3 {
             for px in box.0...box.2 {
                 let x = Double(px) + 0.5, y = Double(py) + 0.5
-                guard SceneCanvas.contains(vertices, x, y), !SceneCanvas.contains(vertices, x - 1, y + 1) else { continue }
+                guard Stage.contains(vertices, x, y), !Stage.contains(vertices, x - 1, y + 1) else { continue }
                 let facing = (x - cx) * -0.7 + (y - cy) * 0.7
                 if facing > 0 { s.raster.plot(px, py, facing > r * 0.4 ? Ink.lampHot : 0xF2A088) }
             }

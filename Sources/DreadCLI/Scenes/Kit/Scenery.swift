@@ -115,6 +115,18 @@ extension Stage {
         }
     }
 
+    /// Even-odd point-in-polygon test.
+    static func contains(_ polygon: [(x: Double, y: Double)], _ x: Double, _ y: Double) -> Bool {
+        var inside = false
+        var j = polygon.count - 1
+        for i in 0..<polygon.count {
+            let a = polygon[i], b = polygon[j]
+            if (a.y > y) != (b.y > y), x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x { inside.toggle() }
+            j = i
+        }
+        return inside
+    }
+
     /// A round tree in two tones with a trunk.
     static let tree = Sprite([
         "..ccc..",
