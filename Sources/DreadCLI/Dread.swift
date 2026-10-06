@@ -23,7 +23,7 @@ public enum Dread {
             case "version":
                 context.write("dread \(DreadcastKit.Dreadcast.version)")
                 return .ok
-            case "now": return try await NowCommand.run(context)
+            case "now", "weather": return try await NowCommand.run(context)
             case "radar": return try await RadarCommand.run(context)
             case "alerts": return try await AlertsCommand.run(context)
             case "prompt": return await PromptCommand.run(context)
@@ -33,6 +33,7 @@ public enum Dread {
             case "top": return try await TopCommand.run(context)
             case "lightning": return try await LightningCommand.run(context)
             case "eta": return try await EtaCommand.run(context)
+            case "scene": return try await SceneCommand.run(context)
             case "setup": return try await SetupCommand.run(context)
             case "auth": return try AuthCommand.run(context)
             case "config": return try ConfigCommand.run(context)
@@ -126,14 +127,32 @@ enum Help {
               dread config set <key> <value>
                 units imperial|metric · palette dreadcast|classic|viridis|rainviewer
                 range 15|35|75|150|300 · renderer auto|kitty|iterm2|halfblock|256
-                quips on|off · icons emoji|ascii
+                quips on|off · icons emoji|ascii · scene <name>|daily|off
+            """
+        case "scene":
+            return """
+            \(title) scene — the Dreadcast scenes as pixel art, with live conditions
+
+              dread scene                  today’s scene, animated, filling the terminal
+              dread scene <name>           \(SceneID.allCases.map(\.rawValue).joined(separator: ", "))
+              --time <auto|dawn|day|dusk|night>
+                                           auto follows the local hour, as in the app
+              --still                      one composed frame, inline
+              --png <file>                 save the artwork as a PNG (--size 120x40)
+
+            Keys: ←/→ change scene, t cycles the time of day, i hides the readings,
+            space pauses, q quits. Scenes are decorative and never describe the weather;
+            the readings below them are real. Reduce Motion shows a still frame.
+
+            `dread config set scene <name|daily|off>` picks the scene shown above `dread`.
             """
         default:
             return """
             \(title) — weather and radar for the command line. \(styler.paint("There’s a lot in the forecast.", Theme.lamp, italic: true))
 
             \(styler.bold("Every day"))
-              dread                        current conditions, alerts and the next two hours
+              dread                        today’s scene, conditions, alerts, the next two hours
+                                           and five days (also: dread weather)
               dread radar                  animated radar with lightning
               dread alerts                 active watches, warnings and advisories
               dread prompt                 a cached segment for prompts and status lines
@@ -144,6 +163,7 @@ enum Help {
               dread top                    full-screen dashboard
               dread outlook                solar, aurora, earthquakes, meteors and hazards
               dread lightning              strike map (needs Xweather credentials)
+              dread scene                  the Dreadcast scenes as animated pixel art
 
             \(styler.bold("Setup"))
               dread setup                  choose a location

@@ -1,7 +1,7 @@
 # Trademarks
 
-"Dreadcast", "DREADCAST", "DREADCAST Weather & Radar" and the Dreadcast radar-ring
-wordmark are trademarks of Dreadcast Weather. The Apache License 2.0 that covers
+"Dreadcast", "DREADCAST", "Dreadcast: Weather & Radar", the Dreadcast radar-ring
+wordmark and the Dreadcast scene names are trademarks of Dreadcast Weather. The Apache License 2.0 that covers
 this repository's code does not grant permission to use these names or marks
 (see section 6 of the license).
 

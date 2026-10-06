@@ -9,18 +9,18 @@ public struct Arguments: Sendable {
     public var flags: Set<String> = []
 
     public static let commands: Set<String> = [
-        "now", "radar", "alerts", "prompt", "forecast", "outlook", "top", "lightning", "eta",
+        "now", "weather", "radar", "alerts", "prompt", "forecast", "outlook", "top", "lightning", "eta", "scene",
         "setup", "auth", "config", "credits", "refresh", "help", "version"
     ]
 
     static let valueOptions: Set<String> = [
         "location", "units", "range", "palette", "renderer", "frames", "loops", "hours", "fail-on",
-        "radius", "format", "min-dbz", "interval", "width", "client-id", "client-secret"
+        "radius", "format", "min-dbz", "interval", "width", "client-id", "client-secret", "time", "size", "png"
     ]
 
     static let booleanFlags: Set<String> = [
         "json", "plain", "no-color", "help", "version", "still", "once", "follow", "watch", "quiet",
-        "ascii", "no-quip", "all", "no-lightning", "debug", "pretty"
+        "ascii", "no-quip", "all", "no-lightning", "debug", "pretty", "no-scene"
     ]
 
     static let shortOptions: [String: String] = [

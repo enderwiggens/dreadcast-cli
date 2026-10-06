@@ -14,6 +14,8 @@ public struct Config: Codable, Sendable {
     public var quips: Bool = true
     /// emoji or ascii weather glyphs.
     public var icons: String = "emoji"
+    /// The pixel-art scene over `dread` and in `dread scene`: a scene name, daily or off.
+    public var scene: String = "daily"
 
     public init() {}
 
@@ -28,6 +30,7 @@ public struct Config: Codable, Sendable {
         renderer = (try? c.decode(String.self, forKey: .renderer)) ?? "auto"
         quips = (try? c.decode(Bool.self, forKey: .quips)) ?? true
         icons = (try? c.decode(String.self, forKey: .icons)) ?? "emoji"
+        scene = (try? c.decode(String.self, forKey: .scene)) ?? "daily"
     }
 
     public static let ranges = [15, 35, 75, 150, 300]

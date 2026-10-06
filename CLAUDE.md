@@ -5,8 +5,8 @@ This guide is for Claude, Codex and other AI-assisted tools, and for people.
 ## What this is
 
 `dread` is an open-source Swift command-line tool that shows weather and radar in the
-terminal. It is the companion to the DREADCAST Weather & Radar Mac app, but it is a
-separate project: it shares no code at build time with the app and never requires it.
+terminal. It is a standalone companion to Dreadcast: Weather & Radar, the Mac app: a
+separate project that shares no code with the app at build time and never requires it.
 
 ## Principles
 
@@ -20,20 +20,25 @@ separate project: it shares no code at build time with the app and never require
   plain or JSON output.
 - **Visual first, with fallbacks.** Kitty graphics, iTerm2 images, truecolor
   half-blocks, 256-color, then plain text. Honor `NO_COLOR`, Reduce Motion and `--still`.
-- **Free palettes only.** Dreadcast, Classic, Viridis and RainViewer's colors. The app's
-  Pro palettes stay in the app.
+- **Free palettes and scenes only.** Dreadcast, Classic, Viridis and RainViewer's colors,
+  and the app's eight free scenes. The Pro palettes and Pro scenes stay in the app.
+- **Scenes are decorative.** They never describe the weather; real readings sit beside
+  them. The `dread` banner steps aside while any alert is active or alert data is
+  unknown, and scene lines follow the voice rules above.
 
 ## Layout
 
 ```text
 Sources/
 ├── DreadcastKit/   providers, decoders, domain models, radar decoding, nowcast, basemap
-├── DreadTerminal/  terminal capabilities, color, text width, rasters, image protocols
+├── DreadTerminal/  terminal capabilities, color, text width, rasters, pixel-art helpers,
+│                   frame diffing, image protocols
 ├── DreadCLI/       commands, arguments, config, cache, formatting, brand copy
+│   └── Scenes/     the pixel-art scenes: model, painter, readings beneath them
 └── dread/          the executable entry point
 Tests/              Swift Testing suites with inline fixtures; no network
-scripts/            basemap generator, tests, release build
-docs/               privacy, data providers, releasing
+scripts/            basemap generator, tests, release build, README screenshots
+docs/               privacy, data providers, releasing, README images
 ```
 
 `DreadcastKit` must not import `DreadTerminal` or `DreadCLI`. Provider payloads are
@@ -46,6 +51,7 @@ scripts/test.sh                   # run the tests
 swift run dread --location 33602  # try a command
 swift build -c release            # optimized build
 scripts/build-basemap.py          # regenerate BasemapData.swift
+scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs pyte, Chrome)
 ```
 
 ## Conventions
@@ -59,7 +65,10 @@ scripts/build-basemap.py          # regenerate BasemapData.swift
 - Every command supports `--json`, `--plain` and pretty output. JSON schemas are
   versioned (`dreadcast.<command>/1`); change the version for breaking changes.
 - Generated files (`BasemapData.swift`, `RainViewerColorTable.swift`,
-  `ViridisSamples.swift`) are not edited by hand.
+  `ViridisSamples.swift`, `docs/images`) are not edited by hand.
+- Scenes are drawn in code on a pixel grid: shapes, flat stepped light and ordered
+  dithering, no anti-aliasing. Keep every scene drawing at any size; the scene tests
+  paint each one across a range of sizes.
 - Never print, log or commit credentials. Never put them in fixtures.
 
 ## Definition of done

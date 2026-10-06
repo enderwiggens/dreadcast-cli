@@ -2,7 +2,8 @@ import Foundation
 import DreadcastKit
 import DreadTerminal
 
-/// `dread`: current conditions, active alerts, the next two hours and recent lightning.
+/// `dread` (or `dread weather`): today's scene, current conditions, active alerts, the
+/// next two hours, recent lightning and the next five days.
 enum NowCommand {
     static func run(_ ctx: Context) async throws -> ExitCode {
         let place = try await ctx.resolveLocation()
@@ -34,6 +35,8 @@ enum NowCommand {
         let report = weather.value
         let fmt = Formatter(units: ctx.units, timeZone: report?.timeZone ?? ctx.timeZone(for: place))
         var lines: [String] = [""]
+        let art = banner(place: place, alerts: alerts, report: report, ctx: ctx, width: width)
+        if !art.isEmpty { lines.append(contentsOf: art + [""]) }
 
         let brand = "  " + s.paint("DREADCAST", Theme.porcelain, bold: true) + s.paint("  ·  ", Theme.faint) + place.name
         let clock = s.paint(fmt.time(ctx.now) + " " + fmt.zoneAbbreviation(ctx.now), Theme.faint)
@@ -85,6 +88,12 @@ enum NowCommand {
         }
         if let report {
             lines.append(dayLine(report: report, fmt: fmt, ctx: ctx))
+            let days = DayRows.upcoming(report, from: ctx.now, count: 5)
+            if !days.isEmpty {
+                lines.append("")
+                lines.append("  " + s.bold("NEXT 5 DAYS") + s.paint("   low · high · chance of rain", Theme.faint))
+                lines.append(contentsOf: DayRows.lines(days, fmt: fmt, ctx: ctx, barWidth: 16))
+            }
         }
         lines.append("")
 
@@ -105,6 +114,31 @@ enum NowCommand {
         lines.append("")
         return lines
     }
+
+    /// Today's scene as a strip above the readings. It is decorative, so it steps aside
+    /// for active or unknown alerts, plain output and short terminals.
+    static func banner(place: Place, alerts: Fetched<[WeatherAlert]>, report: WeatherReport?, ctx: Context, width: Int) -> [String] {
+        guard ctx.styler.mode >= .ansi256, !ctx.arguments.has("no-scene"), width >= 50, ctx.terminal.rows >= bannerMinimumRows else { return [] }
+        if place.isUnitedStates, alerts.value?.isEmpty != true { return [] }
+        let zone = report?.timeZone ?? ctx.timeZone(for: place)
+        guard let scene = SceneCommand.configuredScene(ctx, timeZone: zone) else { return [] }
+        let period = ScenePeriod.at(ctx.now, timeZone: zone)
+        let artWidth = width - 2
+        let band = 20
+        // Draw the full 3:1 panorama, then keep a band around the scene's focus.
+        let fullHeight = max(band, Int((Double(artWidth) / 3).rounded()))
+        let full = ScenePainter(scene: scene, period: period, time: 0, still: true, moon: LunarPhase(at: ctx.now))
+            .paint(width: artWidth, height: fullHeight)
+        let top = max(0, min(fullHeight - band, Int(Double(fullHeight) * scene.bannerFocus) - band / 2))
+        var crop = Raster(width: artWidth, height: band)
+        for y in 0..<band {
+            for x in 0..<artWidth { crop[x, y] = full[x, top + y] }
+        }
+        return HalfBlockFrame(raster: crop).lines(styler: ctx.styler).map { "  " + $0 }
+    }
+
+    /// The banner adds eleven lines; below this height the readings would scroll away.
+    static let bannerMinimumRows = 38
 
     static func alertColor(_ alert: WeatherAlert) -> RGB {
         switch alert.level {
@@ -271,6 +305,10 @@ enum NowCommand {
         if let nowcast {
             lines.append("Rain: " + TextWidth.strippingANSI(nowcastSummary(nowcast, fmt: fmt, ctx: ctx)) + ".")
         }
+        if let report {
+            let days = DayRows.upcoming(report, from: ctx.now, count: 5)
+            if !days.isEmpty { lines.append(contentsOf: ["Next 5 days:"] + DayRows.plain(days, fmt: fmt)) }
+        }
         if let lightning {
             lines.append(TextWidth.strippingANSI(lightningLine(lightning, fmt: fmt, ctx: ctx)).trimmingCharacters(in: .whitespaces)
                 .replacingOccurrences(of: "Lightning   ", with: "Lightning: ") + ".")
@@ -293,6 +331,7 @@ struct NowJSON: Encodable {
     let alertsError: String?
     let nowcast: NowcastSummaryJSON?
     let lightning: LightningJSON?
+    let days: [ForecastJSON.Day]
     let stale: [String]
 
     init(place: Place, weather: Fetched<WeatherReport>, alerts: Fetched<[WeatherAlert]>,
@@ -304,6 +343,7 @@ struct NowJSON: Encodable {
         alertsError = alerts.value == nil ? alerts.error : nil
         self.nowcast = nowcast.map(NowcastSummaryJSON.init)
         self.lightning = lightning?.value.map { LightningJSON($0, now: now) }
+        days = weather.value.map { ForecastJSON.days(DayRows.upcoming($0, from: now, count: 5), timeZone: $0.timeZone) } ?? []
         var stale: [String] = []
         if weather.isStale { stale.append("conditions") }
         if alerts.isStale { stale.append("alerts") }

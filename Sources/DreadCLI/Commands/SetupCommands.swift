@@ -148,6 +148,16 @@ enum ConfigCommand {
             case "icons":
                 guard ["emoji", "ascii"].contains(value) else { return ctx.fail("icons: emoji or ascii.", code: .usage) }
                 config.icons = value
+            case "scene":
+                if value == "daily" || value == "off" {
+                    config.scene = value
+                } else if case .scene(let scene) = SceneID.lookup(value) {
+                    config.scene = scene.rawValue
+                } else if case .pro(let title) = SceneID.lookup(value) {
+                    return ctx.fail("\(title) is a Pro scene in Dreadcast: Weather & Radar. Free scenes: \(SceneID.names).", code: .usage)
+                } else {
+                    return ctx.fail("scene: daily, off, or one of \(SceneID.names).", code: .usage)
+                }
             default:
                 return ctx.fail("Unknown setting \(parts[1]).", code: .usage)
             }
@@ -169,6 +179,7 @@ enum ConfigCommand {
             "  " + s.paint("Renderer", Theme.mist) + "   " + c.renderer + s.paint("  (detected: \(ctx.terminal.graphics.rawValue), \(ctx.terminal.colorMode))", Theme.faint),
             "  " + s.paint("Quips", Theme.mist) + "      " + (c.quips ? "on" : "off"),
             "  " + s.paint("Icons", Theme.mist) + "      " + c.icons,
+            "  " + s.paint("Scene", Theme.mist) + "      " + c.scene,
             "  " + s.paint("Lightning", Theme.mist) + "  " + (Credentials.source(environment: ctx.environment) ?? "not configured"),
             "",
             "  " + s.paint("Config  " + ctx.paths.configFile.path, Theme.faint),
