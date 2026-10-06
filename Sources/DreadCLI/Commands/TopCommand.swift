@@ -70,11 +70,12 @@ enum TopCommand {
         state.with { $0.lightningConfigured = configured }
         var selected = 0
         var lastRender = Date.distantPast
+        var strip = Strip(started: Date())
         while true {
             ctx.refreshClock()
             schedule(ctx: ctx, place: place, state: state)
             if Date().timeIntervalSince(lastRender) >= 1 {
-                selected = render(ctx: ctx, place: place, state: state, selected: selected)
+                selected = render(ctx: ctx, place: place, state: state, selected: selected, strip: &strip)
                 lastRender = Date()
             }
             guard let key = raw.readKey(timeout: 0.2) else { continue }
@@ -90,6 +91,9 @@ enum TopCommand {
             case .character("r"), .character("R"):
                 state.with { $0.lastFetch = [:] }
                 ctx.cache.remove(key: "alerts-\(Context.placeKey(place))")
+                lastRender = .distantPast
+            case .character("s"), .character("S"):
+                strip.hidden.toggle()
                 lastRender = .distantPast
             default:
                 break
@@ -129,13 +133,37 @@ enum TopCommand {
 
     // MARK: Rendering
 
-    static func render(ctx: Context, place: Place, state: State, selected requested: Int) -> Int {
+    /// Today's scene as a strip over the dashboard: only in tall terminals, never while an
+    /// alert is active or unknown, stepping every four seconds. `s` hides it.
+    struct Strip {
+        let started: Date
+        var hidden = false
+        var shown: [String] = []
+        static let rows = 8
+        static let minimumHeight = 40
+    }
+
+    static func stripLines(ctx: Context, place: Place, snapshot: Snapshot, zone: TimeZone, width: Int, height: Int, strip: Strip) -> [String] {
+        guard !strip.hidden, height >= Strip.minimumHeight, ctx.styler.mode >= .ansi256, !ctx.arguments.has("no-scene") else { return [] }
+        if place.isUnitedStates, snapshot.alerts?.value?.isEmpty != true { return [] }
+        guard let scene = SceneCommand.configuredScene(ctx, timeZone: zone) else { return [] }
+        let still = ctx.terminal.reduceMotion
+        let time = still ? 0 : (Date().timeIntervalSince(strip.started) / 4).rounded(.down) * 4
+        let raster = ScenePainter(scene: scene, period: ScenePeriod.at(ctx.now, timeZone: zone), time: time, still: still,
+                                  moon: LunarPhase(at: ctx.now), layout: .strip)
+            .paint(width: width - 2, height: Strip.rows * 2)
+        return HalfBlockFrame(raster: raster).lines(styler: ctx.styler).map { " " + $0 } + [""]
+    }
+
+    static func render(ctx: Context, place: Place, state: State, selected requested: Int, strip: inout Strip) -> Int {
         let s = ctx.styler
         let size = TerminalInfo.windowSize() ?? (ctx.terminal.columns, ctx.terminal.rows)
-        let width = max(60, size.0), height = max(16, size.1)
+        let width = max(60, size.0)
         let snapshot = state.snapshot
         let zone = snapshot.weather?.value?.timeZone ?? ctx.timeZone(for: place)
         let fmt = Formatter(units: ctx.units, timeZone: zone)
+        let art = stripLines(ctx: ctx, place: place, snapshot: snapshot, zone: zone, width: width, height: max(16, size.1), strip: strip)
+        let height = max(16, size.1) - art.count
         var lines: [String] = []
 
         let clock = Date()
@@ -174,12 +202,22 @@ enum TopCommand {
             lines.append("  " + line)
         }
         while lines.count < height - 1 { lines.append("") }
-        let keys: [(String, String)] = [("↑/↓", "select"), ("r", "refresh"), ("q", "quit")]
+        var keys: [(String, String)] = [("↑/↓", "select"), ("r", "refresh")]
+        if max(16, size.1) >= Strip.minimumHeight, ctx.styler.mode >= .ansi256 { keys.append(("s", strip.hidden ? "show scene" : "hide scene")) }
+        keys.append(("q", "quit"))
         let busy = snapshot.inFlight.isEmpty ? "" : "updating \(snapshot.inFlight.sorted().joined(separator: ", "))…"
         lines.append(TextWidth.spread(" " + keys.map { s.paint($0.0, Theme.lamp) + " " + s.paint($0.1, Theme.mist) }.joined(separator: "   "),
                                       s.paint(busy, Theme.faint) + " ", width: width))
 
-        let output = TerminalControl.home + lines.prefix(height).map { TextWidth.truncateStyled($0, to: width) + "\u{1B}[K" }.joined(separator: "\r\n") + TerminalControl.clearToEnd
+        // The strip's rows are rewritten only when the picture changes.
+        var output = ""
+        if art != strip.shown {
+            output += TerminalControl.home + art.map { $0 + "\u{1B}[K" }.joined(separator: "\r\n") + (art.isEmpty ? "" : "\r\n")
+            strip.shown = art
+        } else {
+            output += TerminalControl.moveTo(row: art.count + 1, column: 1)
+        }
+        output += lines.prefix(height).map { TextWidth.truncateStyled($0, to: width) + "\u{1B}[K" }.joined(separator: "\r\n") + TerminalControl.clearToEnd
         Console.write(output)
         return selected
     }

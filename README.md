@@ -87,7 +87,9 @@ that form or fade along the way.
 
 A full-screen dashboard that lists weather systems near you like processes, sorted by
 threat: alerts, storm cells, lightning, severe outlook, tropical storms, wildfires, air
-quality and hazards. Each source refreshes on its own schedule and fails on its own.
+quality and hazards. Each source refreshes on its own schedule and fails on its own. In
+terminals at least 40 rows tall, today's scene runs along the top while no alert is
+active; `s` hides it.
 
 ### Outlook: `dread outlook`
 

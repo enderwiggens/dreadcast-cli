@@ -127,6 +127,23 @@ struct SceneTests {
         #expect(NowCommand.banner(place: Self.tampa, alerts: Self.fetched([]), report: report, ctx: off, width: 86).isEmpty)
     }
 
+    @Test func topShowsAStripOnlyWhenTallAndClear() throws {
+        let ctx = try Self.context(rows: 44)
+        let zone = try #require(TimeZone(identifier: "America/New_York"))
+        var clear = TopCommand.Snapshot()
+        clear.alerts = Self.fetched([])
+        var strip = TopCommand.Strip(started: Date())
+        let lines = TopCommand.stripLines(ctx: ctx, place: Self.tampa, snapshot: clear, zone: zone, width: 100, height: 44, strip: strip)
+        #expect(lines.count == TopCommand.Strip.rows + 1)
+        #expect(TopCommand.stripLines(ctx: ctx, place: Self.tampa, snapshot: clear, zone: zone, width: 100, height: 30, strip: strip).isEmpty)
+        var warned = TopCommand.Snapshot()
+        warned.alerts = Self.fetched([Self.warning()])
+        #expect(TopCommand.stripLines(ctx: ctx, place: Self.tampa, snapshot: warned, zone: zone, width: 100, height: 44, strip: strip).isEmpty)
+        #expect(TopCommand.stripLines(ctx: ctx, place: Self.tampa, snapshot: TopCommand.Snapshot(), zone: zone, width: 100, height: 44, strip: strip).isEmpty)
+        strip.hidden = true
+        #expect(TopCommand.stripLines(ctx: ctx, place: Self.tampa, snapshot: clear, zone: zone, width: 100, height: 44, strip: strip).isEmpty)
+    }
+
     @Test func readingsReplaceTheLineDuringAlerts() throws {
         let ctx = try Self.context()
         let report = VoiceTests.report(code: 1)

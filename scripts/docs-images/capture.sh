@@ -49,7 +49,7 @@ shot outlook 100 outlook --location $LOCATION
 MAX_ROWS=30 shot alerts 100 alerts --location $ALERT_LOCATION
 
 # Full-screen commands run in a pseudo-terminal.
-$T2P pty $OUT/top.png --cols 108 --rows 32 --wait 10 -- $BIN top --location $LOCATION
+$T2P pty $OUT/top.png --cols 108 --rows 44 --wait 10 -- $BIN top --location $LOCATION
 print "  $OUT/top.png"
 $T2P pty $OUT/scene.png --cols 100 --rows 34 --wait 3 -- $BIN scene asteroid --time dusk --location $LOCATION
 print "  $OUT/scene.png"
