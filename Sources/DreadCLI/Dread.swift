@@ -117,7 +117,8 @@ enum Help {
             return """
             \(title) auth — optional lightning credentials
 
-              dread auth xweather          save an Xweather client ID and secret to the Keychain
+              dread auth xweather          save an Xweather client ID and secret (Keychain on macOS,
+                                           a private file on Linux)
               dread auth status            show what is configured
               dread auth remove xweather   delete saved credentials
 

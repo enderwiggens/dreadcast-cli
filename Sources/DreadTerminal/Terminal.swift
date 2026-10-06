@@ -3,6 +3,8 @@ import Foundation
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif canImport(Musl)
+import Musl
 #endif
 
 public enum ColorMode: Int, Comparable, Sendable {
@@ -113,8 +115,10 @@ public struct TerminalInfo: Sendable {
 func systemWrite(_ fd: Int32, _ pointer: UnsafeRawPointer, _ count: Int) -> Int {
     #if canImport(Darwin)
     return Darwin.write(fd, pointer, count)
-    #else
+    #elseif canImport(Glibc)
     return Glibc.write(fd, pointer, count)
+    #else
+    return Musl.write(fd, pointer, count)
     #endif
 }
 

@@ -1,9 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — unreleased
 
 ### Added
 
+- Linux support (x86_64 and arm64), with fully static release binaries.
+- A release workflow that builds the macOS universal binary and the Linux binaries for
+  each tag.
 - `dread` opens a full-screen app with tabs for Now, Systems, Radar, Forecast, Alerts,
   Outlook, Lightning and Scene. Every tab shares one set of live data, refreshed per
   source, and a new alert shows in the header whichever tab is open. `dread top <view>`
@@ -35,6 +38,11 @@
 - `dread top`'s dashboard is now the app's Systems tab.
 - The README and docs describe dreadcast as a standalone companion to Dreadcast: Weather
   & Radar.
+- PNG compression and decompression are now portable Swift, replacing Apple's
+  Compression framework.
+- On Linux, `dread auth xweather` saves credentials to a file only you can read.
+- Release archives are named without a version (`dread-macos-universal.zip`,
+  `dread-linux-x86_64.tar.gz`, `dread-linux-arm64.tar.gz`) and contain only the binary.
 
 ### Fixed
 

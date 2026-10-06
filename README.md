@@ -13,25 +13,69 @@ brings Dreadcast’s scenes along as pixel art.
 
 ## Install
 
-dreadcast runs on macOS 13 or later.
+dreadcast runs on macOS 13 or later and on Linux (x86_64 and arm64, any distribution).
+
+### macOS
+
+With [Homebrew](https://brew.sh):
 
 ```sh
 brew install enderwiggens/dreadcast/dreadcast
 dread setup
 ```
 
-Or build from source with Swift 6 (Xcode 16 or later). There are no other dependencies.
+Or download the universal binary (Apple silicon and Intel) from the
+[latest release](https://github.com/enderwiggens/dreadcast-cli/releases/latest):
+
+```sh
+curl -sSL https://github.com/enderwiggens/dreadcast-cli/releases/latest/download/dread-macos-universal.zip -o dread.zip
+unzip dread.zip && sudo mv dread /usr/local/bin/
+dread setup
+```
+
+### Linux
+
+With [Homebrew on Linux](https://docs.brew.sh/Homebrew-on-Linux), the same command:
+
+```sh
+brew install enderwiggens/dreadcast/dreadcast
+dread setup
+```
+
+Or download a release binary. They’re fully static, so they need no libraries and run
+on any distribution:
+
+```sh
+curl -sSL https://github.com/enderwiggens/dreadcast-cli/releases/latest/download/dread-linux-x86_64.tar.gz | tar xz
+sudo mv dread /usr/local/bin/
+dread setup
+```
+
+Use `dread-linux-arm64.tar.gz` on ARM machines such as a Raspberry Pi 4 or 5 running a
+64-bit OS. Each archive has a `.sha256` file beside it to check the download. Times
+are shown in your place’s own time zone; if your system has no time zone data
+(`tzdata`), dread falls back to the forecast’s UTC offset.
+
+### From source
+
+With Swift 6: Xcode 16 or later on macOS, or a
+[swift.org toolchain](https://www.swift.org/install/linux/) on Linux. There are no
+other dependencies.
 
 ```sh
 git clone https://github.com/enderwiggens/dreadcast-cli.git
 cd dreadcast-cli
 swift build -c release
-cp .build/release/dread /usr/local/bin/   # or anywhere on your PATH
+sudo cp .build/release/dread /usr/local/bin/   # or anywhere on your PATH
 dread setup
 ```
 
+### Getting started
+
 `dread setup` asks for a ZIP code, place name or `lat,lon`. Coordinates are rounded to
-two decimal places (about 1 km) before they are saved or sent anywhere.
+two decimal places (about 1 km) before they are saved or sent anywhere. Then run
+`dread`. To remove dreadcast, delete the binary (or `brew uninstall dreadcast`) and
+the folders listed in [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## What it does
 
@@ -254,7 +298,11 @@ dreadcast detects what your terminal supports and uses the best renderer availab
 
 Force a renderer with `--renderer`, or with `dread config set renderer halfblock`.
 Inside tmux, graphics protocols are off by default. dreadcast honors `NO_COLOR` and the
-macOS Reduce Motion setting; `--still` stops animation.
+macOS Reduce Motion setting; on Linux set `DREAD_REDUCE_MOTION=1`, and `--still` stops
+animation anywhere.
+
+On Linux, lightning credentials are saved to `~/.config/dreadcast/credentials.json`,
+readable only by you, instead of the macOS Keychain.
 
 ## Data and privacy
 

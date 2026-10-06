@@ -1,7 +1,4 @@
 import Foundation
-#if canImport(Compression)
-import Compression
-#endif
 
 /// Minimal PNG encoder (8-bit RGB) for terminal image protocols.
 public enum PNGEncoder {
@@ -17,7 +14,7 @@ public enum PNGEncoder {
                 raw.append(UInt8(p & 0xFF))
             }
         }
-        guard let compressed = zlib(raw) else { return nil }
+        let compressed = Data(Deflate.zlib(raw))
         var png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
         var header = Data()
         header.append(contentsOf: bigEndian(UInt32(raster.width)))
@@ -27,33 +24,6 @@ public enum PNGEncoder {
         png.append(chunk("IDAT", compressed))
         png.append(chunk("IEND", Data()))
         return png
-    }
-
-    private static func zlib(_ bytes: [UInt8]) -> Data? {
-        #if canImport(Compression)
-        var destination = [UInt8](repeating: 0, count: bytes.count + 1024)
-        let written = bytes.withUnsafeBufferPointer { src in
-            destination.withUnsafeMutableBufferPointer { dst in
-                compression_encode_buffer(dst.baseAddress!, dst.count, src.baseAddress!, src.count, nil, COMPRESSION_ZLIB)
-            }
-        }
-        guard written > 0 else { return nil }
-        var data = Data([0x78, 0x9C]) // zlib header around raw DEFLATE
-        data.append(contentsOf: destination[0..<written])
-        data.append(contentsOf: bigEndian(adler32(bytes)))
-        return data
-        #else
-        return nil
-        #endif
-    }
-
-    private static func adler32(_ bytes: [UInt8]) -> UInt32 {
-        var a: UInt32 = 1, b: UInt32 = 0
-        for byte in bytes {
-            a = (a + UInt32(byte)) % 65521
-            b = (b + a) % 65521
-        }
-        return b << 16 | a
     }
 
     private static let crcTable: [UInt32] = (0..<256).map { n -> UInt32 in

@@ -78,12 +78,18 @@ public struct WeatherReport: Codable, Sendable {
     public var coordinate: GeoCoordinate
     public var units: UnitSystem
     public var timeZoneIdentifier: String
+    /// The provider's UTC offset, used when the system has no time zone database.
+    public var utcOffsetSeconds: Int? = nil
     public var current: Current
     public var minutely: [Minutely]
     public var hourly: [Hour]
     public var daily: [Day]
 
-    public var timeZone: TimeZone { TimeZone(identifier: timeZoneIdentifier) ?? .current }
+    public var timeZone: TimeZone {
+        TimeZone(identifier: timeZoneIdentifier)
+            ?? utcOffsetSeconds.flatMap(TimeZone.init(secondsFromGMT:))
+            ?? .current
+    }
 
     public func hours(from now: Date, count: Int) -> [Hour] {
         Array(hourly.filter { $0.time > now.addingTimeInterval(-3600) }.prefix(max(0, count)))
@@ -166,9 +172,13 @@ public struct WeatherService: Sendable {
         } catch {
             throw DreadcastError.invalidResponse("Open-Meteo")
         }
-        guard TimeZone(identifier: payload.timezone) != nil, let current = payload.current,
-              let currentTime = current.number("time") else { throw DreadcastError.invalidResponse("Open-Meteo") }
-        let zone = TimeZone(identifier: payload.timezone)!
+        guard let current = payload.current, let currentTime = current.number("time") else {
+            throw DreadcastError.invalidResponse("Open-Meteo")
+        }
+        // Minimal Linux systems may lack a time zone database; fall back to the fixed offset.
+        let zone = TimeZone(identifier: payload.timezone)
+            ?? payload.utc_offset_seconds.flatMap(TimeZone.init(secondsFromGMT:))
+            ?? TimeZone(secondsFromGMT: 0)!
         try payload.hourly?.validate()
         try payload.daily?.validate()
         try payload.minutely_15?.validate()
@@ -251,8 +261,8 @@ public struct WeatherService: Sendable {
         }
 
         return WeatherReport(fetchedAt: fetchedAt, coordinate: coordinate, units: units,
-                             timeZoneIdentifier: payload.timezone, current: report,
-                             minutely: minutely, hourly: hourly, daily: daily)
+                             timeZoneIdentifier: payload.timezone, utcOffsetSeconds: payload.utc_offset_seconds,
+                             current: report, minutely: minutely, hourly: hourly, daily: daily)
     }
 
     private struct Payload: Decodable {

@@ -1,7 +1,4 @@
 import Foundation
-#if canImport(Compression)
-import Compression
-#endif
 
 /// An 8-bit RGBA image. Pixels are stored row-major without premultiplied alpha.
 public struct RGBAImage: Sendable {
@@ -173,22 +170,10 @@ public enum PNGDecoder {
     }
 
     static func inflate(_ zlib: [UInt8], expectedSize: Int) throws -> [UInt8] {
-        guard zlib.count > 6 else { throw Failure.corrupt("zlib stream") }
-        // PNG wraps DEFLATE in a two-byte zlib header and an Adler-32 trailer.
-        let cmf = zlib[0]
-        guard cmf & 0x0F == 8, (UInt16(cmf) << 8 | UInt16(zlib[1])) % 31 == 0 else { throw Failure.corrupt("zlib header") }
-        #if canImport(Compression)
-        let source = Array(zlib[2...])
-        var destination = [UInt8](repeating: 0, count: expectedSize + 64)
-        let written = source.withUnsafeBufferPointer { src in
-            destination.withUnsafeMutableBufferPointer { dst in
-                compression_decode_buffer(dst.baseAddress!, dst.count, src.baseAddress!, src.count, nil, COMPRESSION_ZLIB)
-            }
+        do {
+            return try Inflate.zlib(zlib, expectedSize: expectedSize, maximumSize: expectedSize + 1024)
+        } catch {
+            throw Failure.corrupt("image data")
         }
-        guard written >= expectedSize else { throw Failure.corrupt("deflate stream") }
-        return Array(destination[0..<written])
-        #else
-        throw Failure.unsupported("PNG decoding needs the Compression framework on this platform")
-        #endif
     }
 }

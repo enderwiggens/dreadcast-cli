@@ -124,3 +124,41 @@ struct RenderingTests {
         #expect(RawTerminal.parse([27, 91, 72]) == .home)
     }
 }
+
+@Suite("Compression")
+struct CompressionTests {
+    @Test func deflateRoundTripsThroughInflate() throws {
+        var samples: [[UInt8]] = [[], [42], Array("dreadcast".utf8)]
+        samples.append([UInt8](repeating: 7, count: 100_000))                       // long runs
+        samples.append((0..<70_000).map { UInt8(($0 * 31 + $0 / 7) & 0xFF) })        // varied data
+        var radar = [UInt8]()                                                        // RGB rows with a filter byte
+        for y in 0..<200 {
+            radar.append(0)
+            for x in 0..<300 { radar.append(contentsOf: (x / 40 + y / 30) % 2 == 0 ? [16, 25, 45] : [99, 200, 185]) }
+        }
+        samples.append(radar)
+        for sample in samples {
+            let compressed = Deflate.zlib(sample)
+            #expect(try Inflate.zlib(compressed) == sample)
+        }
+        #expect(Deflate.zlib(radar).count < radar.count / 10)
+    }
+
+    @Test func inflateReadsZlibStreamsFromOtherEncoders() throws {
+        // Python zlib level 9 chose a dynamic-Huffman block (BTYPE 2) for this text.
+        let expected = Array((0..<400).map { "radar\(($0 * 7) % 97) storm\(($0 * 13) % 31)" }.joined(separator: " ").utf8)
+        let dynamic = [UInt8](Data(base64Encoded: Self.dynamicFixture)!)
+        #expect((dynamic[2] >> 1) & 3 == 2)
+        #expect(try Inflate.zlib(dynamic) == expected)
+        // Python zlib level 0: an uncompressed stored block.
+        let stored = [UInt8](Data(base64Encoded: "eAEBBgD5/3N0b3JlZAk8ApI=")!)
+        #expect(try Inflate.zlib(stored) == Array("stored".utf8))
+    }
+
+    static let dynamicFixture = "eNpdmFuqJEcMBbcyS6iTUj5qOQP+NYY73j/GlJQQ5zPpm4Omgg511M/vv37/PL/+/PvPz9/Pr5//T/s7Kb6j8juP9Z2HvvOp46mP9Z1jfue6naP+tbqdb/35+53nqs/r+or6PGuYmq2u7x6urp8arm6/NZvqdh3Hrr/+jnVXNekY9T+pUevuqElVl6MmjXpMWZOqrs+adMw616h1ffVj7Kfcs9WxZlPdPj1cPea3n2Ndr+Oox1yz1mX1Q21GAcDxkHBsEs4E4SkSngeE1yThPUh4vyR8Fgm/AcJBwHoAWJuAR5JwCIjjEHFOIJ6DiOdLxGsR8Q4iPg8Qn03EbwJxkrBEwjpGeBJxDDCOl4xzgfEMMl4PGa8NxjvJ+AiMzyHjd9q3mIg1iFgvEI9FxhFgnA8Z5ybjmWC8RMbrgPGeZHwGGZ+XjN9FxguIFUQ8HiAem4wjyThFxnnIeE4wXoOM10tRLzI+QcbvA8YPEW8QbsvLLN+EW/MyzTfi9rxpXq55Wl5m+UbcmjfLN+LWPC0vWr4Bt+Zlmm/A7XnT/DDNm+Vllm/CrXm55oOeN83LNE/Li5Zvvq15s/zdxA8It+Vllr/fYZFwa74Jt+dN83LN0/Iyy19RcxU/BNyaN8vLLN+IW/Myzd9VPIC4NT9M82Z5meUbcWtervmA503zMs2b5WWWb8atebP83cXBXfyQcVv+7uK0XSwybs+b5mWap+Vllm/ErXmz/N3FDxi35WWWv7tYZNyab8btedP8MM2b5UXL310ctosfIm7Pm+ZlmjfLyyx/d/EA47b8FfXiLg7bxQ8ZP0S8bRUnV7FI+GqelpdZvhG35s3ydxUHV/FDxG35u4rTVrGIWCRMwPfXPC0vs3wTbs3LNR/0vGlepnmzvMzyTbg1b5ZvwgOAX/Jty99NHLaJHxJuz5vm5Zqn5WWWv5t4gHBbvgm35s3youXvKn4IuDV/V3FyFYuI7695Wl5m+UbcmpdrPuh507xM82Z50fJ3F7OKZVU8WMVhVRxWxWlVPK2KF6t4WRVvVvGxKm7LN+PWPC1/dzGzWJbFw7I4LIvTsjiZxdOyeDGLl2Xxtiw+lsVX80HPU/MyzZvlZZa/u5hdnNbFyS6e1sXLunhZF2/r4sMubs3LNM93Nmb5u4qZxcOyOJjFaVmclsXTsnhZFm9m8bYsPszi+86Glr+ECVhWxYNVPKyKg1WcVsXTqniyipdV8WYVb6viY1V839lQ8/fFB/jKongwisOiOCyKk1E8LYono3hZFG+L4m1RfCyK2/PU/DDNm+Vllr+r2KI4LIqTUTwtiiejeFkUb4viwyi+72xEzdPyMss3YVkVD6viYBWHVXGyiqdV8bIqXqzibVV8WMX3nY1Z/n6LbRdbFotZPCyLg1mclsVpWTwti5dl8WIWb8viwyy+72zM8vcHNXexdfFgFw/r4rAuTuvitC6e7OJlXbzYxdu6+FgXt+Zp+UbMLJZl8bAsHpbFYVmczOK0LJ7M4mVZvC2L76v55z8T/ijP"
+
+    @Test func inflateRejectsCorruptData() {
+        #expect(throws: (any Error).self) { _ = try Inflate.zlib([0x78, 0x9C, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0]) }
+        #expect(throws: Inflate.Failure.truncated) { _ = try Inflate.zlib([0x78, 0x9C]) }
+    }
+}
