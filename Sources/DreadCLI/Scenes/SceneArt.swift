@@ -28,8 +28,13 @@ public struct ScenePainter: Sendable {
     static func kit(_ scene: SceneID) -> ((inout Stage) -> Void)? {
         switch scene {
         case .asteroid: AsteroidWatch.draw
+        case .deepTrouble: DeepTrouble.draw
+        case .aiUprising: AIUprising.draw
+        case .solarTantrum: SolarTantrum.draw
+        case .fallout: FalloutOutlook.draw
+        case .superstorm: Superstorm.draw
+        case .clearForNow: ClearForNow.draw
         case .uap: UAPInvasion.draw
-        default: nil
         }
     }
 

@@ -83,10 +83,9 @@ enum AsteroidWatch {
         let sky = horizon
         let farMax = s.layout == .strip ? 7 : min(18, max(7, sky * 2 / 5))
         let nearMax = s.layout == .strip ? 5 : min(11, max(5, sky / 4))
-        let farTop = buildings(&s, base: horizon, seed: 21, widths: 3...7, heights: max(3, farMax / 3)...farMax,
+        s.buildings(base: horizon, seed: 21, widths: 3...7, heights: max(3, farMax / 3)...farMax,
                                body: tones.far, lit: tones.lit * 0.4, windows: tones.windows.map { Raster.mix($0, tones.far, 0.45) })
-        _ = farTop
-        let near = buildings(&s, base: horizon, seed: 22, widths: 5...11, heights: 2...nearMax,
+        let near = s.buildings(base: horizon, seed: 22, widths: 5...11, heights: 2...nearMax,
                              body: tones.near, lit: tones.lit, windows: tones.windows)
         // A radio mast on the tallest near building, its light blinking.
         if let tallest = near.max(by: { $0.height < $1.height }), s.layout != .strip {
@@ -100,50 +99,6 @@ enum AsteroidWatch {
         if s.isNight {
             s.raster.glow(cx: Double(rockX - 8), cy: Double(horizon), radius: 18, color: 0xBD6876, strength: 0.1, rings: 2)
         }
-    }
-
-    struct Building {
-        let x: Int
-        let width: Int
-        let height: Int
-    }
-
-    @discardableResult
-    static func buildings(_ s: inout Stage, base: Int, seed: Int, widths: ClosedRange<Int>, heights: ClosedRange<Int>,
-                          body: UInt32, lit: Double, windows: [UInt32]) -> [Building] {
-        var result: [Building] = []
-        var x = -2
-        var i = 0
-        while x < s.w {
-            let width = widths.lowerBound + Int(s.hash(i, 1, seed) * Double(widths.count))
-            let height = heights.lowerBound + Int(pow(s.hash(i, 2, seed), 1.3) * Double(heights.count))
-            let top = base - height
-            s.raster.fillRect(x: x, y: top, width: width, height: height + 1, color: body)
-            // A setback or water tank on some roofs.
-            let roof = Int(s.hash(i, 3, seed) * 5)
-            if roof == 0, width >= 6 { s.raster.fillRect(x: x + 2, y: top - 2, width: width - 4, height: 2, color: body) }
-            if roof == 1, width >= 5 {
-                s.raster.fillRect(x: x + 1, y: top - 2, width: 2, height: 1, color: body)
-                s.raster.plot(x + 1, top - 1, body)
-                s.raster.plot(x + 2, top - 1, body)
-            }
-            // Windows on a two-pixel grid; a few switch on and off on long loops.
-            var wy = top + 1
-            while wy < base - 1 {
-                var wx = x + 1
-                while wx < x + width - 1 {
-                    var on = s.hash(wx, wy, seed) < lit
-                    if s.hash(wx, wy, seed + 9) < 0.03 { on = on != (s.tick(5 + 7 * s.hash(wx, wy, seed + 10), frames: 2) == 1) }
-                    if on { s.raster.plot(wx, wy, windows[Int(s.hash(wx, wy, seed + 1) * Double(windows.count)) % windows.count]) }
-                    wx += 2
-                }
-                wy += 2
-            }
-            result.append(Building(x: x, width: width, height: height))
-            x += width + (s.hash(i, 4, seed) < 0.25 ? 1 : 0)
-            i += 1
-        }
-        return result
     }
 
     // MARK: The event
