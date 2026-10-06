@@ -149,15 +149,26 @@ enum ConfigCommand {
                 guard ["emoji", "ascii"].contains(value) else { return ctx.fail("icons: emoji or ascii.", code: .usage) }
                 config.icons = value
             case "scene":
-                if value == "daily" || value == "off" {
+                if value == "off" {
+                    // Hiding the art is its own setting; accept the obvious phrasing too.
+                    config.sceneBanner = false
+                    try ConfigStore.save(config, to: ctx.paths)
+                    ctx.write("  Saved scene-banner = off.")
+                    return .ok
+                } else if value == "daily" {
                     config.scene = value
                 } else if case .scene(let scene) = SceneID.lookup(value) {
                     config.scene = scene.rawValue
                 } else if case .pro(let title) = SceneID.lookup(value) {
                     return ctx.fail("\(title) is a Pro scene in Dreadcast: Weather & Radar. Free scenes: \(SceneID.names).", code: .usage)
                 } else {
-                    return ctx.fail("scene: daily, off, or one of \(SceneID.names).", code: .usage)
+                    return ctx.fail("scene: daily, or one of \(SceneID.names).", code: .usage)
                 }
+            case "scene-banner", "banner":
+                guard ["on", "off", "true", "false", "yes", "no", "1", "0"].contains(value) else {
+                    return ctx.fail("scene-banner: on or off.", code: .usage)
+                }
+                config.sceneBanner = ["on", "true", "yes", "1"].contains(value)
             default:
                 return ctx.fail("Unknown setting \(parts[1]).", code: .usage)
             }
@@ -179,7 +190,9 @@ enum ConfigCommand {
             "  " + s.paint("Renderer", Theme.mist) + "   " + c.renderer + s.paint("  (detected: \(ctx.terminal.graphics.rawValue), \(ctx.terminal.colorMode))", Theme.faint),
             "  " + s.paint("Quips", Theme.mist) + "      " + (c.quips ? "on" : "off"),
             "  " + s.paint("Icons", Theme.mist) + "      " + c.icons,
-            "  " + s.paint("Scene", Theme.mist) + "      " + c.scene,
+            "  " + s.paint("Scene", Theme.mist) + "      " + (c.scene == "daily" ? "daily (a different scene each day)"
+                : SceneID(rawValue: c.scene).map { "\($0.title) (\($0.rawValue))" } ?? c.scene),
+            "  " + s.paint("Banner", Theme.mist) + "     " + (c.sceneBanner ? "on" : "off") + s.paint("  (the scene above dread and dread top)", Theme.faint),
             "  " + s.paint("Lightning", Theme.mist) + "  " + (Credentials.source(environment: ctx.environment) ?? "not configured"),
             "",
             "  " + s.paint("Config  " + ctx.paths.configFile.path, Theme.faint),

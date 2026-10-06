@@ -2,7 +2,7 @@ import Foundation
 import DreadcastKit
 import DreadTerminal
 
-/// `dread` (or `dread weather`): today's scene, current conditions, active alerts, the
+/// `dread` (or `dread weather`): your scene, current conditions, active alerts, the
 /// next two hours, recent lightning and the next five days.
 enum NowCommand {
     static func run(_ ctx: Context) async throws -> ExitCode {
@@ -115,13 +115,14 @@ enum NowCommand {
         return lines
     }
 
-    /// Today's scene as a strip above the readings. It is decorative, so it steps aside
+    /// Your scene as a strip above the readings. It is decorative, so it steps aside
     /// for active or unknown alerts, plain output and short terminals.
     static func banner(place: Place, alerts: Fetched<[WeatherAlert]>, report: WeatherReport?, ctx: Context, width: Int) -> [String] {
         guard ctx.styler.mode >= .ansi256, !ctx.arguments.has("no-scene"), width >= 50, ctx.terminal.rows >= bannerMinimumRows else { return [] }
         if place.isUnitedStates, alerts.value?.isEmpty != true { return [] }
         let zone = report?.timeZone ?? ctx.timeZone(for: place)
-        guard let scene = SceneCommand.configuredScene(ctx, timeZone: zone) else { return [] }
+        guard ctx.config.sceneBanner else { return [] }
+        let scene = SceneCommand.configuredScene(ctx, timeZone: zone)
         let period = ScenePeriod.at(ctx.now, timeZone: zone)
         let strip = ScenePainter(scene: scene, period: period, time: 0, still: true, moon: LunarPhase(at: ctx.now), layout: .strip)
             .paint(width: width - 2, height: 20)

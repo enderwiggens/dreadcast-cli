@@ -88,17 +88,19 @@ struct SceneTests {
 
     // MARK: Banner and readings
 
-    static func context(rows: Int = 44, scene: String = "asteroid", quips: Bool = true) throws -> Context {
+    static func context(rows: Int = 44, scene: String = "asteroid", banner: Bool = true, quips: Bool = true,
+                        arguments: Arguments = Arguments(command: "now")) throws -> Context {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("dreadcast-scene-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var config = Config()
         config.scene = scene
+        config.sceneBanner = banner
         config.quips = quips
         let environment = ["DREADCAST_CONFIG_DIR": directory.path, "DREADCAST_CACHE_DIR": directory.appendingPathComponent("cache").path]
         try ConfigStore.save(config, to: Paths.resolve(environment: environment))
         let terminal = TerminalInfo(isOutputTTY: true, isInputTTY: true, columns: 100, rows: rows, colorMode: .truecolor,
                                     graphics: .none, program: nil, insideMultiplexer: false, reduceMotion: false)
-        return Context(arguments: Arguments(command: "now"), environment: environment, terminal: terminal,
+        return Context(arguments: arguments, environment: environment, terminal: terminal,
                        now: ISODate.parse("2026-10-06T23:30:00Z")!)
     }
 
@@ -123,7 +125,7 @@ struct SceneTests {
         #expect(NowCommand.banner(place: Self.tampa, alerts: Self.fetched(nil), report: report, ctx: ctx, width: 86).isEmpty)
         let short = try Self.context(rows: 30)
         #expect(NowCommand.banner(place: Self.tampa, alerts: Self.fetched([]), report: report, ctx: short, width: 86).isEmpty)
-        let off = try Self.context(scene: "off")
+        let off = try Self.context(banner: false)
         #expect(NowCommand.banner(place: Self.tampa, alerts: Self.fetched([]), report: report, ctx: off, width: 86).isEmpty)
     }
 
@@ -189,8 +191,31 @@ struct SceneTests {
         #expect(scene.value("time") == "night")
     }
 
-    @Test func sceneSettingDefaultsToDaily() throws {
+    @Test func sceneDefaultsToAsteroidWatchWithTheBannerOn() throws {
         let config = try JSONDecoder.dreadcast.decode(Config.self, from: Data(#"{"units":"metric"}"#.utf8))
-        #expect(config.scene == "daily")
+        #expect(config.scene == "asteroid")
+        #expect(config.sceneBanner)
+        let early = try JSONDecoder.dreadcast.decode(Config.self, from: Data(#"{"scene":"off"}"#.utf8))
+        #expect(early.scene == "asteroid" && !early.sceneBanner)
+        let ctx = try Self.context()
+        #expect(SceneCommand.configuredScene(ctx, timeZone: .current) == .asteroid)
+    }
+
+    @Test func configSetsTheSceneAndTheBanner() throws {
+        func run(_ words: [String]) throws -> (ExitCode, Config) {
+            let ctx = try Self.context(arguments: try Arguments.parse(["config", "set"] + words))
+            let code = try ConfigCommand.run(ctx)
+            return (code, ConfigStore.load(from: ctx.paths))
+        }
+        let picked = try run(["scene", "UAP"])
+        #expect(picked.0 == .ok && picked.1.scene == "uap")
+        let daily = try run(["scene", "daily"])
+        #expect(daily.1.scene == "daily")
+        let hidden = try run(["scene-banner", "off"])
+        #expect(hidden.0 == .ok && !hidden.1.sceneBanner)
+        let alias = try run(["scene", "off"])
+        #expect(alias.0 == .ok && !alias.1.sceneBanner && alias.1.scene == "asteroid")
+        #expect(try run(["scene", "volcano"]).0 == .usage)
+        #expect(try run(["scene-banner", "maybe"]).0 == .usage)
     }
 }

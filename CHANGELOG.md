@@ -8,9 +8,10 @@
   terminal, with live conditions beneath them. Each scene follows the local time of day,
   as in the app. Keys change the scene and time of day; `--still` draws one frame and
   `--png` saves the artwork.
-- `dread` shows today's scene as a banner when no alert is active, and a five-day list.
-  `dread config set scene <name|daily|off>` chooses the banner.
-- `dread top` shows today's scene as a strip along the top in terminals at least 40 rows
+- `dread` shows your scene as a banner when no alert is active, and a five-day list.
+- `dread config set scene <name|daily>` picks your scene (Asteroid Watch by default), and
+  `dread config set scene-banner on|off` shows or hides it above `dread` and `dread top`.
+- `dread top` shows your scene as a strip along the top in terminals at least 40 rows
   tall, while no alert is active; `s` hides it.
 - `dread weather` as another name for `dread`.
 - README examples of every main command, captured from live runs, and the script that

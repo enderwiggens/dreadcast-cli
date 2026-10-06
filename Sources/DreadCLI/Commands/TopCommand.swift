@@ -133,7 +133,7 @@ enum TopCommand {
 
     // MARK: Rendering
 
-    /// Today's scene as a strip over the dashboard: only in tall terminals, never while an
+    /// Your scene as a strip over the dashboard: only in tall terminals, never while an
     /// alert is active or unknown, stepping every four seconds. `s` hides it.
     struct Strip {
         let started: Date
@@ -146,7 +146,8 @@ enum TopCommand {
     static func stripLines(ctx: Context, place: Place, snapshot: Snapshot, zone: TimeZone, width: Int, height: Int, strip: Strip) -> [String] {
         guard !strip.hidden, height >= Strip.minimumHeight, ctx.styler.mode >= .ansi256, !ctx.arguments.has("no-scene") else { return [] }
         if place.isUnitedStates, snapshot.alerts?.value?.isEmpty != true { return [] }
-        guard let scene = SceneCommand.configuredScene(ctx, timeZone: zone) else { return [] }
+        guard ctx.config.sceneBanner else { return [] }
+        let scene = SceneCommand.configuredScene(ctx, timeZone: zone)
         let still = ctx.terminal.reduceMotion
         let time = still ? 0 : (Date().timeIntervalSince(strip.started) / 4).rounded(.down) * 4
         let raster = ScenePainter(scene: scene, period: ScenePeriod.at(ctx.now, timeZone: zone), time: time, still: still,
@@ -203,7 +204,7 @@ enum TopCommand {
         }
         while lines.count < height - 1 { lines.append("") }
         var keys: [(String, String)] = [("↑/↓", "select"), ("r", "refresh")]
-        if max(16, size.1) >= Strip.minimumHeight, ctx.styler.mode >= .ansi256 { keys.append(("s", strip.hidden ? "show scene" : "hide scene")) }
+        if max(16, size.1) >= Strip.minimumHeight, ctx.styler.mode >= .ansi256, ctx.config.sceneBanner { keys.append(("s", strip.hidden ? "show scene" : "hide scene")) }
         keys.append(("q", "quit"))
         let busy = snapshot.inFlight.isEmpty ? "" : "updating \(snapshot.inFlight.sorted().joined(separator: ", "))…"
         lines.append(TextWidth.spread(" " + keys.map { s.paint($0.0, Theme.lamp) + " " + s.paint($0.1, Theme.mist) }.joined(separator: "   "),

@@ -39,7 +39,7 @@ enum SceneCommand {
         }
         if ctx.mode == .pretty, ctx.arguments.value("png") == nil { readings = await load(readings.place, ctx: ctx) }
         let zone = readings.weather?.value?.timeZone ?? readings.place.map(ctx.timeZone(for:)) ?? .current
-        var scene = chosen ?? configuredScene(ctx, timeZone: zone) ?? .daily(on: ctx.now, timeZone: zone)
+        var scene = chosen ?? configuredScene(ctx, timeZone: zone)
         func period() -> ScenePeriod { fixedPeriod ?? ScenePeriod.at(ctx.now, timeZone: zone) }
 
         // Exporting a PNG works the same whether or not output goes to a terminal.
@@ -167,12 +167,13 @@ enum SceneCommand {
         return Readings(place: place, weather: w, alerts: place.isUnitedStates ? a : nil)
     }
 
-    /// The configured scene: a name, `daily`, or nil when scenes are off.
-    static func configuredScene(_ ctx: Context, timeZone: TimeZone) -> SceneID? {
+    /// The configured scene: a name, or `daily` for a different one each day. Asteroid
+    /// Watch unless set otherwise.
+    static func configuredScene(_ ctx: Context, timeZone: TimeZone) -> SceneID {
         let value = ctx.config.scene.lowercased()
-        if value == "off" { return nil }
-        if value != "daily", case .scene(let scene) = SceneID.lookup(value) { return scene }
-        return .daily(on: ctx.now, timeZone: timeZone)
+        if value == "daily" { return .daily(on: ctx.now, timeZone: timeZone) }
+        if case .scene(let scene) = SceneID.lookup(value) { return scene }
+        return .asteroid
     }
 
     static func hud(scene: SceneID, period: ScenePeriod, automatic: Bool, paused: Bool, columns: Int, styler s: Styler) -> String {

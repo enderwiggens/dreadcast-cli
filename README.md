@@ -9,7 +9,7 @@ every reading attached. It draws animated radar in your terminal, tells you when
 will arrive, lists active warnings in full, fits a forecast into your shell prompt, and
 brings Dreadcast’s scenes along as pixel art.
 
-![dread: today’s scene over current conditions, the next two hours and five days](docs/images/dread.png)
+![dread: the Asteroid Watch scene over current conditions, the next two hours and five days](docs/images/dread.png)
 
 ## Install
 
@@ -39,7 +39,7 @@ The screenshots below are real runs, captured from the terminal.
 
 ### Weather at a glance: `dread`
 
-`dread`, or `dread weather`, shows today’s scene, current conditions, active alerts, rain
+`dread`, or `dread weather`, shows your scene, current conditions, active alerts, rain
 in the next two hours, recent lightning and the next five days. The scene appears in
 terminals at least 38 rows tall and steps aside whenever an alert is active; the dry line
 at the bottom never appears with an alert either.
@@ -88,7 +88,7 @@ that form or fade along the way.
 A full-screen dashboard that lists weather systems near you like processes, sorted by
 threat: alerts, storm cells, lightning, severe outlook, tropical storms, wildfires, air
 quality and hazards. Each source refreshes on its own schedule and fails on its own. In
-terminals at least 40 rows tall, today's scene runs along the top while no alert is
+terminals at least 40 rows tall, your scene runs along the top while no alert is
 active; `s` hides it.
 
 ### Outlook: `dread outlook`
@@ -105,16 +105,18 @@ labeled and never changes a reading.
 
 The app’s free scenes as animated pixel art, filling the terminal, with live conditions
 underneath. Each scene changes with the local time of day, from a hint of trouble at
-dawn to the full situation at night, as in the app.
+dawn to the full situation at night, as in the app. Asteroid Watch is the default; pick
+any other, or `daily` for a different scene each day.
 
 ![The eight scenes at dusk](docs/images/scenes.png)
 
 ```sh
-dread scene                        # today’s scene, animated
+dread scene                        # your scene, animated
 dread scene superstorm             # pick one
 dread scene uap --time night       # dawn, day, dusk, night or auto
 dread scene --still                # one frame, inline
-dread config set scene asteroid    # the scene above `dread`: a name, daily or off
+dread config set scene uap         # your scene: any name above, or daily to rotate
+dread config set scene-banner off  # hide it above `dread` and `dread top`
 ```
 
 While it runs: ←/→ change scene, t cycles the time of day, i hides the readings, space

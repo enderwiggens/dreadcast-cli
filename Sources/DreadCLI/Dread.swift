@@ -127,13 +127,14 @@ enum Help {
               dread config set <key> <value>
                 units imperial|metric · palette dreadcast|classic|viridis|rainviewer
                 range 15|35|75|150|300 · renderer auto|kitty|iterm2|halfblock|256
-                quips on|off · icons emoji|ascii · scene <name>|daily|off
+                quips on|off · icons emoji|ascii
+                scene <name>|daily · scene-banner on|off
             """
         case "scene":
             return """
             \(title) scene — the Dreadcast scenes as pixel art, with live conditions
 
-              dread scene                  today’s scene, animated, filling the terminal
+              dread scene                  your scene, animated, filling the terminal
               dread scene <name>           \(SceneID.allCases.map(\.rawValue).joined(separator: ", "))
               --time <auto|dawn|day|dusk|night>
                                            auto follows the local hour, as in the app
@@ -145,14 +146,15 @@ enum Help {
             space pauses, q quits. Scenes are decorative and never describe the weather;
             the readings below them are real. Reduce Motion shows a still frame.
 
-            `dread config set scene <name|daily|off>` picks the scene shown above `dread`.
+            `dread config set scene <name|daily>` picks your scene (Asteroid Watch by default);
+            `dread config set scene-banner off` hides it above `dread` and `dread top`.
             """
         default:
             return """
             \(title) — weather and radar for the command line. \(styler.paint("There’s a lot in the forecast.", Theme.lamp, italic: true))
 
             \(styler.bold("Every day"))
-              dread                        today’s scene, conditions, alerts, the next two hours
+              dread                        your scene, conditions, alerts, the next two hours
                                            and five days (also: dread weather)
               dread radar                  animated radar with lightning
               dread alerts                 active watches, warnings and advisories
