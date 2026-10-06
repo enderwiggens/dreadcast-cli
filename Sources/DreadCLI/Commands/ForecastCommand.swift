@@ -54,7 +54,7 @@ enum ForecastCommand {
         let label = { (text: String) in "  " + s.paint(TextWidth.pad(text, to: 10), Theme.mist) }
         var lines = [""]
         let issued = fetched.storedAt.map { "OPEN-METEO · " + (fetched.isStale ? "stale, " : "") + "updated " + Formatter.ago($0, now: ctx.now) } ?? "OPEN-METEO"
-        lines.append(TextWidth.spread("  " + s.paint("FORECAST", Theme.porcelain, bold: true) + s.paint("  ·  ", Theme.faint) + place.name,
+        lines.append(TextWidth.spread(ctx.title("FORECAST", place: place),
                                       s.paint(issued, fetched.isStale ? Theme.advisory : Theme.faint), width: width))
         lines.append("")
         lines.append("  " + s.bold("NEXT \(hours.count) HOURS"))

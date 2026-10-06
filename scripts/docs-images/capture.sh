@@ -41,15 +41,17 @@ shot() {
 
 # `dread` uses a radar nowcast only when one is already cached, as it would be in daily use.
 COLUMNS=100 $BIN eta --location $LOCATION --plain < /dev/null > /dev/null 2>&1 || true
-shot dread 96 --location $LOCATION
+shot dread 96 now --location $LOCATION
 shot forecast 100 forecast --location $LOCATION
 shot radar 100 radar --still --range 150 --location $LOCATION
 shot eta 100 eta --location $LOCATION
 shot outlook 100 outlook --location $LOCATION
 MAX_ROWS=30 shot alerts 100 alerts --location $ALERT_LOCATION
 
-# Full-screen commands run in a pseudo-terminal.
-$T2P pty $OUT/top.png --cols 108 --rows 44 --wait 10 -- $BIN top --location $LOCATION
+# The app runs in a pseudo-terminal, opened on one tab per screenshot.
+$T2P pty $OUT/app.png --cols 108 --rows 44 --wait 10 -- $BIN top now --location $LOCATION
+print "  $OUT/app.png"
+$T2P pty $OUT/top.png --cols 108 --rows 40 --wait 10 -- $BIN top systems --location $LOCATION
 print "  $OUT/top.png"
 $T2P pty $OUT/scene.png --cols 100 --rows 34 --wait 3 -- $BIN scene asteroid --time dusk --location $LOCATION
 print "  $OUT/scene.png"

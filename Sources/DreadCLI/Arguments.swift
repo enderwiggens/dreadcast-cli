@@ -4,6 +4,8 @@ import Foundation
 /// small parser replaces swift-argument-parser.
 public struct Arguments: Sendable {
     public var command: String
+    /// False when no command was typed, so `command` is the default.
+    public var commandGiven = false
     public var positionals: [String] = []
     public var options: [String: String] = [:]
     public var flags: Set<String> = []
@@ -84,6 +86,7 @@ public struct Arguments: Sendable {
             index += 1
         }
         if result.flags.contains("version"), !commandSet { result.command = "version" }
+        result.commandGiven = commandSet
         return result
     }
 

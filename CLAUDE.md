@@ -23,7 +23,7 @@ separate project that shares no code with the app at build time and never requir
 - **Free palettes and scenes only.** Dreadcast, Classic, Viridis and RainViewer's colors,
   and the app's eight free scenes. The Pro palettes and Pro scenes stay in the app.
 - **Scenes are decorative.** They never describe the weather; real readings sit beside
-  them. The `dread` banner steps aside while any alert is active or alert data is
+  them. The Now banner steps aside while any alert is active or alert data is
   unknown, and scene lines follow the voice rules above.
 
 ## Layout
@@ -34,6 +34,7 @@ Sources/
 ├── DreadTerminal/  terminal capabilities, color, text width, rasters, pixel-art helpers,
 │                   frame diffing, image protocols
 ├── DreadCLI/       commands, arguments, config, cache, formatting, brand copy
+│   ├── App/        the full-screen app: tabs, frame, screen diffing, one view per tab
 │   └── Scenes/     the scenes: model, painter, readings beneath them
 │       └── Kit/    the scene kit (stage, sprites, shared scenery) and one file per scene
 └── dread/          the executable entry point
@@ -49,7 +50,7 @@ decoded into provider-neutral models before any command sees them.
 
 ```sh
 scripts/test.sh                   # run the tests
-swift run dread --location 33602  # try a command
+swift run dread --location 33602  # open the app (dread now prints the quick look)
 swift build -c release            # optimized build
 scripts/build-basemap.py          # regenerate BasemapData.swift
 scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs pyte, Chrome)
@@ -63,6 +64,11 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
 - New data sources get a cached loader in `Context` with an honest refresh interval,
   independent failure, and entries in `docs/DATA_PROVIDERS.md`, `docs/PRIVACY.md` and
   `dread credits`.
+- `dread` is one app with a tab per view, sharing `TopCommand.State`'s live data. A tab
+  reuses its command's pretty renderer, sized by the app (`width`/`height` parameters)
+  rather than the terminal, and `ctx.inApp` drops titles the app header already shows.
+  New views go in `App/AppViews.swift`, keep the one-shot command, and get a tab only
+  when they're worth living in.
 - Every command supports `--json`, `--plain` and pretty output. JSON schemas are
   versioned (`dreadcast.<command>/1`); change the version for breaking changes.
 - Generated files (`BasemapData.swift`, `RainViewerColorTable.swift`,

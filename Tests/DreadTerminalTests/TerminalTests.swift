@@ -117,5 +117,10 @@ struct RenderingTests {
         #expect(RawTerminal.parse([27, 91, 65]) == .up)
         #expect(RawTerminal.parse([113]) == .character("q"))
         #expect(RawTerminal.parse([3]) == .interrupt)
+        #expect(RawTerminal.parse([9]) == .tab)
+        #expect(RawTerminal.parse([27, 91, 90]) == .backTab)
+        #expect(RawTerminal.parse([27, 91, 53, 126]) == .pageUp)
+        #expect(RawTerminal.parse([27, 91, 54, 126]) == .pageDown)
+        #expect(RawTerminal.parse([27, 91, 72]) == .home)
     }
 }

@@ -158,7 +158,8 @@ public enum Console {
 /// Keys read in raw mode.
 public enum Key: Equatable, Sendable {
     case character(Character)
-    case up, down, left, right, enter, escape, tab, backspace, interrupt
+    case up, down, left, right, enter, escape, tab, backTab, backspace, interrupt
+    case pageUp, pageDown, home, end
     case focusIn, focusOut
 }
 
@@ -242,8 +243,15 @@ public final class RawTerminal: @unchecked Sendable {
                 case 66: return .down
                 case 67: return .right
                 case 68: return .left
+                case 70: return .end
+                case 72: return .home
                 case 73: return .focusIn
                 case 79: return .focusOut
+                case 90: return .backTab
+                case 49 where bytes.count >= 4 && bytes[3] == 126: return .home
+                case 52 where bytes.count >= 4 && bytes[3] == 126: return .end
+                case 53 where bytes.count >= 4 && bytes[3] == 126: return .pageUp
+                case 54 where bytes.count >= 4 && bytes[3] == 126: return .pageDown
                 default: return nil
                 }
             }

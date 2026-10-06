@@ -73,12 +73,13 @@ enum AlertsCommand {
         return fetched.isStale ? .unavailable : .ok
     }
 
-    static func prettyLines(_ alerts: [WeatherAlert], place: Place, fetched: Fetched<[WeatherAlert]>, fmt: Formatter, ctx: Context) -> [String] {
+    static func prettyLines(_ alerts: [WeatherAlert], place: Place, fetched: Fetched<[WeatherAlert]>, fmt: Formatter, ctx: Context,
+                            width requested: Int? = nil) -> [String] {
         let s = ctx.styler
-        let width = min(max(ctx.terminal.columns - 2, 60), 96)
+        let width = requested ?? min(max(ctx.terminal.columns - 2, 60), 96)
         var lines = [""]
         let updated = fetched.storedAt.map { (fetched.isStale ? "stale · " : "") + "updated " + Formatter.ago($0, now: ctx.now) } ?? ""
-        lines.append(TextWidth.spread("  " + s.paint("ALERTS", Theme.porcelain, bold: true) + s.paint("  ·  ", Theme.faint) + place.name,
+        lines.append(TextWidth.spread(ctx.title("ALERTS", place: place),
                                       s.paint("NWS · " + updated, fetched.isStale ? Theme.advisory : Theme.faint), width: width))
         lines.append("")
         if alerts.isEmpty {

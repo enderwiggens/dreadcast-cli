@@ -4,21 +4,29 @@
 
 ### Added
 
+- `dread` opens a full-screen app with tabs for Now, Systems, Radar, Forecast, Alerts,
+  Outlook, Lightning and Scene. Every tab shares one set of live data, refreshed per
+  source, and a new alert shows in the header whichever tab is open. `dread top <view>`
+  opens on a view by name or number.
+- `dread now` prints the quick look that `dread` used to, and `dread` still prints it
+  when piped or given `--plain` or `--json`.
 - `dread scene`: the app's eight free scenes as animated pixel art, filling the
   terminal, with live conditions beneath them. Each scene follows the local time of day,
   as in the app. Keys change the scene and time of day; `--still` draws one frame and
   `--png` saves the artwork.
 - `dread` shows your scene as a banner when no alert is active, and a five-day list.
 - `dread config set scene <name|daily>` picks your scene (Asteroid Watch by default), and
-  `dread config set scene-banner on|off` shows or hides it above `dread` and `dread top`.
-- `dread top` shows your scene as a strip along the top in terminals at least 40 rows
-  tall, while no alert is active; `s` hides it.
+  `dread config set scene-banner on|off` shows or hides it on the Now tab and in
+  `dread now`.
 - `dread weather` as another name for `dread`.
 - README examples of every main command, captured from live runs, and the script that
   regenerates them.
 
 ### Changed
 
+- `dread` in an interactive terminal opens the app instead of printing and exiting. Shell
+  profiles that ran `dread` at startup should use `dread now`.
+- `dread top`'s dashboard is now the app's Systems tab.
 - The README and docs describe dreadcast as a standalone companion to Dreadcast: Weather
   & Radar.
 

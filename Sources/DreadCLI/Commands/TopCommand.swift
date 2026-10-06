@@ -2,8 +2,9 @@ import Foundation
 import DreadcastKit
 import DreadTerminal
 
-/// `dread top`: a full-screen dashboard. Weather systems are listed like processes,
+/// The app's shared data and its Systems view: weather systems listed like processes,
 /// sorted by threat. Each source refreshes on its own cadence and fails independently.
+/// `dread top` opens the app (see DreadApp).
 enum TopCommand {
     /// Everything the dashboard shows. Copied out under the lock for each render.
     struct Snapshot: Sendable {
@@ -17,7 +18,11 @@ enum TopCommand {
         var air: Fetched<AirQualityReading>?
         var hazards: Fetched<HazardSummary>?
         var quakes: Fetched<EarthquakeSnapshot>?
+        var solar: Fetched<SolarOutlook>?
+        var aurora: Fetched<AuroraReading>?
         var lightningConfigured = false
+        /// Solar and aurora data load only once the Outlook tab has been opened.
+        var wantsOutlook = false
         var lastFetch: [String: Date] = [:]
         var inFlight: Set<String> = []
     }
@@ -52,53 +57,18 @@ enum TopCommand {
 
     static let cadences: [(String, TimeInterval)] = [
         ("weather", 600), ("alerts", 120), ("lightning", 60), ("nowcast", 300), ("severe", 900),
-        ("tropical", 900), ("fires", 300), ("air", 1800), ("hazards", 900), ("quakes", 300)
+        ("tropical", 900), ("fires", 300), ("air", 1800), ("hazards", 900), ("quakes", 300), ("solar", 600), ("aurora", 900)
     ]
 
     static func run(_ ctx: Context) async throws -> ExitCode {
-        let place = try await ctx.resolveLocation()
+        let requested = ctx.arguments.positionals.first
+        guard let tab = requested.map(AppTab.named) ?? .now else {
+            return ctx.fail("Unknown view \(requested ?? ""). Choose \(AppTab.allCases.map { $0.title.lowercased() }.joined(separator: ", ")).", code: .usage)
+        }
         guard ctx.mode == .pretty, ctx.terminal.isInputTTY, ctx.terminal.isOutputTTY else {
-            return ctx.fail("dread top needs an interactive terminal. Try `dread --json` or `dread alerts --json`.", code: .usage)
+            return ctx.fail("dread top needs an interactive terminal. Try `dread now`, `dread --json` or `dread alerts --json`.", code: .usage)
         }
-        guard let raw = RawTerminal(alternateScreen: true) else {
-            return ctx.fail("Couldn’t take over the terminal.", code: .unavailable)
-        }
-        defer { raw.restore() }
-
-        let state = State()
-        let configured = Credentials.xweather(environment: ctx.environment) != nil
-        state.with { $0.lightningConfigured = configured }
-        var selected = 0
-        var lastRender = Date.distantPast
-        var strip = Strip(started: Date())
-        while true {
-            ctx.refreshClock()
-            schedule(ctx: ctx, place: place, state: state)
-            if Date().timeIntervalSince(lastRender) >= 1 {
-                selected = render(ctx: ctx, place: place, state: state, selected: selected, strip: &strip)
-                lastRender = Date()
-            }
-            guard let key = raw.readKey(timeout: 0.2) else { continue }
-            switch key {
-            case .character("q"), .character("Q"), .escape, .interrupt:
-                return .ok
-            case .up, .character("k"):
-                selected = max(0, selected - 1)
-                lastRender = .distantPast
-            case .down, .character("j"):
-                selected += 1
-                lastRender = .distantPast
-            case .character("r"), .character("R"):
-                state.with { $0.lastFetch = [:] }
-                ctx.cache.remove(key: "alerts-\(Context.placeKey(place))")
-                lastRender = .distantPast
-            case .character("s"), .character("S"):
-                strip.hidden.toggle()
-                lastRender = .distantPast
-            default:
-                break
-            }
-        }
+        return try await DreadApp.run(ctx, tab: tab)
     }
 
     static func schedule(ctx: Context, place: Place, state: State) {
@@ -107,6 +77,7 @@ enum TopCommand {
             let due = state.with { s -> Bool in
                 guard !s.inFlight.contains(name) else { return false }
                 if name == "lightning" && !s.lightningConfigured { return false }
+                if (name == "solar" || name == "aurora") && !s.wantsOutlook { return false }
                 guard now.timeIntervalSince(s.lastFetch[name] ?? .distantPast) >= cadence else { return false }
                 s.inFlight.insert(name)
                 return true
@@ -124,6 +95,8 @@ enum TopCommand {
                 case "air": let v = await ctx.airQuality(place); state.with { $0.air = v }
                 case "hazards": let v = await ctx.hazards(place); state.with { $0.hazards = v }
                 case "quakes": let v = await ctx.earthquakes(); state.with { $0.quakes = v }
+                case "solar": let v = await ctx.solar(); state.with { $0.solar = v }
+                case "aurora": let v = await ctx.aurora(place); state.with { $0.aurora = v }
                 default: break
                 }
                 state.with { $0.inFlight.remove(name); $0.lastFetch[name] = Date() }
@@ -131,48 +104,15 @@ enum TopCommand {
         }
     }
 
-    // MARK: Rendering
+    // MARK: Systems view
 
-    /// Your scene as a strip over the dashboard: only in tall terminals, never while an
-    /// alert is active or unknown, stepping every four seconds. `s` hides it.
-    struct Strip {
-        let started: Date
-        var hidden = false
-        var shown: [String] = []
-        static let rows = 8
-        static let minimumHeight = 40
-    }
-
-    static func stripLines(ctx: Context, place: Place, snapshot: Snapshot, zone: TimeZone, width: Int, height: Int, strip: Strip) -> [String] {
-        guard !strip.hidden, height >= Strip.minimumHeight, ctx.styler.mode >= .ansi256, !ctx.arguments.has("no-scene") else { return [] }
-        if place.isUnitedStates, snapshot.alerts?.value?.isEmpty != true { return [] }
-        guard ctx.config.sceneBanner else { return [] }
-        let scene = SceneCommand.configuredScene(ctx, timeZone: zone)
-        let still = ctx.terminal.reduceMotion
-        let time = still ? 0 : (Date().timeIntervalSince(strip.started) / 4).rounded(.down) * 4
-        let raster = ScenePainter(scene: scene, period: ScenePeriod.at(ctx.now, timeZone: zone), time: time, still: still,
-                                  moon: LunarPhase(at: ctx.now), layout: .strip)
-            .paint(width: width - 2, height: Strip.rows * 2)
-        return HalfBlockFrame(raster: raster).lines(styler: ctx.styler).map { " " + $0 } + [""]
-    }
-
-    static func render(ctx: Context, place: Place, state: State, selected requested: Int, strip: inout Strip) -> Int {
+    /// Meters, the threat-sorted table and the selected row's details, sized to fit.
+    static func systemsLines(ctx: Context, place: Place, snapshot: Snapshot, selected requested: Int,
+                             width: Int, height: Int) -> (lines: [String], selected: Int) {
         let s = ctx.styler
-        let size = TerminalInfo.windowSize() ?? (ctx.terminal.columns, ctx.terminal.rows)
-        let width = max(60, size.0)
-        let snapshot = state.snapshot
         let zone = snapshot.weather?.value?.timeZone ?? ctx.timeZone(for: place)
         let fmt = Formatter(units: ctx.units, timeZone: zone)
-        let art = stripLines(ctx: ctx, place: place, snapshot: snapshot, zone: zone, width: width, height: max(16, size.1), strip: strip)
-        let height = max(16, size.1) - art.count
-        var lines: [String] = []
-
-        let clock = Date()
-        lines.append(TextWidth.spread(" " + s.paint("dread top", Theme.lamp, bold: true) + s.paint("  —  ", Theme.faint) + place.name
-                                      + s.paint("  \(place.coordinate.formatted)", Theme.faint),
-                                      s.paint(fmt.time(clock).replacingOccurrences(of: " ", with: ":\(String(format: "%02d", Calendar.current.component(.second, from: clock))) ") + " " + fmt.zoneAbbreviation(clock), Theme.faint) + " ", width: width))
-        lines.append("")
-        lines.append(contentsOf: meters(snapshot: snapshot, fmt: fmt, ctx: ctx, width: width))
+        var lines = meters(snapshot: snapshot, fmt: fmt, ctx: ctx, width: width)
         lines.append("")
 
         let rows = buildRows(snapshot: snapshot, place: place, fmt: fmt, ctx: ctx)
@@ -180,7 +120,7 @@ enum TopCommand {
         let header = " " + "PID".padding(6) + "SYSTEM".padding(28) + "STATE".padding(11) + "DIST".padding(9) + "BRG".padding(5) + "MOVING".padding(9) + "ETA".padding(13) + "PEAK"
         lines.append(s.paint(TextWidth.pad(header, to: width), TextStyle(foreground: Theme.mist, background: RGB(hex: 0x182B40), bold: true)))
         let detailHeight = 4
-        let available = max(3, height - lines.count - detailHeight - 2)
+        let available = max(3, height - lines.count - detailHeight)
         let start = max(0, min(selected - available + 1, rows.count - available))
         for (index, row) in rows.enumerated().dropFirst(start).prefix(available) {
             var text = " " + String(row.pid).padding(6) + row.system.cell(28)
@@ -194,7 +134,7 @@ enum TopCommand {
                 lines.append(s.paint(text, color) + s.paint(stateText, row.stateColor ?? color) + s.paint(rest, row.color ?? Theme.mist))
             }
         }
-        while lines.count < height - detailHeight - 1 { lines.append("") }
+        while lines.count < height - detailHeight { lines.append("") }
 
         let detail = rows.isEmpty ? ["Waiting for data…"] : rows[selected].detail
         let title = rows.isEmpty ? "" : " \(rows[selected].pid) \(rows[selected].system) "
@@ -202,25 +142,7 @@ enum TopCommand {
         for line in detail.flatMap({ TextWidth.wrap($0, width: width - 4) }).prefix(detailHeight - 1) {
             lines.append("  " + line)
         }
-        while lines.count < height - 1 { lines.append("") }
-        var keys: [(String, String)] = [("↑/↓", "select"), ("r", "refresh")]
-        if max(16, size.1) >= Strip.minimumHeight, ctx.styler.mode >= .ansi256, ctx.config.sceneBanner { keys.append(("s", strip.hidden ? "show scene" : "hide scene")) }
-        keys.append(("q", "quit"))
-        let busy = snapshot.inFlight.isEmpty ? "" : "updating \(snapshot.inFlight.sorted().joined(separator: ", "))…"
-        lines.append(TextWidth.spread(" " + keys.map { s.paint($0.0, Theme.lamp) + " " + s.paint($0.1, Theme.mist) }.joined(separator: "   "),
-                                      s.paint(busy, Theme.faint) + " ", width: width))
-
-        // The strip's rows are rewritten only when the picture changes.
-        var output = ""
-        if art != strip.shown {
-            output += TerminalControl.home + art.map { $0 + "\u{1B}[K" }.joined(separator: "\r\n") + (art.isEmpty ? "" : "\r\n")
-            strip.shown = art
-        } else {
-            output += TerminalControl.moveTo(row: art.count + 1, column: 1)
-        }
-        output += lines.prefix(height).map { TextWidth.truncateStyled($0, to: width) + "\u{1B}[K" }.joined(separator: "\r\n") + TerminalControl.clearToEnd
-        Console.write(output)
-        return selected
+        return (Array(lines.prefix(height)), selected)
     }
 
     static func meters(snapshot: Snapshot, fmt: Formatter, ctx: Context, width: Int) -> [String] {

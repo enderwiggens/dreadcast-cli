@@ -23,7 +23,8 @@ public enum Dread {
             case "version":
                 context.write("dread \(DreadcastKit.Dreadcast.version)")
                 return .ok
-            case "now", "weather": return try await NowCommand.run(context)
+            case "now", "weather":
+                return context.opensApp ? try await DreadApp.run(context, tab: .now) : try await NowCommand.run(context)
             case "radar": return try await RadarCommand.run(context)
             case "alerts": return try await AlertsCommand.run(context)
             case "prompt": return await PromptCommand.run(context)
@@ -130,6 +131,24 @@ enum Help {
                 quips on|off · icons emoji|ascii
                 scene <name>|daily · scene-banner on|off
             """
+        case "top", "app":
+            return """
+            \(title) — the app
+
+              dread                        opens on Now
+              dread top [view]             opens on a view: now, systems, radar, forecast,
+                                           alerts, outlook, lightning or scene (or 1–8)
+
+            Keys: tab and shift-tab or 1–8 switch views · ↑/↓ select or scroll · r refresh
+            · q quits. Radar: space pauses, ←/→ step frames, +/− change range. Scene: ←/→
+            change scene, t the time of day.
+
+            Every view reads the same live data, and each source refreshes on its own
+            schedule. A new alert shows in the header whichever view is open.
+
+            Piped, or with --plain or --json, `dread` prints the quick look instead, as
+            `dread now` always does.
+            """
         case "scene":
             return """
             \(title) scene — the Dreadcast scenes as pixel art, with live conditions
@@ -147,15 +166,17 @@ enum Help {
             the readings below them are real. Reduce Motion shows a still frame.
 
             `dread config set scene <name|daily>` picks your scene (Asteroid Watch by default);
-            `dread config set scene-banner off` hides it above `dread` and `dread top`.
+            `dread config set scene-banner off` hides it on the Now tab and in `dread now`.
             """
         default:
             return """
             \(title) — weather and radar for the command line. \(styler.paint("There’s a lot in the forecast.", Theme.lamp, italic: true))
 
             \(styler.bold("Every day"))
-              dread                        your scene, conditions, alerts, the next two hours
-                                           and five days (also: dread weather)
+              dread                        the app: now, systems, radar, forecast, alerts,
+                                           outlook, lightning and your scene, one tab each
+              dread now                    a quick look: your scene, conditions, alerts, the
+                                           next two hours and five days (also: dread weather)
               dread radar                  animated radar with lightning
               dread alerts                 active watches, warnings and advisories
               dread prompt                 a cached segment for prompts and status lines
@@ -163,7 +184,6 @@ enum Help {
             \(styler.bold("Weather enthusiasts"))
               dread forecast               hourly and 7-day forecast
               dread eta                    rain arrival from radar motion
-              dread top                    full-screen dashboard
               dread outlook                solar, aurora, earthquakes, meteors and hazards
               dread lightning              strike map (needs Xweather credentials)
               dread scene                  the Dreadcast scenes as animated pixel art

@@ -28,19 +28,22 @@ enum NowCommand {
 
     // MARK: Pretty
 
+    /// `width` and `rows` default to the terminal; the app passes its own. `sceneTime`
+    /// animates the banner in slow steps instead of a still frame.
     static func pretty(place: Place, weather: Fetched<WeatherReport>, alerts: Fetched<[WeatherAlert]>,
-                       lightning: Fetched<LightningSnapshot>?, nowcast: Nowcast?, ctx: Context) -> [String] {
+                       lightning: Fetched<LightningSnapshot>?, nowcast: Nowcast?, ctx: Context,
+                       width requested: Int? = nil, rows: Int? = nil, sceneTime: Double? = nil) -> [String] {
         let s = ctx.styler
-        let width = min(max(ctx.terminal.columns - 2, 60), 86)
+        let width = requested ?? min(max(ctx.terminal.columns - 2, 60), 86)
         let report = weather.value
         let fmt = Formatter(units: ctx.units, timeZone: report?.timeZone ?? ctx.timeZone(for: place))
         var lines: [String] = [""]
-        let art = banner(place: place, alerts: alerts, report: report, ctx: ctx, width: width)
+        let art = banner(place: place, alerts: alerts, report: report, ctx: ctx, width: width, rows: rows, sceneTime: sceneTime)
         if !art.isEmpty { lines.append(contentsOf: art + [""]) }
 
         let brand = "  " + s.paint("DREADCAST", Theme.porcelain, bold: true) + s.paint("  ·  ", Theme.faint) + place.name
         let clock = s.paint(fmt.time(ctx.now) + " " + fmt.zoneAbbreviation(ctx.now), Theme.faint)
-        lines.append(TextWidth.spread(brand, clock, width: width))
+        if !ctx.inApp { lines.append(TextWidth.spread(brand, clock, width: width)) }
 
         if let report {
             let c = report.current
@@ -117,14 +120,17 @@ enum NowCommand {
 
     /// Your scene as a strip above the readings. It is decorative, so it steps aside
     /// for active or unknown alerts, plain output and short terminals.
-    static func banner(place: Place, alerts: Fetched<[WeatherAlert]>, report: WeatherReport?, ctx: Context, width: Int) -> [String] {
-        guard ctx.styler.mode >= .ansi256, !ctx.arguments.has("no-scene"), width >= 50, ctx.terminal.rows >= bannerMinimumRows else { return [] }
+    static func banner(place: Place, alerts: Fetched<[WeatherAlert]>, report: WeatherReport?, ctx: Context, width: Int,
+                       rows: Int? = nil, sceneTime: Double? = nil) -> [String] {
+        guard ctx.styler.mode >= .ansi256, !ctx.arguments.has("no-scene"), width >= 50,
+              (rows ?? ctx.terminal.rows) >= bannerMinimumRows else { return [] }
         if place.isUnitedStates, alerts.value?.isEmpty != true { return [] }
         let zone = report?.timeZone ?? ctx.timeZone(for: place)
         guard ctx.config.sceneBanner else { return [] }
         let scene = SceneCommand.configuredScene(ctx, timeZone: zone)
         let period = ScenePeriod.at(ctx.now, timeZone: zone)
-        let strip = ScenePainter(scene: scene, period: period, time: 0, still: true, moon: LunarPhase(at: ctx.now), layout: .strip)
+        let strip = ScenePainter(scene: scene, period: period, time: sceneTime ?? 0, still: sceneTime == nil || ctx.terminal.reduceMotion,
+                                 moon: LunarPhase(at: ctx.now), layout: .strip)
             .paint(width: width - 2, height: 20)
         return HalfBlockFrame(raster: strip).lines(styler: ctx.styler).map { "  " + $0 }
     }

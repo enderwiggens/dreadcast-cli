@@ -78,6 +78,21 @@ public final class Context: @unchecked Sendable {
         useEmoji ? WeatherCondition.emoji(code, isDay: isDay) : WeatherCondition.ascii(code, isDay: isDay)
     }
 
+    /// Set while the app is running: its header already names the place.
+    var inApp = false
+
+    /// A section title, followed by the place outside the app.
+    func title(_ name: String, place: Place) -> String {
+        "  " + styler.paint(name, Theme.porcelain, bold: true) + (inApp ? "" : styler.paint("  ·  ", Theme.faint) + place.name)
+    }
+
+    /// Plain `dread` opens the app when a person is at the terminal; piped, or with
+    /// --pretty, --plain or --json, it prints the quick look instead.
+    var opensApp: Bool {
+        !arguments.commandGiven && mode == .pretty && !arguments.has("pretty")
+            && terminal.isInputTTY && terminal.isOutputTTY
+    }
+
     public var quipsEnabled: Bool { config.quips && !arguments.has("no-quip") && mode == .pretty }
 
     // MARK: Output

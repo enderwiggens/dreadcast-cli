@@ -9,7 +9,7 @@ every reading attached. It draws animated radar in your terminal, tells you when
 will arrive, lists active warnings in full, fits a forecast into your shell prompt, and
 brings Dreadcast’s scenes along as pixel art.
 
-![dread: the Asteroid Watch scene over current conditions, the next two hours and five days](docs/images/dread.png)
+![dread: the app on its Now tab, with the Asteroid Watch scene over current conditions and five days](docs/images/app.png)
 
 ## Install
 
@@ -37,12 +37,27 @@ two decimal places (about 1 km) before they are saved or sent anywhere.
 
 The screenshots below are real runs, captured from the terminal.
 
-### Weather at a glance: `dread`
+### The app: `dread`
 
-`dread`, or `dread weather`, shows your scene, current conditions, active alerts, rain
-in the next two hours, recent lightning and the next five days. The scene appears in
-terminals at least 38 rows tall and steps aside whenever an alert is active; the dry line
-at the bottom never appears with an alert either.
+`dread` opens a full-screen app with a tab for each view: **Now**, **Systems**,
+**Radar**, **Forecast**, **Alerts**, **Outlook**, **Lightning** and **Scene**. Tab,
+Shift-Tab or 1–8 switch views, ↑/↓ scroll or select, `r` refreshes and `q` quits.
+Every tab reads the same live data, and each source refreshes on its own schedule and
+fails on its own, so switching tabs never waits on the network. A new alert shows in
+the header whichever tab is open, with a count on the Alerts tab.
+
+`dread top radar` (or any view's name or number) opens on that view. Piped, or with
+`--plain` or `--json`, `dread` prints the quick look below instead, so scripts and
+shell profiles keep working.
+
+### Quick look: `dread now`
+
+![dread now: the Asteroid Watch scene over current conditions, the next two hours and five days](docs/images/dread.png)
+
+`dread now`, or `dread weather`, prints your scene, current conditions, active alerts,
+rain in the next two hours, recent lightning and the next five days, then exits. The
+scene appears in terminals at least 38 rows tall and steps aside whenever an alert is
+active; the dry line at the bottom never appears with an alert either.
 
 ### Radar: `dread radar`
 
@@ -81,15 +96,13 @@ backward from your location to estimate when rain arrives, how heavy it gets and
 it eases. It reports its confidence and the frames it used. It can’t foresee storms
 that form or fade along the way.
 
-### Dashboard: `dread top`
+### Systems: the app’s second tab
 
-![dread top listing nearby weather systems like processes](docs/images/top.png)
+![The Systems tab listing nearby weather systems like processes](docs/images/top.png)
 
-A full-screen dashboard that lists weather systems near you like processes, sorted by
-threat: alerts, storm cells, lightning, severe outlook, tropical storms, wildfires, air
-quality and hazards. Each source refreshes on its own schedule and fails on its own. In
-terminals at least 40 rows tall, your scene runs along the top while no alert is
-active; `s` hides it.
+Weather systems near you, listed like processes and sorted by threat: alerts, storm
+cells, lightning, severe outlook, tropical storms, wildfires, air quality and hazards.
+↑/↓ select a system to read its details. `dread top systems` opens straight to it.
 
 ### Outlook: `dread outlook`
 
@@ -116,7 +129,7 @@ dread scene superstorm             # pick one
 dread scene uap --time night       # dawn, day, dusk, night or auto
 dread scene --still                # one frame, inline
 dread config set scene uap         # your scene: any name above, or daily to rotate
-dread config set scene-banner off  # hide it above `dread` and `dread top`
+dread config set scene-banner off  # hide it on the Now tab and in `dread now`
 ```
 
 While it runs: ←/→ change scene, t cycles the time of day, i hides the readings, space
@@ -128,8 +141,8 @@ stay in the app.
 
 A Braille strike map with five age bands, using your own
 [Xweather](https://www.xweather.com/) account. Save credentials with
-`dread auth xweather`; lightning then also appears in `dread`, `dread radar` and
-`dread top`.
+`dread auth xweather`; lightning then also appears on the app’s Now, Radar and Systems
+tabs, in `dread now` and in `dread radar`.
 
 ### Prompts and status lines: `dread prompt`
 
@@ -167,12 +180,13 @@ when = true
 
 | Command | What it does |
 | --- | --- |
-| `dread`, `dread weather` | Today’s scene, conditions, alerts, the next two hours, lightning and five days |
+| `dread` | The app: Now, Systems, Radar, Forecast, Alerts, Outlook, Lightning and Scene tabs |
+| `dread now`, `dread weather` | A quick look: your scene, conditions, alerts, the next two hours, lightning and five days |
 | `dread radar` | Animated radar loop with ranges, palettes and lightning ages |
 | `dread alerts` | Active NWS watches, warnings and advisories in full |
 | `dread forecast` | Hourly and 7-day charts |
 | `dread eta` | When rain reaches you, from recent radar motion |
-| `dread top` | Full-screen dashboard: weather systems listed like processes |
+| `dread top [view]` | The app, opened on a view by name or number |
 | `dread outlook` | Solar activity, aurora, earthquakes, meteor showers and hazards |
 | `dread scene` | The Dreadcast scenes as animated pixel art, with live conditions |
 | `dread lightning` | Strike map in Braille dots (needs your own Xweather account) |

@@ -45,10 +45,10 @@ enum LightningCommand {
     }
 
     static func pretty(place: Place, snapshot: LightningSnapshot, fetched: Fetched<LightningSnapshot>,
-                       fmt: Formatter, ctx: Context, watching: Bool) -> [String] {
+                       fmt: Formatter, ctx: Context, watching: Bool, width: Int? = nil, height: Int? = nil) -> [String] {
         let s = ctx.styler
-        let columns = min(max(ctx.terminal.columns - 4, 40), 96)
-        let rows = max(10, min(ctx.terminal.rows - 10, columns / 3))
+        let columns = min(max((width ?? ctx.terminal.columns) - 4, 40), 96)
+        let rows = max(height == nil ? 10 : 6, min((height ?? ctx.terminal.rows) - 10, columns / 3))
         // One basemap pixel per cell for the background, Braille dots for strikes.
         let cellViewport = RadarViewport(center: place.coordinate, rangeMiles: snapshot.radiusMiles, width: columns, height: rows * 2)
         let scene = RadarScene(viewport: cellViewport, palette: ctx.config.palette, minimumDBZ: 99, units: ctx.units)
@@ -71,7 +71,7 @@ enum LightningCommand {
 
         var lines = [""]
         let status = (fetched.isStale ? "stale · " : "") + "updated " + Formatter.ago(fetched.storedAt ?? ctx.now, now: ctx.now) + (watching ? " · refreshes every minute" : "")
-        lines.append(TextWidth.spread("  " + s.paint("LIGHTNING", Theme.porcelain, bold: true) + s.paint("  ·  ", Theme.faint) + place.name
+        lines.append(TextWidth.spread(ctx.title("LIGHTNING", place: place)
                                       + s.paint("  ·  \(fmt.distance(miles: snapshot.radiusMiles)) radius", Theme.mist),
                                       s.paint("XWEATHER · " + status, fetched.isStale ? Theme.advisory : Theme.faint), width: columns + 2))
         lines.append(contentsOf: canvas.render(styler: s, background: background, overlays: markers).map { "  " + $0 })
