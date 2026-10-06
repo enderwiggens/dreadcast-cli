@@ -1,0 +1,290 @@
+import Foundation
+import DreadcastKit
+import DreadTerminal
+
+public enum ExitCode: Int32, Sendable {
+    case ok = 0
+    /// `--fail-on`: an alert at or above the requested level is active.
+    case alertActive = 1
+    case usage = 2
+    /// Data was unavailable or stale. Never reported as all clear.
+    case unavailable = 3
+    case setupRequired = 4
+}
+
+public enum OutputMode: Sendable { case pretty, plain, json }
+
+/// Everything a command needs: arguments, preferences, terminal, cache and data loaders.
+public final class Context: @unchecked Sendable {
+    public let arguments: Arguments
+    public let environment: [String: String]
+    public let paths: Paths
+    public var config: Config
+    public let terminal: TerminalInfo
+    public let styler: Styler
+    public let mode: OutputMode
+    public let http: HTTPClient
+    public let cache: DiskCache
+    /// Created on first use so fast commands like `prompt` skip the tile directory.
+    public lazy var tiles = DiskTileStore(directory: paths.cacheDirectory.appendingPathComponent("radar", isDirectory: true))
+    public private(set) var now: Date
+
+    public init(arguments: Arguments,
+                environment: [String: String] = ProcessInfo.processInfo.environment,
+                terminal: TerminalInfo? = nil,
+                http: HTTPClient = HTTPClient(),
+                now: Date = Date()) {
+        self.arguments = arguments
+        self.environment = environment
+        paths = Paths.resolve(environment: environment)
+        config = ConfigStore.load(from: paths)
+        let detected = terminal ?? TerminalInfo.detect(environment: environment)
+        self.terminal = detected
+        if arguments.has("json") {
+            mode = .json
+        } else if arguments.has("pretty") {
+            mode = .pretty
+        } else if arguments.has("plain") || !detected.isOutputTTY {
+            mode = .plain
+        } else {
+            mode = .pretty
+        }
+        // --pretty keeps colors when output is piped, for `less -R` and screenshots.
+        let available = detected.isOutputTTY ? detected.colorMode : TerminalInfo.colorMode(environment: environment, isTTY: true)
+        let colors: ColorMode = (arguments.has("no-color") || mode != .pretty) ? .none : available
+        styler = Styler(mode: colors)
+        self.http = http
+        cache = DiskCache(directory: paths.cacheDirectory)
+        self.now = now
+    }
+
+    public func refreshClock() { now = Date() }
+
+    // MARK: Preferences
+
+    public var units: UnitSystem {
+        switch arguments.value("units")?.lowercased() {
+        case "metric", "c", "celsius": .metric
+        case "imperial", "f", "fahrenheit": .imperial
+        default: config.units
+        }
+    }
+
+    public var useEmoji: Bool {
+        !arguments.has("ascii") && config.icons != "ascii" && mode == .pretty
+    }
+
+    public func icon(_ code: Int?, isDay: Bool = true) -> String {
+        useEmoji ? WeatherCondition.emoji(code, isDay: isDay) : WeatherCondition.ascii(code, isDay: isDay)
+    }
+
+    public var quipsEnabled: Bool { config.quips && !arguments.has("no-quip") && mode == .pretty }
+
+    // MARK: Output
+
+    public func write(_ lines: [String]) {
+        Console.write(lines.joined(separator: "\n") + "\n")
+    }
+
+    public func write(_ line: String) {
+        Console.write(line + "\n")
+    }
+
+    public func writeJSON<T: Encodable>(_ value: T) {
+        let encoder = JSONEncoder.dreadcast
+        guard let data = try? encoder.encode(value), let text = String(data: data, encoding: .utf8) else { return }
+        Console.write(text + "\n")
+    }
+
+    public func fail(_ message: String, code: ExitCode) -> ExitCode {
+        if mode == .json {
+            struct ErrorBody: Encodable { let error: String; let code: Int32 }
+            writeJSON(ErrorBody(error: message, code: code.rawValue))
+        } else {
+            Console.writeError(styler.paint("dread: ", Theme.faint) + message + "\n")
+        }
+        return code
+    }
+
+    // MARK: Location
+
+    public enum LocationError: LocalizedError {
+        case notConfigured
+
+        public var errorDescription: String? {
+            "No location yet. Run `dread setup`, or pass --location with a ZIP code, place or lat,lon."
+        }
+    }
+
+    public func resolveLocation() async throws -> Place {
+        if let query = arguments.value("location") ?? environment["DREADCAST_LOCATION"], !query.isEmpty {
+            let key = "place-" + query.lowercased()
+            if let cached = cache.read(Place.self, key: key), now.timeIntervalSince(cached.storedAt) < 30 * 86400 {
+                return cached.value
+            }
+            let places = try await PlaceService(http: http).resolve(query)
+            guard let place = places.first else { throw DreadcastError.notFound("No places matched “\(query)”.") }
+            cache.write(place, key: key, at: now)
+            return place
+        }
+        guard let place = config.location else { throw LocationError.notConfigured }
+        return place
+    }
+
+    /// The location's own time zone: from the forecast when cached, then the place, then this Mac.
+    public func timeZone(for place: Place) -> TimeZone {
+        if let report = cache.read(WeatherReport.self, key: "weather-\(Self.placeKey(place))-\(units.rawValue)")?.value {
+            return report.timeZone
+        }
+        return place.timeZone.flatMap(TimeZone.init(identifier:)) ?? .current
+    }
+
+    // MARK: Data, cached with per-source refresh intervals
+
+    func load<T: Codable & Sendable>(key: String, maxAge: TimeInterval, staleLimit: TimeInterval = 6 * 3600,
+                                     fetch: @Sendable () async throws -> T) async -> Fetched<T> {
+        let cached = cache.read(T.self, key: key)
+        if let cached, now.timeIntervalSince(cached.storedAt) >= 0, now.timeIntervalSince(cached.storedAt) < maxAge {
+            return Fetched(value: cached.value, storedAt: cached.storedAt, error: nil, isStale: false)
+        }
+        do {
+            let value = try await fetch()
+            cache.write(value, key: key, at: now)
+            return Fetched(value: value, storedAt: now, error: nil, isStale: false)
+        } catch {
+            if let cached, now.timeIntervalSince(cached.storedAt) < staleLimit {
+                return Fetched(value: cached.value, storedAt: cached.storedAt, error: error.userMessage, isStale: true)
+            }
+            return .failure(error.userMessage)
+        }
+    }
+
+    /// Cached value only, without touching the network.
+    func cached<T: Codable & Sendable>(_ type: T.Type, key: String) -> (value: T, storedAt: Date)? {
+        cache.read(type, key: key)
+    }
+
+    static func placeKey(_ place: Place) -> String {
+        String(format: "%.2f_%.2f", locale: Locale(identifier: "en_US_POSIX"), place.coordinate.latitude, place.coordinate.longitude)
+    }
+
+    public func weather(_ place: Place) async -> Fetched<WeatherReport> {
+        let units = self.units, http = self.http, now = self.now
+        return await load(key: "weather-\(Self.placeKey(place))-\(units.rawValue)", maxAge: 600) {
+            try await WeatherService(http: http).report(at: place.coordinate, units: units, now: now)
+        }
+    }
+
+    public func alerts(_ place: Place) async -> Fetched<[WeatherAlert]> {
+        guard place.isUnitedStates else {
+            return .failure("NWS alerts cover the United States and its territories.")
+        }
+        let http = self.http
+        return await load(key: "alerts-\(Self.placeKey(place))", maxAge: 120, staleLimit: 1800) {
+            try await AlertService(http: http).activeAlerts(at: place.coordinate)
+        }
+    }
+
+    /// Nil when no Xweather credentials are configured.
+    public func lightning(_ place: Place, radiusMiles: Double = XweatherLightningService.maximumRadiusMiles) async -> Fetched<LightningSnapshot>? {
+        guard let credentials = Credentials.xweather(environment: environment) else { return nil }
+        let http = self.http, now = self.now
+        return await load(key: "lightning-\(Self.placeKey(place))-\(Int(radiusMiles))", maxAge: 60, staleLimit: 600) {
+            try await XweatherLightningService(credentials: credentials, http: http)
+                .snapshot(center: place.coordinate, radiusMiles: radiusMiles, now: now)
+        }
+    }
+
+    public func manifest() async -> Fetched<RadarManifest> {
+        let http = self.http, now = self.now
+        return await load(key: "radar-manifest", maxAge: 300, staleLimit: 3600) {
+            try await RainViewerService(http: http).manifest(now: now)
+        }
+    }
+
+    public static let nowcastViewportSize = 160
+    public static let nowcastRangeMiles = 100.0
+
+    public func nowcast(_ place: Place) async -> Fetched<Nowcast> {
+        let key = "nowcast-\(Self.placeKey(place))"
+        if let cached = cache.read(Nowcast.self, key: key),
+           let latest = cached.value.latestFrame,
+           now.timeIntervalSince(cached.storedAt) < 300,
+           now.timeIntervalSince(latest) < 900 {
+            return Fetched(value: cached.value, storedAt: cached.storedAt, error: nil, isStale: false)
+        }
+        let manifest = await self.manifest()
+        guard let radar = manifest.value else { return .failure(manifest.error ?? "Radar is unavailable.") }
+        let viewport = RadarViewport(center: place.coordinate, rangeMiles: Self.nowcastRangeMiles,
+                                     width: Self.nowcastViewportSize, height: Self.nowcastViewportSize)
+        let fields = await RadarLoader(http: http, store: tiles).fields(manifest: radar, frames: radar.recent(4), viewport: viewport)
+        guard fields.count >= 2 else {
+            if let cached = cache.read(Nowcast.self, key: key) {
+                return Fetched(value: cached.value, storedAt: cached.storedAt, error: "Radar frames are unavailable.", isStale: true)
+            }
+            return .failure("Radar frames are unavailable.")
+        }
+        let result = Nowcaster.forecast(fields: fields, viewport: viewport, now: now)
+        cache.write(result, key: key, at: now)
+        return Fetched(value: result, storedAt: now, error: nil, isStale: false)
+    }
+
+    public struct SevereRisk: Codable, Sendable {
+        public let risk: SevereOutlook.Risk
+        public let expires: Date?
+    }
+
+    public func severeRisk(_ place: Place) async -> Fetched<SevereRisk> {
+        guard place.isUnitedStates else { return .failure("SPC outlooks cover the contiguous United States.") }
+        let http = self.http, now = self.now
+        return await load(key: "spc-\(Self.placeKey(place))", maxAge: 900) {
+            let outlook = try await SevereOutlookService(http: http).day1(now: now)
+            let risk = outlook.risk(at: place.coordinate)
+            return SevereRisk(risk: risk.risk, expires: risk.expires)
+        }
+    }
+
+    public func tropical() async -> Fetched<[TropicalStorm]> {
+        let http = self.http
+        return await load(key: "nhc-storms", maxAge: 900) { try await TropicalService(http: http).activeStorms() }
+    }
+
+    public func wildfires(_ place: Place, radiusMiles: Double = 100) async -> Fetched<[Wildfire]> {
+        guard place.isUnitedStates else { return .failure("NIFC wildfire data covers the United States.") }
+        let http = self.http
+        return await load(key: "fires-\(Self.placeKey(place))-\(Int(radiusMiles))", maxAge: 300) {
+            try await WildfireService(http: http).activeFires(near: place.coordinate, radiusMiles: radiusMiles)
+        }
+    }
+
+    public func airQuality(_ place: Place) async -> Fetched<AirQualityReading> {
+        let http = self.http, now = self.now
+        return await load(key: "aqi-\(Self.placeKey(place))", maxAge: 1800) {
+            try await AirQualityService(http: http).reading(at: place.coordinate, now: now)
+        }
+    }
+
+    public func solar() async -> Fetched<SolarOutlook> {
+        let http = self.http, now = self.now
+        return await load(key: "swpc-kp", maxAge: 600) { try await OutlookService(http: http).solar(now: now) }
+    }
+
+    public func earthquakes() async -> Fetched<EarthquakeSnapshot> {
+        let http = self.http, now = self.now
+        return await load(key: "usgs-quakes", maxAge: 300) { try await OutlookService(http: http).earthquakes(now: now) }
+    }
+
+    public func aurora(_ place: Place) async -> Fetched<AuroraReading> {
+        let http = self.http
+        return await load(key: "aurora-\(Self.placeKey(place))", maxAge: 900) {
+            try await OutlookService(http: http).aurora(at: place.coordinate)
+        }
+    }
+
+    public func hazards(_ place: Place) async -> Fetched<HazardSummary> {
+        let http = self.http, now = self.now
+        return await load(key: "hazards-\(Self.placeKey(place))", maxAge: 900) {
+            await HazardService(http: http).summary(near: place.coordinate, now: now)
+        }
+    }
+}
