@@ -4,7 +4,7 @@ import DreadTerminal
 
 /// The app's views, one tab each.
 enum AppTab: Int, CaseIterable, Sendable {
-    case now, systems, radar, forecast, alerts, outlook, lightning, scene
+    case now, systems, radar, forecast, alerts, outlook, lightning, scene, places
 
     var title: String {
         switch self {
@@ -16,7 +16,13 @@ enum AppTab: Int, CaseIterable, Sendable {
         case .outlook: "Outlook"
         case .lightning: "Lightning"
         case .scene: "Scene"
+        case .places: "Places"
         }
+    }
+
+    /// The Places tab appears once there's more than one place to watch.
+    static func visible(places: Int) -> [AppTab] {
+        places > 1 ? allCases : allCases.filter { $0 != .places }
     }
 
     static func named(_ name: String) -> AppTab? {
@@ -32,7 +38,17 @@ enum AppBody {
     case pixels(HalfBlockFrame, below: [String])
 }
 
-/// Everything a view needs for one frame.
+/// A place the app watches, with its latest data.
+struct Watched {
+    let saved: SavedPlace
+    let snapshot: TopCommand.Snapshot
+
+    var reading: PlaceRows.Reading {
+        PlaceRows.Reading(saved: saved, weather: snapshot.weather, alerts: snapshot.alerts, nowcast: snapshot.nowcast?.value)
+    }
+}
+
+/// Everything a view needs for one frame. `place` and `snapshot` are the selected place.
 struct AppFrame {
     let ctx: Context
     let place: Place
@@ -40,6 +56,22 @@ struct AppFrame {
     let width: Int
     let height: Int
     let elapsed: Double
+    var places: [Watched] = []
+    var selected = 0
+
+    /// Every watched place; just the selected one when the app watches a single place.
+    var watched: [Watched] {
+        places.isEmpty ? [Watched(saved: SavedPlace(name: "", place: place), snapshot: snapshot)] : places
+    }
+
+    var selectedIndex: Int { places.isEmpty ? 0 : selected }
+
+    /// The most serious alert at any watched place, with that place's index and the count.
+    var worstAlert: (index: Int, alert: WeatherAlert, count: Int)? {
+        let all = watched.enumerated().flatMap { i, w in (w.snapshot.alerts?.value ?? []).map { (i, $0) } }
+        guard let worst = all.sorted(by: { WeatherAlert.threatOrder($0.1, $1.1) }).first else { return nil }
+        return (worst.0, worst.1, all.count)
+    }
 
     var zone: TimeZone { snapshot.weather?.value?.timeZone ?? ctx.timeZone(for: place) }
     var fmt: Formatter { Formatter(units: ctx.units, timeZone: zone) }
@@ -53,6 +85,12 @@ protocol AppView: AnyObject {
     func body(_ frame: AppFrame) -> AppBody
     /// Returns true when the view used the key.
     func handle(_ key: Key, frame: AppFrame) -> Bool
+    /// Called when the app switches to another place.
+    func placeChanged()
+}
+
+extension AppView {
+    func placeChanged() {}
 }
 
 /// `dread` in an interactive terminal (and `dread top`): one full-screen app with a tab
@@ -63,7 +101,15 @@ enum DreadApp {
     static let footerRows = 2
 
     static func run(_ ctx: Context, tab start: AppTab) async throws -> ExitCode {
-        let place = try await ctx.resolveLocation()
+        let primary = try await ctx.resolveLocation()
+        // Saved places are all watched; a place given with --location that isn't saved
+        // is shown on its own.
+        var places = ctx.config.places
+        var selected = places.firstIndex { $0.place.coordinate == primary.coordinate } ?? -1
+        if selected < 0 {
+            places = [SavedPlace(name: "here", place: primary)]
+            selected = 0
+        }
         guard let raw = RawTerminal(alternateScreen: true) else {
             return ctx.fail("Couldn’t take over the terminal.", code: .unavailable)
         }
@@ -71,14 +117,17 @@ enum DreadApp {
         ctx.inApp = true
         _ = ctx.tiles   // created up front; views load radar tiles in the background
 
-        let state = TopCommand.State()
         let configured = Credentials.xweather(environment: ctx.environment) != nil
-        state.with { $0.lightningConfigured = configured }
+        let states = places.map { _ in TopCommand.State() }
+        for state in states { state.with { $0.lightningConfigured = configured } }
+        let placesView = PlacesView()
         let views: [AppTab: AppView] = [
             .now: NowView(), .systems: SystemsView(), .radar: RadarView(ctx: ctx), .forecast: ForecastView(),
             .alerts: AlertsView(), .outlook: OutlookView(), .lightning: LightningView(), .scene: SceneView(ctx: ctx),
+            .places: placesView,
         ]
-        var tab = start
+        let tabs = AppTab.visible(places: places.count)
+        var tab = tabs.contains(start) ? start : .now
         var screen = AppScreen()
         let started = Date()
         var lastDraw = Date.distantPast
@@ -86,14 +135,30 @@ enum DreadApp {
 
         func frame() -> AppFrame {
             let size = TerminalInfo.windowSize() ?? (ctx.terminal.columns, ctx.terminal.rows)
-            return AppFrame(ctx: ctx, place: place, snapshot: state.snapshot, width: max(60, size.0),
-                            height: max(4, max(12, size.1) - headerRows - footerRows), elapsed: Date().timeIntervalSince(started))
+            return AppFrame(ctx: ctx, place: places[selected].place, snapshot: states[selected].snapshot, width: max(60, size.0),
+                            height: max(4, max(12, size.1) - headerRows - footerRows), elapsed: Date().timeIntervalSince(started),
+                            places: places.count > 1 ? zip(places, states).map { Watched(saved: $0, snapshot: $1.snapshot) } : [],
+                            selected: selected)
+        }
+        func show(_ next: AppTab) {
+            guard next != tab, tabs.contains(next) else { return }
+            tab = next
+            screen.reset()
+        }
+        func switchPlace(to index: Int) {
+            guard index != selected, places.indices.contains(index) else { return }
+            selected = index
+            for view in views.values { view.placeChanged() }
+            screen.reset()
         }
 
         while true {
             ctx.refreshClock()
-            if tab == .outlook { state.with { $0.wantsOutlook = true } }
-            TopCommand.schedule(ctx: ctx, place: place, state: state)
+            if tab == .outlook { states[selected].with { $0.wantsOutlook = true } }
+            for (i, state) in states.enumerated() {
+                TopCommand.schedule(ctx: ctx, place: places[i].place, state: state,
+                                    only: sources(for: i, selected: selected, tab: tab, highlighted: placesView.highlighted))
+            }
             let view = views[tab]!
             if Date().timeIntervalSince(lastDraw) >= view.interval {
                 let current = frame()
@@ -106,24 +171,43 @@ enum DreadApp {
             case .character("q"), .character("Q"), .escape, .interrupt:
                 return .ok
             case .tab:
-                tab = AppTab(rawValue: (tab.rawValue + 1) % AppTab.allCases.count)!
-                screen.reset()
+                show(tabs[((tabs.firstIndex(of: tab) ?? 0) + 1) % tabs.count])
             case .backTab:
-                tab = AppTab(rawValue: (tab.rawValue + AppTab.allCases.count - 1) % AppTab.allCases.count)!
-                screen.reset()
+                show(tabs[((tabs.firstIndex(of: tab) ?? 0) + tabs.count - 1) % tabs.count])
             case .character(let c) where c.isNumber:
-                if let number = c.wholeNumberValue, let chosen = AppTab(rawValue: number - 1), chosen != tab {
-                    tab = chosen
-                    screen.reset()
+                if let number = c.wholeNumberValue, let chosen = AppTab(rawValue: number - 1) { show(chosen) }
+            case .character("]"):
+                switchPlace(to: (selected + 1) % places.count)
+            case .character("["):
+                switchPlace(to: (selected + places.count - 1) % places.count)
+            case .character("a"):
+                // Jump to the most serious alert, wherever it is.
+                if let worst = frame().worstAlert {
+                    switchPlace(to: worst.index)
+                    show(.alerts)
+                } else {
+                    redraw = false
                 }
             case .character("r"), .character("R"):
-                state.with { $0.lastFetch = [:] }
-                ctx.cache.remove(key: "alerts-\(Context.placeKey(place))")
+                states[selected].with { $0.lastFetch = [:] }
+                ctx.cache.remove(key: "alerts-\(Context.placeKey(places[selected].place))")
             default:
                 redraw = view.handle(key, frame: frame())
+                if let chosen = placesView.takeChoice() {
+                    switchPlace(to: chosen)
+                    show(.now)
+                }
             }
             if redraw { lastDraw = .distantPast }
         }
+    }
+
+    /// What a place loads: every source for the selected place. The others are watched
+    /// lightly, with alerts and conditions, plus rain timing for the row highlighted on
+    /// the Places tab.
+    static func sources(for index: Int, selected: Int, tab: AppTab, highlighted: Int) -> Set<String>? {
+        if index == selected { return nil }
+        return tab == .places && highlighted == index ? ["weather", "alerts", "nowcast"] : ["weather", "alerts"]
     }
 
     // MARK: Frame
@@ -132,26 +216,36 @@ enum DreadApp {
         let clock = Date()
         let alerts = f.snapshot.alerts?.value ?? []
         var right = s.paint(f.fmt.time(clock) + " " + f.fmt.zoneAbbreviation(clock), Theme.faint) + " "
-        if let worst = alerts.sorted(by: WeatherAlert.threatOrder).first {
-            let badge = " ▲ \(alerts.count == 1 ? worst.event.uppercased() : "\(alerts.count) ALERTS") "
-            right = s.paint(badge, TextStyle(foreground: Theme.midnight, background: NowCommand.alertColor(worst), bold: true)) + "  " + right
+        // Alerts from every watched place, naming the place when it isn't this one.
+        if let worst = f.worstAlert {
+            var badge = " ▲ \(worst.count == 1 ? worst.alert.event.uppercased() : "\(worst.count) ALERTS")"
+            if worst.index != f.selectedIndex { badge += " · \(f.watched[worst.index].saved.name)" }
+            right = s.paint(badge + " ", TextStyle(foreground: Theme.midnight, background: NowCommand.alertColor(worst.alert), bold: true)) + "  " + right
         }
-        let title = TextWidth.spread(" " + s.paint("DREADCAST", Theme.porcelain, bold: true) + s.paint("  ·  ", Theme.faint) + f.place.name,
-                                     right, width: f.width)
-        return [title, tabs(active: tab, alerts: alerts, width: f.width, styler: s), s.paint(String(repeating: "─", count: f.width), Theme.border)]
+        var left = " " + s.paint("DREADCAST", Theme.porcelain, bold: true) + s.paint("  ·  ", Theme.faint) + f.place.name
+        if f.places.count > 1 {
+            left += s.paint("  \(f.watched[f.selectedIndex].saved.name) · \(f.selectedIndex + 1) of \(f.places.count)", Theme.faint)
+        }
+        let elsewhere = f.watched.enumerated().filter { $0.offset != f.selectedIndex }.flatMap { $0.element.snapshot.alerts?.value ?? [] }
+        return [TextWidth.spread(left, right, width: f.width),
+                tabs(active: tab, alerts: alerts, elsewhere: elsewhere, places: f.places.count, width: f.width, styler: s),
+                s.paint(String(repeating: "─", count: f.width), Theme.border)]
     }
 
-    /// The tab bar. When every name doesn't fit, other tabs show only their numbers.
-    static func tabs(active: AppTab, alerts: [WeatherAlert], width: Int, styler s: Styler) -> String {
-        let worst = alerts.sorted(by: WeatherAlert.threatOrder).first
+    /// The tab bar. When every name doesn't fit, other tabs show only their numbers. The
+    /// Alerts tab counts this place's alerts; the Places tab counts the other places'.
+    static func tabs(active: AppTab, alerts: [WeatherAlert], elsewhere: [WeatherAlert] = [], places: Int = 1,
+                     width: Int, styler s: Styler) -> String {
+        func worst(_ list: [WeatherAlert]) -> WeatherAlert? { list.sorted(by: WeatherAlert.threatOrder).first }
         func bar(named: Bool) -> String {
             var line = " "
-            for candidate in AppTab.allCases {
-                let count = candidate == .alerts && !alerts.isEmpty ? " \(alerts.count)" : ""
+            for candidate in AppTab.visible(places: places) {
+                let counted = candidate == .alerts ? alerts : candidate == .places ? elsewhere : []
+                let count = counted.isEmpty ? "" : " \(counted.count)"
                 if candidate == active {
                     line += s.paint(" \(candidate.rawValue + 1) \(candidate.title)\(count) ", TextStyle(foreground: Theme.midnight, background: Theme.lamp, bold: true))
                 } else {
-                    let color = worst.map { candidate == .alerts ? NowCommand.alertColor($0) : Theme.mist } ?? Theme.mist
+                    let color = worst(counted).map(NowCommand.alertColor) ?? Theme.mist
                     line += " " + s.paint("\(candidate.rawValue + 1)", named ? Theme.faint : Theme.mist)
                         + (named ? " " + s.paint(candidate.title + count, color) : count.isEmpty ? "" : s.paint(count, color)) + " "
                 }
@@ -163,7 +257,10 @@ enum DreadApp {
     }
 
     static func footer(view: AppView, frame f: AppFrame, styler s: Styler) -> [String] {
-        let keys = [("tab", "next"), ("1–8", "views")] + view.hints + [("r", "refresh"), ("q", "quit")]
+        var keys = [("tab", "next"), ("1–\(AppTab.visible(places: f.places.count).count)", "views")] + view.hints
+        if f.places.count > 1 { keys.append(("[ ]", "place")) }
+        if let worst = f.worstAlert, worst.index != f.selectedIndex { keys.append(("a", "go to alert")) }
+        keys += [("r", "refresh"), ("q", "quit")]
         let busy = f.snapshot.inFlight.isEmpty ? "" : "updating \(f.snapshot.inFlight.sorted().joined(separator: ", "))…"
         let left = " " + keys.map { s.paint($0.0, Theme.lamp) + " " + s.paint($0.1, Theme.mist) }.joined(separator: "  ")
         return [s.paint(String(repeating: "─", count: f.width), Theme.border),

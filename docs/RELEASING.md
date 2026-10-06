@@ -53,6 +53,6 @@ Users then install with `brew install enderwiggens/dreadcast/dreadcast`.
 
 - [ ] Version updated in `Sources/DreadcastKit/HTTP.swift` and `CHANGELOG.md`
 - [ ] `scripts/test.sh` passes
-- [ ] Manual check in Terminal, iTerm2, Ghostty and Kitty: `dread` (every tab), `dread now`, `dread radar`
+- [ ] Manual check in Terminal, iTerm2, Ghostty and Kitty: `dread` (every tab, and the Places tab with two or more saved places), `dread now`, `dread radar`
 - [ ] The repository URL in the User-Agent resolves
 - [ ] Provider terms re-checked for any new source

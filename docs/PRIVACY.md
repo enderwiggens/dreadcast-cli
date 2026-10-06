@@ -12,6 +12,13 @@ which the National Weather Service asks clients to send.
 Coordinates are rounded to two decimal places (about 1 km) before they are stored or
 included in any request.
 
+If you save more than one place (`dread places`), each is a location in this sense.
+While the app runs, it checks every saved place's conditions with Open-Meteo every 10
+minutes and, for US places, its alerts with the National Weather Service every 2
+minutes. Radar tiles and the other location-specific sources are requested only for the
+place you're viewing, and rain timing also for the row highlighted on the Places tab.
+`dread now --all` and `dread alerts --all` make the same per-place requests once.
+
 | Provider | What it receives |
 | --- | --- |
 | Open-Meteo | Rounded coordinates and unit choices (forecast, air quality, dust); place-name text when you search during setup |
@@ -28,7 +35,7 @@ Each provider also sees your IP address, as with any internet request.
 
 | What | Where |
 | --- | --- |
-| Preferences and saved location | `~/.config/dreadcast/config.json` (or `$XDG_CONFIG_HOME/dreadcast`) |
+| Preferences and saved places | `~/.config/dreadcast/config.json` (or `$XDG_CONFIG_HOME/dreadcast`) |
 | Cached readings and radar tiles | `~/Library/Caches/dreadcast` on macOS, `~/.cache/dreadcast` elsewhere |
 | Xweather credentials | The login Keychain, service `dreadcast-cli` |
 

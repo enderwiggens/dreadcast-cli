@@ -69,6 +69,10 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
   rather than the terminal, and `ctx.inApp` drops titles the app header already shows.
   New views go in `App/AppViews.swift`, keep the one-shot command, and get a tab only
   when they're worth living in.
+- Saved places (`Config.places`, first is the default) each get their own `State` in
+  the app. Only the place being viewed loads every source; the rest are watched
+  lightly (`DreadApp.sources`). Views reset per-place state in `placeChanged()`, and
+  nothing from one place may be drawn under another's header.
 - Every command supports `--json`, `--plain` and pretty output. JSON schemas are
   versioned (`dreadcast.<command>/1`); change the version for breaking changes.
 - Generated files (`BasemapData.swift`, `RainViewerColorTable.swift`,

@@ -46,6 +46,11 @@ Every tab reads the same live data, and each source refreshes on its own schedul
 fails on its own, so switching tabs never waits on the network. A new alert shows in
 the header whichever tab is open, with a count on the Alerts tab.
 
+Save more than one place and a ninth tab, **Places**, lists them all with conditions,
+alerts, rain timing and today’s range. `[` and `]` switch places from any tab, Enter
+on a row shows that place in full, and an alert at any place shows in the header with
+its name; `a` jumps to it.
+
 `dread top radar` (or any view's name or number) opens on that view. Piped, or with
 `--plain` or `--json`, `dread` prints the quick look below instead, so scripts and
 shell profiles keep working.
@@ -95,6 +100,24 @@ scripts (see [Scripts and automation](#scripts-and-automation)).
 backward from your location to estimate when rain arrives, how heavy it gets and when
 it eases. It reports its confidence and the frames it used. It can’t foresee storms
 that form or fade along the way.
+
+### Several places: `dread places`
+
+![The Places tab watching three saved places](docs/images/places.png)
+
+```sh
+dread places add 32801 --name mom   # save a place under a short name
+dread places                        # list them; the first is your default
+dread now -l mom                    # any command takes a saved name
+dread now --all                     # one row per place
+dread alerts --all --fail-on severe # exit 1 if any place has a severe alert
+dread alerts --follow --all         # changes at every place, each line named
+```
+
+The app watches every saved place: alerts every 2 minutes and conditions every 10.
+The place you’re viewing gets everything, from radar to wildfires and lightning, so
+switching places shows it in full within moments. Up to eight places; each is sent to
+Open-Meteo and the NWS on those refreshes, rounded to about 1 km.
 
 ### Systems: the app’s second tab
 
@@ -187,6 +210,7 @@ when = true
 | `dread forecast` | Hourly and 7-day charts |
 | `dread eta` | When rain reaches you, from recent radar motion |
 | `dread top [view]` | The app, opened on a view by name or number |
+| `dread places` | Save places under short names; `--all` on `now` and `alerts` covers them all |
 | `dread outlook` | Solar activity, aurora, earthquakes, meteor showers and hazards |
 | `dread scene` | The Dreadcast scenes as animated pixel art, with live conditions |
 | `dread lightning` | Strike map in Braille dots (needs your own Xweather account) |

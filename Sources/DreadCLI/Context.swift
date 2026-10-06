@@ -89,7 +89,7 @@ public final class Context: @unchecked Sendable {
     /// Plain `dread` opens the app when a person is at the terminal; piped, or with
     /// --pretty, --plain or --json, it prints the quick look instead.
     var opensApp: Bool {
-        !arguments.commandGiven && mode == .pretty && !arguments.has("pretty")
+        !arguments.commandGiven && mode == .pretty && !arguments.has("pretty") && !arguments.has("all")
             && terminal.isInputTTY && terminal.isOutputTTY
     }
 
@@ -133,6 +133,8 @@ public final class Context: @unchecked Sendable {
 
     public func resolveLocation() async throws -> Place {
         if let query = arguments.value("location") ?? environment["DREADCAST_LOCATION"], !query.isEmpty {
+            // A saved place's name wins over a search.
+            if let i = PlaceBook.index(of: query, in: config.places) { return config.places[i].place }
             let key = "place-" + query.lowercased()
             if let cached = cache.read(Place.self, key: key), now.timeIntervalSince(cached.storedAt) < 30 * 86400 {
                 return cached.value

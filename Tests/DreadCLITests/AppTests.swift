@@ -24,7 +24,7 @@ struct AppTests {
         #expect(AppTab.named("3") == .radar)
         #expect(AppTab.named("8") == .scene)
         #expect(AppTab.named("top") == .systems)
-        #expect(AppTab.named("9") == nil)
+        #expect(AppTab.named("10") == nil)
         #expect(AppTab.named("tornado") == nil)
     }
 

@@ -6,6 +6,7 @@ import DreadTerminal
 /// next two hours, recent lightning and the next five days.
 enum NowCommand {
     static func run(_ ctx: Context) async throws -> ExitCode {
+        if ctx.arguments.has("all") { return await all(ctx) }
         let place = try await ctx.resolveLocation()
         async let weatherResult = ctx.weather(place)
         async let alertsResult = ctx.alerts(place)
@@ -24,6 +25,46 @@ enum NowCommand {
             ctx.write(pretty(place: place, weather: weather, alerts: alerts, lightning: lightning, nowcast: nowcast, ctx: ctx))
         }
         return weather.value == nil ? .unavailable : .ok
+    }
+
+    // MARK: Every place
+
+    /// `dread now --all`: one row per saved place.
+    static func all(_ ctx: Context) async -> ExitCode {
+        let places = ctx.config.places
+        guard !places.isEmpty else {
+            return ctx.fail("No saved places. Run `dread setup` or `dread places add <place>`.", code: .setupRequired)
+        }
+        let readings = await withTaskGroup(of: (Int, PlaceRows.Reading).self) { group in
+            for (i, saved) in places.enumerated() {
+                group.addTask {
+                    async let weather = ctx.weather(saved.place)
+                    async let alerts = ctx.alerts(saved.place)
+                    let nowcast = ctx.cached(Nowcast.self, key: "nowcast-\(Context.placeKey(saved.place))")
+                        .flatMap { ctx.now.timeIntervalSince($0.storedAt) < 600 ? $0.value : nil }
+                    return (i, PlaceRows.Reading(saved: saved, weather: await weather, alerts: await alerts, nowcast: nowcast))
+                }
+            }
+            var result = [PlaceRows.Reading?](repeating: nil, count: places.count)
+            for await (i, reading) in group { result[i] = reading }
+            return result.compactMap { $0 }
+        }
+        switch ctx.mode {
+        case .json:
+            ctx.writeJSON(NowAllJSON(readings, now: ctx.now))
+        case .plain:
+            ctx.write(readings.map { PlaceRows.plain($0, ctx: ctx) })
+        case .pretty:
+            let s = ctx.styler
+            let width = min(max(ctx.terminal.columns - 1, 80), 130)
+            var lines = ["", TextWidth.spread("  " + s.paint("PLACES", Theme.porcelain, bold: true) + s.paint("  ·  now", Theme.faint),
+                                              s.paint("OPEN-METEO · NWS", Theme.faint), width: width), ""]
+            lines.append(PlaceRows.header(styler: s, width: width))
+            lines += readings.enumerated().map { PlaceRows.line($1, ctx: ctx, width: width, highlighted: false, viewing: $0 == 0) }
+            lines += ["", "  " + s.paint("● your default · ", Theme.faint) + s.paint("dread now -l <name>", Theme.lamp) + s.paint(" for one place in full", Theme.faint), ""]
+            ctx.write(lines)
+        }
+        return readings.allSatisfy { $0.weather?.value == nil } ? .unavailable : .ok
     }
 
     // MARK: Pretty
@@ -319,6 +360,26 @@ enum NowCommand {
 }
 
 // MARK: JSON
+
+struct NowAllJSON: Encodable {
+    struct Entry: Encodable {
+        let name: String
+        let isDefault: Bool
+        let now: NowJSON
+    }
+    let schema = "dreadcast.now-all/1"
+    let generatedAt: Date
+    let places: [Entry]
+
+    init(_ readings: [PlaceRows.Reading], now: Date) {
+        generatedAt = now
+        places = readings.enumerated().map { i, r in
+            Entry(name: r.saved.name, isDefault: i == 0,
+                  now: NowJSON(place: r.saved.place, weather: r.weather ?? .failure("Not loaded."), alerts: r.alerts ?? .failure("Not loaded."),
+                               lightning: nil, nowcast: r.nowcast, now: now))
+        }
+    }
+}
 
 struct NowJSON: Encodable {
     let schema = "dreadcast.now/1"

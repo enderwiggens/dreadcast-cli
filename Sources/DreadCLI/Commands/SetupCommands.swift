@@ -30,6 +30,20 @@ enum Prompt {
 
 /// `dread setup`: choose a location and units.
 enum SetupCommand {
+    /// The first match, or the one the person picks when several match.
+    static func choose(_ places: [Place], ctx: Context, interactive: Bool) -> Place {
+        guard places.count > 1, interactive else { return places[0] }
+        let s = ctx.styler
+        ctx.write("")
+        for (index, candidate) in places.enumerated() {
+            ctx.write("  " + s.paint("\(index + 1)", Theme.lamp) + "  " + candidate.name + s.paint("  \(candidate.coordinate.formatted)", Theme.faint))
+        }
+        if let answer = Prompt.ask("\n  Which one? [1]: "), let choice = Int(answer), (1...places.count).contains(choice) {
+            return places[choice - 1]
+        }
+        return places[0]
+    }
+
     static func run(_ ctx: Context) async throws -> ExitCode {
         let s = ctx.styler
         let interactive = ctx.terminal.isInputTTY && ctx.mode != .json
@@ -44,17 +58,7 @@ enum SetupCommand {
             query = answer
         }
 
-        let places = try await PlaceService(http: ctx.http).resolve(query)
-        var place = places[0]
-        if places.count > 1, interactive {
-            ctx.write("")
-            for (index, candidate) in places.enumerated() {
-                ctx.write("  " + s.paint("\(index + 1)", Theme.lamp) + "  " + candidate.name + s.paint("  \(candidate.coordinate.formatted)", Theme.faint))
-            }
-            if let answer = Prompt.ask("\n  Which one? [1]: "), let choice = Int(answer), (1...places.count).contains(choice) {
-                place = places[choice - 1]
-            }
-        }
+        let place = choose(try await PlaceService(http: ctx.http).resolve(query), ctx: ctx, interactive: interactive)
 
         var config = ctx.config
         config.location = place
@@ -183,7 +187,8 @@ enum ConfigCommand {
         let c = ctx.config
         ctx.write([
             "",
-            "  " + s.paint("Location", Theme.mist) + "   " + (c.location.map { "\($0.name) (\($0.coordinate.formatted))" } ?? s.paint("not set · dread setup", Theme.advisory)),
+            "  " + s.paint("Location", Theme.mist) + "   " + (c.location.map { "\($0.name) (\($0.coordinate.formatted))" } ?? s.paint("not set · dread setup", Theme.advisory))
+                + (c.places.count > 1 ? s.paint("  +\(c.places.count - 1) more: \(c.places.dropFirst().map(\.name).joined(separator: ", ")) · dread places", Theme.faint) : ""),
             "  " + s.paint("Units", Theme.mist) + "      " + c.units.rawValue,
             "  " + s.paint("Palette", Theme.mist) + "    " + c.palette.title,
             "  " + s.paint("Range", Theme.mist) + "      \(c.radarRange) mi",

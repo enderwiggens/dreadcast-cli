@@ -12,12 +12,12 @@ public struct Arguments: Sendable {
 
     public static let commands: Set<String> = [
         "now", "weather", "radar", "alerts", "prompt", "forecast", "outlook", "top", "lightning", "eta", "scene",
-        "setup", "auth", "config", "credits", "refresh", "help", "version"
+        "setup", "places", "auth", "config", "credits", "refresh", "help", "version"
     ]
 
     static let valueOptions: Set<String> = [
         "location", "units", "range", "palette", "renderer", "frames", "loops", "hours", "fail-on",
-        "radius", "format", "min-dbz", "interval", "width", "client-id", "client-secret", "time", "size", "png", "layout", "at"
+        "radius", "format", "min-dbz", "interval", "width", "client-id", "client-secret", "time", "size", "png", "layout", "at", "name"
     ]
 
     static let booleanFlags: Set<String> = [

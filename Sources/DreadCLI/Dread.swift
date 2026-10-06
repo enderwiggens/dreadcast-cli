@@ -36,6 +36,7 @@ public enum Dread {
             case "eta": return try await EtaCommand.run(context)
             case "scene": return try await SceneCommand.run(context)
             case "setup": return try await SetupCommand.run(context)
+            case "places": return try await PlacesCommand.run(context)
             case "auth": return try AuthCommand.run(context)
             case "config": return try ConfigCommand.run(context)
             case "credits": return CreditsCommand.run(context)
@@ -76,10 +77,12 @@ enum Help {
               --follow                     keep running and print changes every 2 minutes
               --fail-on <level>            exit 1 if an alert is active at or above
                                            minor, moderate, severe or extreme
+              --all                        every saved place (see dread help places)
               --json                       structured output
 
             Exit codes: 0 nothing at or above the level, 1 an alert is active,
             3 alert data unavailable or stale. Missing data is never reported as clear.
+            With --all, 1 means any place, and 3 means any US place couldn't be checked.
             """
         case "prompt":
             return """
@@ -137,17 +140,44 @@ enum Help {
 
               dread                        opens on Now
               dread top [view]             opens on a view: now, systems, radar, forecast,
-                                           alerts, outlook, lightning or scene (or 1–8)
+                                           alerts, outlook, lightning, scene or places (or 1–9)
+              dread -l <name>              opens on a saved place
 
-            Keys: tab and shift-tab or 1–8 switch views · ↑/↓ select or scroll · r refresh
-            · q quits. Radar: space pauses, ←/→ step frames, +/− change range. Scene: ←/→
-            change scene, t the time of day.
+            Keys: tab and shift-tab or 1–9 switch views · [ and ] switch places · a goes to
+            the most serious alert · ↑/↓ select or scroll · r refresh · q quits. Radar: space
+            pauses, ←/→ step frames, +/− change range. Scene: ←/→ change scene, t the time
+            of day. Places: enter shows the highlighted place in full.
 
             Every view reads the same live data, and each source refreshes on its own
             schedule. A new alert shows in the header whichever view is open.
 
+            With saved places (dread places), the app watches all of them: alerts every
+            2 minutes and conditions every 10. The place you're viewing gets everything.
+
             Piped, or with --plain or --json, `dread` prints the quick look instead, as
             `dread now` always does.
+            """
+        case "places":
+            return """
+            \(title) places — save places under short names
+
+              dread places                 list them; the first is your default
+              dread places add <place>     ZIP code, place name or lat,lon
+                    --name <name>          a short name (default: the town)
+              dread places remove <name>
+              dread places default <name>
+              dread places rename <name> <new-name>
+
+            Any command takes a saved name: dread now -l mom. Up to \(PlaceBook.limit) places.
+
+              dread now --all              one row per place
+              dread alerts --all           alerts at every place; with --fail-on, exits 1
+                                           when any place has one at or above the level
+              dread alerts --follow --all  changes at every place, each line named
+
+            In the app, the Places tab lists them all and [ ] switch between them. Each
+            saved place is sent to Open-Meteo and the NWS on every refresh, rounded to
+            about 1 km.
             """
         case "scene":
             return """
@@ -190,6 +220,7 @@ enum Help {
 
             \(styler.bold("Setup"))
               dread setup                  choose a location
+              dread places                 save more places and watch them all
               dread auth xweather          optional lightning credentials
               dread config                 preferences
               dread credits                data sources and licenses

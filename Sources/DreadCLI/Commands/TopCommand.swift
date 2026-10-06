@@ -71,9 +71,11 @@ enum TopCommand {
         return try await DreadApp.run(ctx, tab: tab)
     }
 
-    static func schedule(ctx: Context, place: Place, state: State) {
+    /// Starts every source that's due. `only` limits a place to some sources, for places
+    /// watched in the background.
+    static func schedule(ctx: Context, place: Place, state: State, only: Set<String>? = nil) {
         let now = Date()
-        for (name, cadence) in cadences {
+        for (name, cadence) in cadences where only?.contains(name) ?? true {
             let due = state.with { s -> Bool in
                 guard !s.inFlight.contains(name) else { return false }
                 if name == "lightning" && !s.lightningConfigured { return false }

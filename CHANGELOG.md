@@ -8,6 +8,12 @@
   Outlook, Lightning and Scene. Every tab shares one set of live data, refreshed per
   source, and a new alert shows in the header whichever tab is open. `dread top <view>`
   opens on a view by name or number.
+- Saved places: `dread places add|remove|default|rename`, up to eight, each usable as
+  `--location <name>`. The app watches all of them, alerts every 2 minutes and
+  conditions every 10, and gives the place you're viewing every source. A Places tab
+  lists them, `[` and `]` switch places, and an alert at any place shows in the header
+  with its name (`a` jumps to it). `dread now --all`, `dread alerts --all` and
+  `dread alerts --follow --all` cover every place; `--fail-on` exits 1 when any does.
 - `dread now` prints the quick look that `dread` used to, and `dread` still prints it
   when piped or given `--plain` or `--json`.
 - `dread scene`: the app's eight free scenes as animated pixel art, filling the

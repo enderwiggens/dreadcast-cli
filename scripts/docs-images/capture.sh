@@ -56,6 +56,14 @@ print "  $OUT/top.png"
 $T2P pty $OUT/scene.png --cols 100 --rows 34 --wait 3 -- $BIN scene asteroid --time dusk --location $LOCATION
 print "  $OUT/scene.png"
 
+# Saved places, last so the shots above show a single place. The alert location
+# stands in for a second US place.
+$BIN setup $LOCATION --plain < /dev/null > /dev/null
+$BIN places add $ALERT_LOCATION --name ${DREAD_DOCS_PLACE_NAME:-family} --plain < /dev/null > /dev/null || true
+$BIN places add "${DREAD_DOCS_ABROAD:-London}" --name abroad --plain < /dev/null > /dev/null || true
+$T2P pty $OUT/places.png --cols 112 --rows 20 --wait 14 -- $BIN top places
+print "  $OUT/places.png"
+
 # Every free scene at dusk.
 items=()
 for scene in asteroid deep-trouble ai-uprising solar-tantrum fallout superstorm clear-for-now uap; do

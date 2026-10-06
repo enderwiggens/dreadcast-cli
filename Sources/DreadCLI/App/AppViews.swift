@@ -23,6 +23,8 @@ class ScrollingView: AppView {
         return .lines(Array(all.dropFirst(offset).prefix(f.height)))
     }
 
+    func placeChanged() { offset = 0 }
+
     func handle(_ key: Key, frame f: AppFrame) -> Bool {
         let page = max(1, f.height - 2)
         switch key {
@@ -86,6 +88,65 @@ final class SystemsView: AppView {
         default: return false
         }
         return true
+    }
+
+    func placeChanged() { selected = 0 }
+}
+
+// MARK: Places
+
+/// Every watched place at a glance. Enter shows the highlighted place in full.
+final class PlacesView: AppView {
+    var highlighted = 0
+    private var choice: Int?
+    var interval: Double { 1 }
+    var hints: [(String, String)] { [("↑/↓", "select"), ("enter", "show")] }
+
+    func body(_ f: AppFrame) -> AppBody {
+        let s = f.ctx.styler
+        let watched = f.watched
+        highlighted = min(max(0, highlighted), watched.count - 1)
+        var lines = ["", PlaceRows.header(styler: s, width: f.width)]
+        for (i, w) in watched.enumerated() {
+            lines.append(PlaceRows.line(w.reading, ctx: f.ctx, width: f.width, highlighted: i == highlighted, viewing: i == f.selectedIndex))
+        }
+        lines.append("")
+
+        // The highlighted place's alerts, in brief.
+        let w = watched[highlighted]
+        lines.append("  " + s.paint(w.saved.name, Theme.porcelain, bold: true) + s.paint("  ·  " + w.saved.place.name, Theme.mist))
+        let fmt = Formatter(units: f.ctx.units, timeZone: w.snapshot.weather?.value?.timeZone ?? f.ctx.timeZone(for: w.saved.place))
+        let width = ScrollingView.textWidth(f, maximum: 96)
+        switch PlaceRows.alertState(w.reading) {
+        case .active:
+            let alerts = (w.snapshot.alerts?.value ?? []).sorted(by: WeatherAlert.threatOrder)
+            for alert in alerts.prefix(3) { lines += NowCommand.alertLines(alert, fmt: fmt, ctx: f.ctx, width: width).prefix(1) }
+            if alerts.count > 3 { lines.append("  " + s.paint("+\(alerts.count - 3) more on the Alerts tab", Theme.mist)) }
+        case .clear: lines.append("  " + s.paint("No active alerts for this location.", Theme.mint))
+        case .unknown: lines.append("  " + s.paint("Alerts are unavailable right now. This is not an all-clear.", Theme.advisory))
+        case .loading: lines.append("  " + s.paint("Loading alerts…", Theme.faint))
+        case .notCovered: lines.append("  " + s.paint("Official alerts are available for US locations.", Theme.faint))
+        }
+        lines.append("")
+        lines.append("  " + s.paint("Other places refresh alerts every 2 minutes and conditions every 10; the highlighted row also", Theme.faint))
+        lines.append("  " + s.paint("checks radar for rain. Enter shows a place in full. Save more with dread places add.", Theme.faint))
+        return .lines(Array(lines.prefix(f.height)))
+    }
+
+    func handle(_ key: Key, frame f: AppFrame) -> Bool {
+        switch key {
+        case .up, .character("k"): highlighted = max(0, highlighted - 1)
+        case .down, .character("j"): highlighted = min(f.watched.count - 1, highlighted + 1)
+        case .enter: choice = highlighted
+        default: return false
+        }
+        return true
+    }
+
+    /// The place chosen with Enter, once.
+    func takeChoice() -> Int? {
+        defer { choice = nil }
+        return choice
     }
 }
 
@@ -154,6 +215,7 @@ final class LightningView: ScrollingView {
 /// The animated loop, loaded in the background the first time the tab opens.
 final class RadarView: AppView, @unchecked Sendable {
     struct Loop {
+        let place: String
         let key: String
         let scene: RadarScene
         let frames: [Raster]
@@ -191,16 +253,19 @@ final class RadarView: AppView, @unchecked Sendable {
 
     func body(_ f: AppFrame) -> AppBody {
         let rows = max(4, f.height - Self.hudRows)
-        let key = "\(f.width)x\(rows)x\(range)"
+        let place = Context.placeKey(f.place)
+        let key = "\(place) \(f.width)x\(rows)x\(range)"
         let (current, pending, problem) = lock.withLock { (loop, loading, failure) }
         // Load on first view and when the size or range changes, then keep the loop fresh.
         // The previous loop stays on screen until the next one is ready.
         let due = current?.key != key || Date().timeIntervalSince(current?.loadedAt ?? .distantPast) > Self.reload
         let waiting = problem.map { $0.key == key && Date().timeIntervalSince($0.at) < Self.retry } ?? false
         if due, pending == nil, !waiting { load(f, key: key, rows: rows) }
-        guard let current, !current.frames.isEmpty else {
+        // Another place's loop is never shown, even while this one loads.
+        guard let current, current.place == place, !current.frames.isEmpty else {
             let s = f.ctx.styler
-            return .lines(["", "  " + (problem.map { s.paint("Radar is unavailable: \($0.message).", Theme.advisory) } ?? s.paint("Loading radar…", Theme.faint))])
+            let failed = problem.flatMap { $0.key == key ? $0.message : nil }
+            return .lines(["", "  " + (failed.map { s.paint("Radar is unavailable: \($0).", Theme.advisory) } ?? s.paint("Loading radar…", Theme.faint))])
         }
         // A new loop starts on its newest frame.
         if shown != current.key + "\(current.loadedAt.timeIntervalSince1970)" {
@@ -233,7 +298,7 @@ final class RadarView: AppView, @unchecked Sendable {
 
     private func load(_ f: AppFrame, key: String, rows: Int) {
         lock.withLock { loading = key }
-        let ctx = f.ctx, place = f.place, width = f.width, range = range, palette = palette
+        let ctx = f.ctx, place = f.place, placeKey = Context.placeKey(f.place), width = f.width, range = range, palette = palette
         Task.detached { [weak self] in
             let manifest = await ctx.manifest()
             var result: Loop?
@@ -246,7 +311,7 @@ final class RadarView: AppView, @unchecked Sendable {
                 if fields.isEmpty {
                     problem = "no frames right now"
                 } else {
-                    result = Loop(key: key, scene: scene, frames: fields.map { scene.compose(base: base, field: $0) },
+                    result = Loop(place: placeKey, key: key, scene: scene, frames: fields.map { scene.compose(base: base, field: $0) },
                                   times: fields.map(\.time), loadedAt: Date())
                 }
             }
