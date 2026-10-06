@@ -33,7 +33,7 @@ enum AsteroidWatch {
 
     static func draw(_ s: inout Stage) {
         let tones = tones(s.period)
-        let ground = s.layout == .strip ? 2 : s.deskHeight + 3
+        let ground = s.layout == .strip ? 2 : (s.layout == .window ? 5 : 3)
         let horizon = s.h - ground
         s.bands(tones.sky, bottom: horizon + 1)
 
@@ -61,7 +61,6 @@ enum AsteroidWatch {
         if s.isEvening {
             for x in stride(from: 5, to: s.w, by: 11) { s.raster.plot(x, horizon + 1, 0xFFD9A0) }
         }
-        s.desk()
     }
 
     /// Where the rock is, and how big: it grows from a speck at dawn to a body at night.
@@ -188,16 +187,26 @@ enum AsteroidWatch {
         }
         if r >= 5 { s.raster.glow(cx: cxd, cy: cyd, radius: r * 1.9, color: 0xE0806A, strength: s.isNight ? 0.2 : 0.14, rings: 2) }
         rock(&s, cx: cxd, cy: cyd, r: r)
-        // Fragments peel away below the leading edge.
-        let chips = r >= 8 ? 6 : r >= 5 ? 3 : 0
+        // Fragments flake off the sides of the body and fall behind it along the trail,
+        // cooling from hot to coral to violet as they go.
+        let chips = r >= 8 ? 11 : r >= 5 ? 6 : 0
         for i in 0..<chips {
-            let life = 24
-            let age = (s.tick(0.25, frames: life, offset: s.hash(i, 1, 31) * 6))
+            let life = 20 + Int(s.hash(i, 4, 31) * 12)
+            let age = s.tick(0.2, frames: life, offset: s.hash(i, 1, 31) * 8)
             let f = Double(age) / Double(life)
-            let px = Int(cxd - r * 0.4 - f * r * (1.2 + 1.6 * s.hash(i, 2, 31)))
-            let py = Int(cyd + r * 0.6 + f * r * (1.6 + 2.2 * s.hash(i, 3, 31)))
-            guard py < horizon - 1 else { continue }
-            s.raster.plot(px, py, f < 0.35 ? Ink.lampHot : f < 0.7 ? 0xE0806A : 0x8A5A86)
+            let along = r * 0.5 + f * (r * 4 + 12) * (0.7 + 0.5 * s.hash(i, 3, 31))
+            let side: Double = i % 2 == 0 ? 1 : -1
+            let half = r * (1.05 - 0.6 * min(1, along / length))
+            let across = side * half * (0.95 + 0.35 * s.hash(i, 2, 31) + 0.4 * f)
+            let px = Int(cxd + dir.x * along + perp.x * across)
+            let py = Int(cyd + dir.y * along + perp.y * across)
+            guard py >= 0, py < horizon - 1 else { continue }
+            let color: UInt32 = f < 0.3 ? Ink.lampHot : f < 0.65 ? 0xE0806A : 0x8A5A86
+            // A short dash along the trail: bright head, dimmer pixel toward the rock.
+            if r >= 8, f < 0.65 {
+                s.raster.plot(Int(Double(px) - dir.x * 1.6), Int(Double(py) - dir.y * 1.6), f < 0.3 ? 0xE0806A : 0x8A5A86)
+            }
+            s.raster.plot(px, py, color)
         }
     }
 

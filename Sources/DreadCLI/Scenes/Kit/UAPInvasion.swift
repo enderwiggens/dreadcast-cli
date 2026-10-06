@@ -50,7 +50,7 @@ enum UAPInvasion {
         let strip = s.layout == .strip
         let fenceHeight = strip ? 3 : 5
         let fieldDepth = strip ? 4 : (s.layout == .window ? 9 : 6)
-        let fenceTop = s.h - s.deskHeight - fenceHeight
+        let fenceTop = s.h - fenceHeight
         let horizon = fenceTop - fieldDepth
         s.bands(tones.sky, bottom: horizon + 1)
 
@@ -103,14 +103,13 @@ enum UAPInvasion {
             }
         }
 
-        // Fence in the foreground, then the desk.
+        // A fence along the foreground.
         s.raster.fillRect(x: 0, y: fenceTop, width: s.w, height: s.h - fenceTop, color: tones.near)
         s.raster.fillRect(x: 0, y: fenceTop + 1, width: s.w, height: 1, color: tones.fence)
         if fenceHeight >= 5 { s.raster.fillRect(x: 0, y: fenceTop + 3, width: s.w, height: 1, color: tones.fence) }
         for x in stride(from: 2, to: s.w, by: 7) {
             s.raster.fillRect(x: x, y: fenceTop, width: 1, height: fenceHeight, color: tones.fence)
         }
-        s.desk()
     }
 
     // MARK: The farm

@@ -5,7 +5,7 @@ import DreadTerminal
 /// Where a scene is shown. Each scene composes all three on purpose rather than
 /// cropping one picture into another shape.
 public enum SceneLayout: String, Sendable, CaseIterable {
-    /// The whole terminal, any aspect, with the desk in the corner.
+    /// The whole terminal, any aspect.
     case window
     /// An inline 3:1 still.
     case panorama
@@ -183,96 +183,4 @@ struct Stage {
             "ssssssssss",
         ]),
     ]
-
-    // MARK: The room
-
-    /// How tall the desk is at the bottom of the frame; zero in the banner strip.
-    var deskHeight: Int {
-        switch layout {
-        case .window: h >= 44 ? 4 : 3
-        case .panorama: 3
-        case .strip: 0
-        }
-    }
-
-    /// The Dreadcast signature: your desk at the bottom of the window, a lamp on, a mug
-    /// still warm. The world outside moves; the room stays still.
-    mutating func desk() {
-        let height = deskHeight
-        guard height > 0 else { return }
-        let top = h - height
-        let wood: UInt32 = 0x161118, edge: UInt32 = 0x2A2026
-        raster.fillRect(x: 0, y: top, width: w, height: height, color: wood)
-        raster.fillRect(x: 0, y: top, width: w, height: 1, color: edge)
-
-        // Bottom right: a laptop, a lamp that is always on, and a mug still warm.
-        let lampX = w - 20
-        let shade = top - Stage.lamp.height
-        raster.glow(cx: Double(lampX) + 4.5, cy: Double(shade) + 2, radius: 12, color: Ink.lamp, strength: 0.3, rings: 3)
-        for x in max(0, lampX - 6)..<min(w, lampX + 15) {
-            let d = abs(Double(x) - Double(lampX) - 4) / 10
-            if d < 1 { raster.plot(x, top, Raster.mix(edge, Ink.lamp, 0.7 * (1 - d))) }
-        }
-        if w >= 60 {
-            let laptopX = lampX - Stage.laptop.width - 3
-            let laptopY = top - Stage.laptop.height
-            Stage.laptop.draw(on: &raster, x: laptopX, y: laptopY, palette: Stage.roomInk)
-            // A tiny radar on the screen: a few echoes and a sweep that steps around.
-            let echoes: [(Int, Int, UInt32)] = [(3, 2, 0x63C8B9), (4, 2, 0xD9EF9B), (4, 3, 0x63C8B9), (6, 3, 0x63C8B9), (2, 3, 0x2E6E7E)]
-            for echo in echoes { raster.plot(laptopX + echo.0, laptopY + echo.1, echo.2) }
-            let sweep = [(5, 1), (7, 2), (7, 3), (5, 4), (2, 4), (1, 2)][tick(0.5, frames: 6)]
-            raster.plot(laptopX + sweep.0, laptopY + sweep.1, 0x9CF0C8)
-        }
-        Stage.lamp.draw(on: &raster, x: lampX, y: shade, palette: Stage.roomInk)
-        Stage.mug.draw(on: &raster, x: lampX + 11, y: top - Stage.mug.height, palette: Stage.roomInk)
-        // Steam: three wisps rising a pixel at a time.
-        let frame = tick(0.6, frames: 4)
-        let wisps = [(1, -1), (2, -2), (1, -3)]
-        for (i, wisp) in wisps.enumerated() where (i + frame) % 4 != 3 {
-            let sway = (i + frame) % 2
-            raster.blend(x: lampX + 11 + wisp.0 + sway, y: top - Stage.mug.height + wisp.1, color: 0xC8C4D0, alpha: 0.5 - 0.12 * Double(i))
-        }
-    }
-
-    static let roomInk: [Character: UInt32] = [
-        "k": 0x120E16,    // stem, base and laptop body
-        "s": 0xC98D5E,    // shade edge
-        "L": Ink.lamp,
-        "H": Ink.lampHot,
-        "e": 0x2A2A36,    // laptop bezel
-        "q": 0x0E2232,    // laptop screen
-        "m": 0x3A2E3C,    // mug
-        "n": 0x9A6A4C,    // the mug's lamplit side
-    ]
-
-    /// A table lamp with a lit shade: readable at any size.
-    static let lamp = Sprite([
-        "..sssss..",
-        ".sLLLLLs.",
-        ".LLLLLLL.",
-        "sLLLLLLLs",
-        "HHHHHHHHH",
-        "....k....",
-        "....k....",
-        "...kkk...",
-        "..kkkkk..",
-    ])
-
-    /// An open laptop, screen toward you.
-    static let laptop = Sprite([
-        ".eeeeeeeee.",
-        ".eqqqqqqqe.",
-        ".eqqqqqqqe.",
-        ".eqqqqqqqe.",
-        ".eqqqqqqqe.",
-        ".eeeeeeeee.",
-        "kkkkkkkkkkk",
-    ])
-
-    static let mug = Sprite([
-        "nmmmm.",
-        "nmmmmm",
-        "nmmmm.",
-        ".mmm..",
-    ])
 }
