@@ -51,7 +51,8 @@ enum LightningCommand {
         let rows = max(height == nil ? 10 : 6, min((height ?? ctx.terminal.rows) - 10, columns / 3))
         // One basemap pixel per cell for the background, Braille dots for strikes.
         let cellViewport = RadarViewport(center: place.coordinate, rangeMiles: snapshot.radiusMiles, width: columns, height: rows * 2)
-        let scene = RadarScene(viewport: cellViewport, palette: ctx.config.palette, minimumDBZ: 99, units: ctx.units)
+        let scene = RadarScene(viewport: cellViewport, palette: ctx.config.palette, minimumDBZ: 99, units: ctx.units,
+                               style: ctx.mapStyle, highlight: ctx.highlight)
         let full = scene.base()
         var background = Raster(width: columns, height: rows)
         for y in 0..<rows { for x in 0..<columns { background[x, y] = Raster.mix(full[x, y * 2], full[x, y * 2 + 1], 0.5) } }
@@ -66,7 +67,7 @@ enum LightningCommand {
             let y = Int((Double(canvas.dotHeight) / 2 - offset.north * dotsPerMile).rounded(.down))
             canvas.set(dotX: x, dotY: y, color: Theme.lightning[strike.ageBand(at: ctx.now).rawValue].hex)
         }
-        let markers = [CellOverlay(column: columns / 2, row: rows / 2, character: "✛", color: Theme.lamp, bold: true)]
+        let markers = [CellOverlay(column: columns / 2, row: rows / 2, character: "✛", color: ctx.highlight, bold: true)]
             + CellOverlay.text(" " + (place.name.components(separatedBy: ",").first ?? place.name), column: columns / 2 + 1, row: rows / 2, color: Theme.porcelain, bold: true)
 
         var lines = [""]

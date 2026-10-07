@@ -30,13 +30,13 @@ enum EtaCommand {
         if n.isRainingNow {
             let now = intensity(n.currentDBZ ?? 0)
             if let end = n.endMinutes {
-                return "Rain is falling now (\(now)). It should ease in " + s.paint("~\(Formatter.duration(minutes: end))", Theme.lamp, bold: true)
+                return "Rain is falling now (\(now)). It should ease in " + s.paint("~\(Formatter.duration(minutes: end))", ctx.highlight, bold: true)
                     + " (\(fmt.time(ctx.now.addingTimeInterval(Double(end) * 60))))."
             }
             return "Rain is falling now (\(now)) and should continue for at least 2 hours."
         }
         if let arrival = n.arrivalMinutes {
-            var text = "Rain reaches you in " + s.paint("~\(Formatter.duration(minutes: arrival))", Theme.lamp, bold: true)
+            var text = "Rain reaches you in " + s.paint("~\(Formatter.duration(minutes: arrival))", ctx.highlight, bold: true)
                 + " (\(fmt.time(ctx.now.addingTimeInterval(Double(arrival) * 60))))."
             if n.heavyMinutes > 0 { text += " Heavy for ~\(n.heavyMinutes) min." }
             else if let peak = n.peakDBZ { text += " Mostly \(intensity(peak))." }

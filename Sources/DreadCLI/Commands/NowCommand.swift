@@ -61,7 +61,7 @@ enum NowCommand {
                                               s.paint("OPEN-METEO · NWS", Theme.faint), width: width), ""]
             lines.append(PlaceRows.header(styler: s, width: width))
             lines += readings.enumerated().map { PlaceRows.line($1, ctx: ctx, width: width, highlighted: false, viewing: $0 == 0) }
-            lines += ["", "  " + s.paint("● your default · ", Theme.faint) + s.paint("dread now -l <name>", Theme.lamp) + s.paint(" for one place in full", Theme.faint), ""]
+            lines += ["", "  " + s.paint("● your default · ", Theme.faint) + s.paint("dread now -l <name>", ctx.highlight) + s.paint(" for one place in full", Theme.faint), ""]
             ctx.write(lines)
         }
         return readings.allSatisfy { $0.weather?.value == nil } ? .unavailable : .ok

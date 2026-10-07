@@ -266,11 +266,17 @@ Dreadcast’s free scenes, redrawn for the terminal. Each follows your local tim
 from a hint of trouble at dawn to the full situation at night. Your scene sits at the
 top of the Now tab whenever no alert is active; when one is, it steps aside.
 
+As in the Mac app, a scene is a whole theme: it brings its own highlight color and its
+own map colors under the radar. Asteroid Watch glows amber over a dusky purple map; UAP
+Invasion is violet over blue slate. Either can be fixed instead.
+
 ```sh
 dread scene                        # your scene, full screen
 dread scene superstorm --time night
 dread config set scene uap         # pick yours, or daily for a new one each day
 dread config set scene-banner off  # keep the Now tab to the numbers
+dread config set highlight solar-mint  # a fixed highlight, or auto to follow the scene
+dread config set map graphite      # a neutral map, or theme to follow the scene
 ```
 
 Asteroid Watch is the default. It is not a forecast.
@@ -344,6 +350,9 @@ dread now --all --json | jq -r '.places[] | "\(.name) \(.now.conditions.temperat
 | `renderer` | `auto`, `kitty`, `iterm2`, `halfblock` or `256` |
 | `scene` | a scene name, or `daily` |
 | `scene-banner` | `on` or `off` |
+| `highlight` | `auto` (follows the scene), `signal-blue`, `solar-mint`, `superstorm-lime`, `fallout-gold`, `lamp-glow`, `ember-red`, `afterglow-pink` or `ai-violet` |
+| `map` | `theme` (the scene’s map colors) or `graphite` |
+| `forecast` | `days`, `hourly` or `off`, beside the radar on the Now tab |
 | `quips` | `on` or `off` (one dry line under the quick look, never during alerts) |
 | `icons` | `emoji` or `ascii` |
 

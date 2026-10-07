@@ -241,14 +241,15 @@ enum DreadApp {
         }
         let elsewhere = f.watched.enumerated().filter { $0.offset != f.selectedIndex }.flatMap { $0.element.snapshot.alerts?.value ?? [] }
         return [TextWidth.spread(left, right, width: f.width),
-                tabs(active: tab, alerts: alerts, elsewhere: elsewhere, places: f.places.count, width: f.width, styler: s),
+                tabs(active: tab, alerts: alerts, elsewhere: elsewhere, places: f.places.count, width: f.width, styler: s,
+                     highlight: f.ctx.highlight),
                 s.paint(String(repeating: "─", count: f.width), Theme.border)]
     }
 
     /// The tab bar. When every name doesn't fit, other tabs show only their numbers. The
     /// Alerts tab counts this place's alerts; the Places tab counts the other places'.
     static func tabs(active: AppTab, alerts: [WeatherAlert], elsewhere: [WeatherAlert] = [], places: Int = 1,
-                     width: Int, styler s: Styler) -> String {
+                     width: Int, styler s: Styler, highlight: RGB = Theme.lamp) -> String {
         func worst(_ list: [WeatherAlert]) -> WeatherAlert? { list.sorted(by: WeatherAlert.threatOrder).first }
         func bar(named: Bool) -> String {
             var line = " "
@@ -256,7 +257,7 @@ enum DreadApp {
                 let counted = candidate == .alerts ? alerts : candidate == .places ? elsewhere : []
                 let count = counted.isEmpty ? "" : " \(counted.count)"
                 if candidate == active {
-                    line += s.paint(" \(candidate.rawValue + 1) \(candidate.title)\(count) ", TextStyle(foreground: Theme.midnight, background: Theme.lamp, bold: true))
+                    line += s.paint(" \(candidate.rawValue + 1) \(candidate.title)\(count) ", TextStyle(foreground: Theme.midnight, background: highlight, bold: true))
                 } else {
                     let color = worst(counted).map(NowCommand.alertColor) ?? Theme.mist
                     line += " " + s.paint("\(candidate.rawValue + 1)", named ? Theme.faint : Theme.mist)
@@ -275,7 +276,7 @@ enum DreadApp {
         if let worst = f.worstAlert, worst.index != f.selectedIndex { keys.append(("a", "go to alert")) }
         keys += [("r", "refresh"), ("q", "quit")]
         let busy = f.snapshot.inFlight.isEmpty ? "" : "updating \(f.snapshot.inFlight.sorted().joined(separator: ", "))…"
-        let left = " " + keys.map { s.paint($0.0, Theme.lamp) + " " + s.paint($0.1, Theme.mist) }.joined(separator: "  ")
+        let left = " " + keys.map { s.paint($0.0, f.ctx.highlight) + " " + s.paint($0.1, Theme.mist) }.joined(separator: "  ")
         return [s.paint(String(repeating: "─", count: f.width), Theme.border),
                 TextWidth.spread(left, s.paint(TextWidth.truncate(busy, to: max(0, f.width / 3)), Theme.faint) + " ", width: f.width - 1)]
     }

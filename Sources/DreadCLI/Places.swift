@@ -177,7 +177,7 @@ enum PlaceRows {
             return s.paint(TextWidth.pad(TextWidth.truncate(text, to: width), to: width),
                            TextStyle(foreground: Theme.porcelain, background: RGB(hex: 0x1C3350), bold: true))
         }
-        return " " + s.paint(marker, Theme.lamp) + " " + s.paint(cells[0], Theme.porcelain, bold: true) + s.paint(cells[1], Theme.mist) + cells[2]
+        return " " + s.paint(marker, ctx.highlight) + " " + s.paint(cells[0], Theme.porcelain, bold: true) + s.paint(cells[1], Theme.mist) + cells[2]
             + s.paint(alert.0.cell(columns[3].1), alert.1) + s.paint(rain.0.cell(columns[4].1), rain.1) + s.paint(today, Theme.mist)
     }
 

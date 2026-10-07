@@ -38,7 +38,7 @@ enum SetupCommand {
         let s = ctx.styler
         ctx.write("")
         for (index, candidate) in places.enumerated() {
-            ctx.write("  " + s.paint("\(index + 1)", Theme.lamp) + "  " + candidate.name + s.paint("  \(candidate.coordinate.formatted)", Theme.faint))
+            ctx.write("  " + s.paint("\(index + 1)", ctx.highlight) + "  " + candidate.name + s.paint("  \(candidate.coordinate.formatted)", Theme.faint))
         }
         if let answer = Prompt.ask("\n  Which one? [1]: "), let choice = Int(answer), (1...places.count).contains(choice) {
             return places[choice - 1]
@@ -158,6 +158,15 @@ enum ConfigCommand {
             case "icons":
                 guard ["emoji", "ascii"].contains(value) else { return ctx.fail("icons: emoji or ascii.", code: .usage) }
                 config.icons = value
+            case "highlight":
+                guard let highlight = Highlight.named(value) else { return ctx.fail("highlight: \(Highlight.names).", code: .usage) }
+                config.highlight = highlight.rawValue
+            case "map":
+                guard let map = MapChoice.named(value) else { return ctx.fail("map: theme (follows your scene) or graphite.", code: .usage) }
+                config.map = map.rawValue
+            case "forecast":
+                guard let row = ForecastRow.named(value) else { return ctx.fail("forecast: days, hourly or off.", code: .usage) }
+                config.forecast = row.rawValue
             case "scene":
                 if value == "off" {
                     // Hiding the art is its own setting; accept the obvious phrasing too.
@@ -204,6 +213,10 @@ enum ConfigCommand {
             "  " + s.paint("Scene", Theme.mist) + "      " + (c.scene == "daily" ? "daily (a different scene each day)"
                 : SceneID(rawValue: c.scene).map { "\($0.title) (\($0.rawValue))" } ?? c.scene),
             "  " + s.paint("Banner", Theme.mist) + "     " + (c.sceneBanner ? "on" : "off") + s.paint("  (the scene on the Now tab and in dread now)", Theme.faint),
+            "  " + s.paint("Highlight", Theme.mist) + "  " + s.paint("●", ctx.highlight) + " " + (Highlight.named(c.highlight) ?? .automatic).title
+                + (Highlight.named(c.highlight) == .automatic ? s.paint("  (follows the scene)", Theme.faint) : ""),
+            "  " + s.paint("Map", Theme.mist) + "        " + ((MapChoice.named(c.map) ?? .theme) == .theme ? "theme" + s.paint("  (follows the scene)", Theme.faint) : "graphite"),
+            "  " + s.paint("Forecast", Theme.mist) + "   " + (ForecastRow.named(c.forecast) ?? .days).rawValue + s.paint("  (beside the radar on the Now tab)", Theme.faint),
             "  " + s.paint("Lightning", Theme.mist) + "  " + (Credentials.source(environment: ctx.environment) ?? "not configured"),
             "",
             "  " + s.paint("Config  " + ctx.paths.configFile.path, Theme.faint),

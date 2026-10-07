@@ -235,6 +235,20 @@ struct CommandTests {
         #expect(!main.lowercased().contains("no server"))
     }
 
+    @Test func themeSettingsSaveTheAppsNames() async throws {
+        let env = try await Self.home()
+        #expect(try await Self.run(["config", "set", "highlight", "violet", "--plain"], environment: env).code == .ok)
+        #expect(try await Self.run(["config", "set", "map", "neutral", "--plain"], environment: env).code == .ok)
+        #expect(try await Self.run(["config", "set", "forecast", "hourly", "--plain"], environment: env).code == .ok)
+        let config = try Self.json(try await Self.run(["config", "--json"], environment: env).out)
+        #expect(config["highlight"] as? String == "ai-violet")
+        #expect(config["map"] as? String == "graphite")
+        #expect(config["forecast"] as? String == "hourly")
+        #expect(try await Self.run(["config", "set", "highlight", "chartreuse", "--plain"], environment: env).code == .usage)
+        #expect(try await Self.run(["config", "set", "map", "daylight", "--plain"], environment: env).code == .usage)
+        #expect(try await Self.run(["config", "set", "forecast", "never", "--plain"], environment: env).code == .usage)
+    }
+
     @Test func versionMatchesTheRelease() async throws {
         let env = try await Self.home(location: nil)
         #expect(try await Self.run(["version"], environment: env).out == "dread \(Dreadcast.version)\n")

@@ -16,6 +16,12 @@
   header, then conditions, alerts and the next two hours, then live radar filling the
   rest, with its timeline and the coming days beneath. It falls back to text in small
   windows and without 256 colors.
+- Themes, as in the Mac app: each scene brings its own highlight color (for the selected
+  tab, keys and the map marker) and its own map colors under the radar.
+  `dread config set highlight` fixes one of the app's eight highlights, `map graphite`
+  picks the neutral map, and `forecast days|hourly|off` sets what sits beside the
+  radar's timeline. Hazard, alert, radar and lightning colors never change with a
+  theme.
 - Saved places: `dread places add|remove|default|rename`, up to eight, each usable as
   `--location <name>`. The app watches all of them, alerts every 2 minutes and
   conditions every 10, and gives the place you're viewing every source. A Places tab
