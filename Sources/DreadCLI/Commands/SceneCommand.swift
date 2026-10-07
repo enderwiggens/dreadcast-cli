@@ -24,8 +24,8 @@ enum SceneCommand {
         }
         var fixedPeriod: ScenePeriod?
         if let time = ctx.arguments.value("time")?.lowercased(), time != "auto" {
-            guard let period = ScenePeriod(rawValue: time) else {
-                return ctx.fail("--time must be auto, dawn, day, dusk or night.", code: .usage)
+            guard let period = ScenePeriod.named(time) else {
+                return ctx.fail("--time must be auto, dusk or night. Scenes show their sunset and night versions, drawn for dark terminals.", code: .usage)
             }
             fixedPeriod = period
         }
@@ -126,11 +126,11 @@ enum SceneCommand {
             case .left, .character("p"):
                 scene = scene.adjacent(-1)
             case .character("t"), .up, .down:
-                // auto → dawn → day → dusk → night → auto
+                // auto → dusk → night → auto
                 if let current = fixedPeriod {
-                    fixedPeriod = current == .night ? nil : current.next
+                    fixedPeriod = current == ScenePeriod.shown.last ? nil : current.next
                 } else {
-                    fixedPeriod = .dawn
+                    fixedPeriod = ScenePeriod.shown.first
                 }
             case .character("i"):
                 showText.toggle()

@@ -31,8 +31,9 @@
 - `dread now` prints the quick look that `dread` used to, and `dread` still prints it
   when piped or given `--plain` or `--json`.
 - `dread scene`: the app's eight free scenes as animated pixel art, filling the
-  terminal, with live conditions beneath them. Each scene follows the local time of day,
-  as in the app. Keys change the scene and time of day; `--still` draws one frame and
+  terminal, with live conditions beneath them. Scenes show their sunset version through
+  the day and their night version after 8 PM, the two drawn for a dark terminal. Keys
+  change the scene and switch between sunset and night; `--still` draws one frame and
   `--png` saves the artwork.
 - `dread` shows your scene as a banner when no alert is active, and a five-day list.
 - `dread config set scene <name|daily>` picks your scene (Asteroid Watch by default), and

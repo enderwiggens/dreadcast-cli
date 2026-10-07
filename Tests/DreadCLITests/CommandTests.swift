@@ -249,6 +249,15 @@ struct CommandTests {
         #expect(try await Self.run(["config", "set", "forecast", "never", "--plain"], environment: env).code == .usage)
     }
 
+    @Test func scenesOnlyComeInSunsetAndNight() async throws {
+        let env = try await Self.home()
+        #expect(try await Self.run(["scene", "asteroid", "--time", "day", "--json"], environment: env).code == .usage)
+        let night = try Self.json(try await Self.run(["scene", "asteroid", "--time", "night", "--json"], environment: env).out)
+        #expect(night["period"] as? String == "night")
+        let sunset = try Self.json(try await Self.run(["scene", "asteroid", "--time", "sunset", "--json"], environment: env).out)
+        #expect(sunset["period"] as? String == "dusk")
+    }
+
     @Test func versionMatchesTheRelease() async throws {
         let env = try await Self.home(location: nil)
         #expect(try await Self.run(["version"], environment: env).out == "dread \(Dreadcast.version)\n")
