@@ -2,7 +2,7 @@ import Foundation
 import DreadcastKit
 import DreadTerminal
 
-/// An animated radar loop at any size, shared by the Now and Radar tabs. The loop loads in
+/// An animated radar loop at any size, for the Radar tab. The loop loads in
 /// the background the first time it's drawn, reloads every five minutes and whenever the
 /// size, range or place changes, and keeps the previous loop on screen meanwhile.
 final class RadarPanel: @unchecked Sendable {

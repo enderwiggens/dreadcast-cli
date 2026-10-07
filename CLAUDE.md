@@ -26,7 +26,7 @@ separate project that shares no code with the app at build time and never requir
 - **Free palettes and scenes only.** Dreadcast, Classic, Viridis and RainViewer's colors,
   and the app's eight free scenes. The Pro palettes and Pro scenes stay in the app.
 - **Scenes are decorative.** They never describe the weather; real readings sit beside
-  them. The Now banner steps aside while any alert is active or alert data is
+  them. The `dread now` banner steps aside while any alert is active or alert data is
   unknown, and scene lines follow the voice rules above.
 
 ## Layout
@@ -82,9 +82,9 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
   `DreadcastTheme.swift`, `MapPalette.swift` and `Resources/MapPreview/style.js`, and
   keep its free and Pro scenes, order and accents in `Scene.swift`. Themes never touch
   hazard, alert, radar or lightning colors.
-- Radar comes first, as in the Mac app. Now is laid out like the app's window (scene
-  header, readings, live radar, timeline and days) and gives the radar its room before
-  the scene. Both radar tabs draw through `RadarPanel`.
+- Radar comes first, as in the Mac app. The app opens on the Radar tab: the readings,
+  live radar, then the timeline and days, with no scene (scenes have their own tab and
+  head `dread now`). It draws through `RadarPanel`.
 - Saved places (`Config.places`, first is the default) each get their own `State` in
   the app. Only the place being viewed loads every source; the rest are watched
   lightly (`DreadApp.sources`). Views reset per-place state in `placeChanged()`, and

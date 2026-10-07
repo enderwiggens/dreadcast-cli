@@ -55,25 +55,21 @@ class ScrollingView: AppView {
     static func textWidth(_ f: AppFrame, maximum: Int = 100) -> Int { min(f.width - 1, maximum) }
 }
 
-// MARK: Now
+// MARK: Radar
 
-/// Home, laid out like the Dreadcast window: the scene as a short header, the readings,
-/// then live radar filling the rest, with the timeline and the next few days beneath it.
+/// Home: the readings, then live radar filling the rest, with the timeline and the next
+/// few days beneath it. The scene stays on its own tab, so the radar has no competition.
 /// Without room for the radar, or without 256 colors, it shows the quick look's text.
-final class NowView: AppView {
+final class RadarView: AppView {
     let radar: RadarPanel
     private var showingRadar = true
-    private var sceneCache: (key: String, lines: [String])?
 
     init(ctx: Context) { radar = RadarPanel(ctx: ctx) }
 
     var interval: Double { 0.1 }
-    var hints: [(String, String)] { showingRadar ? [("+/−", "range"), ("space", radar.paused ? "play" : "pause")] : [] }
+    var hints: [(String, String)] { showingRadar ? radar.hints : [] }
 
-    static let sceneRows = 6
     static let minimumRadarRows = 8
-    /// Radar comes first: the scene shows only while the radar keeps at least this many rows.
-    static let radarRowsWithScene = 14
     static let footerRows = 2
 
     func body(_ f: AppFrame) -> AppBody {
@@ -92,13 +88,8 @@ final class NowView: AppView {
         if let lightning { readings.append(NowCommand.lightningLine(lightning, fmt: fmt, ctx: ctx)) }
         readings.append("")
 
-        // The scene goes first when space is short; then the radar, for the text layout.
-        var scene = sceneLines(f, alerts: alerts, report: report)
-        var rows = f.height - scene.count - readings.count - Self.footerRows
-        if rows < Self.radarRowsWithScene, !scene.isEmpty {
-            scene = []
-            rows = f.height - readings.count - Self.footerRows
-        }
+        // Too short for the radar, the text layout takes over.
+        let rows = f.height - readings.count - Self.footerRows
         guard rows >= Self.minimumRadarRows else { return text(f, weather: weather, alerts: alerts) }
         showingRadar = true
         let picture = radar.picture(f, width: f.width, rows: rows)
@@ -108,11 +99,11 @@ final class NowView: AppView {
         ]
         switch picture {
         case .art(let art):
-            return .pixels(art, above: scene + readings, below: below)
+            return .pixels(art, above: readings, below: below)
         case .note(let note, let failed):
             var waiting = [String](repeating: "", count: rows)
             waiting[rows / 2] = TextWidth.pad("", to: max(0, (f.width - TextWidth.of(note)) / 2)) + s.paint(note, failed ? Theme.advisory : Theme.faint)
-            return .lines(scene + readings + waiting + below)
+            return .lines(readings + waiting + below)
         }
     }
 
@@ -123,19 +114,8 @@ final class NowView: AppView {
         let lines = NowCommand.pretty(place: f.place, weather: weather, alerts: alerts,
                                       lightning: snapshot.lightningConfigured ? snapshot.lightning : nil,
                                       nowcast: snapshot.nowcast?.value, ctx: f.ctx, width: ScrollingView.textWidth(f, maximum: 96),
-                                      rows: f.height + 5, sceneTime: (f.elapsed / 4).rounded(.down) * 4)
+                                      rows: f.height + 5, scene: false)
         return .lines(Array(lines.prefix(f.height)))
-    }
-
-    /// The scene header, repainted only when it changes (every few seconds).
-    private func sceneLines(_ f: AppFrame, alerts: Fetched<[WeatherAlert]>, report: WeatherReport?) -> [String] {
-        let time = (f.elapsed / 4).rounded(.down) * 4
-        let key = "\(Context.placeKey(f.place)) \(f.width) \(time) \(alerts.value?.count ?? -1) \(ScenePeriod.at(f.ctx.now, timeZone: f.zone))"
-        if let cached = sceneCache, cached.key == key { return cached.lines }
-        let lines = NowCommand.sceneStrip(place: f.place, alerts: alerts, report: report, ctx: f.ctx,
-                                          width: f.width, rows: Self.sceneRows, sceneTime: time)
-        sceneCache = (key, lines)
-        return lines
     }
 
     /// Beside the timeline, as the app's header forecast: days, the coming hours, or nothing.
@@ -324,7 +304,7 @@ final class LightningView: ScrollingView {
             return ["", "  " + st.paint("LIGHTNING", Theme.porcelain, bold: true), "",
                     "  Lightning uses your own Xweather account.",
                     "  Add credentials with " + st.paint("dread auth xweather", f.ctx.highlight) + ", then strikes appear here,",
-                    "  on the Now and Radar tabs, and in Systems."]
+                    "  on the Radar tab and in Systems."]
         }
         guard let fetched = f.snapshot.lightning else { return Self.loading("lightning", f) }
         guard let snapshot = fetched.value else {
@@ -333,37 +313,6 @@ final class LightningView: ScrollingView {
         return LightningCommand.pretty(place: f.place, snapshot: snapshot, fetched: fetched, fmt: f.fmt, ctx: f.ctx,
                                        watching: true, width: f.width, height: f.height + 4)
     }
-}
-
-// MARK: Radar
-
-/// The radar on its own, as large as the window allows, with the scale and controls.
-final class RadarView: AppView {
-    let panel: RadarPanel
-
-    init(ctx: Context) { panel = RadarPanel(ctx: ctx) }
-
-    var interval: Double { 0.1 }
-    var hints: [(String, String)] { panel.hints }
-
-    static let hudRows = 3
-
-    func body(_ f: AppFrame) -> AppBody {
-        if let note = ScrollingView.needsColor(f) { return .lines(note) }
-        let s = f.ctx.styler
-        switch panel.picture(f, width: f.width, rows: max(4, f.height - Self.hudRows)) {
-        case .note(let text, let failed):
-            return .lines(["", "  " + s.paint(text, failed ? Theme.advisory : Theme.faint)])
-        case .art(let art):
-            return .pixels(art, below: [
-                "  " + panel.timeline(f) + s.paint(" · \(panel.palette.title)", Theme.mist),
-                "  " + panel.legend(f),
-                "  " + s.paint("RainViewer · Natural Earth · " + panel.age(f), Theme.faint),
-            ])
-        }
-    }
-
-    func handle(_ key: Key, frame f: AppFrame) -> Bool { panel.handle(key) }
 }
 
 // MARK: Scene
@@ -380,7 +329,7 @@ final class SceneView: AppView {
     init(ctx: Context) { reduceMotion = ctx.terminal.reduceMotion }
 
     var interval: Double { reduceMotion ? 1 : 0.11 }
-    var hints: [(String, String)] { [("←/→", "scene"), ("t", "time of day"), ("space", paused ? "play" : "pause")] }
+    var hints: [(String, String)] { [("←/→", "scene"), ("t", "sunset/night"), ("space", paused ? "play" : "pause")] }
 
     func body(_ f: AppFrame) -> AppBody {
         if let note = ScrollingView.needsColor(f) { return .lines(note) }

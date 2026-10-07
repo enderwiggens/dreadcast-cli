@@ -179,8 +179,8 @@ enum SceneCommand {
     static func hud(scene: SceneID, period: ScenePeriod, automatic: Bool, paused: Bool, columns: Int, styler s: Styler) -> String {
         let state = "\(period.title)\(automatic ? " (auto)" : "")\(paused ? " · paused" : "")"
         let keys = columns >= 96
-            ? "←/→ scene · t time of day · i readings · space pause · q quit"
-            : "←/→ scene · t time · q quit"
+            ? "←/→ scene · t sunset/night · i readings · space pause · q quit"
+            : "←/→ scene · t sunset/night · q quit"
         let left = "  " + s.paint("◀ ", scene.accent) + s.paint(scene.title, Theme.porcelain) + s.paint(" ▶", scene.accent)
             + s.paint("  " + state, Theme.faint)
         return TextWidth.spread(left, s.paint(keys, Theme.faint), width: columns - 2)

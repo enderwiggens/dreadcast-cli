@@ -10,7 +10,7 @@
 [![macOS and Linux](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-5B7FA6)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-5B7FA6)](LICENSE)
 
-<img src="docs/images/demo.gif" alt="The dread app: live radar animating under the Asteroid Watch scene and current conditions, then the Systems table, saved places and a full-screen scene" width="880">
+<img src="docs/images/demo.gif" alt="The dread app: live radar animating under current conditions, then the Systems table, saved places and a full-screen scene" width="880">
 
 </div>
 
@@ -46,8 +46,8 @@ it runs on macOS and Linux.
   missing data is never reported as all clear.
 - **Made for scripts and prompts.** `--json` on every command, exit codes for alerts, and
   a prompt segment that returns in about 15 ms.
-- **Dreadcast’s scenes.** Asteroid Watch, Deep Trouble and six more sit above the radar
-  as animated pixel art, at sunset by day and at night after dark. They don’t describe the
+- **Dreadcast’s scenes.** Asteroid Watch, Deep Trouble and six more as animated pixel
+  art on a tab of their own, at sunset by day and at night after dark. They don’t describe the
   weather. The numbers underneath do.
 
 <table>
@@ -57,7 +57,7 @@ it runs on macOS and Linux.
   </tr>
   <tr>
     <td align="center"><b>Radar</b> · <code>dread radar</code></td>
-    <td align="center"><b>Systems</b> · tab 3</td>
+    <td align="center"><b>Systems</b> · tab 2</td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/alerts.png" alt="An active NWS Flood Warning shown in full"></td>
@@ -164,31 +164,28 @@ folders listed in [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## The app
 
-`dread` opens on **Now**, laid out like the Mac app’s window: your scene as a short
-header, then conditions, alerts and the next two hours, then live radar filling the
-rest, with the radar’s timeline and the coming days beneath it. The scene steps aside
-during an alert, and in a short window the radar keeps its room first. Every tab reads
-the same live data, and each source refreshes on its own schedule, so switching tabs
-never waits on the network.
+`dread` opens on **Radar**: conditions, alerts and the next two hours, then live radar
+filling the rest of the window, with the radar’s timeline and the coming days beneath
+it. Every tab reads the same live data, and each source refreshes on its own schedule,
+so switching tabs never waits on the network.
 
 | Key | Tab | What’s there |
 | :-: | --- | --- |
-| `1` | **Now** | Live radar, with your scene, conditions, alerts and the next two hours above it |
-| `2` | **Radar** | The radar on its own, full screen, with its scale. `space` pauses, `←` `→` step |
-| `3` | **Systems** | Storm cells, alerts, fires, tropical storms and more, sorted by threat |
-| `4` | **Forecast** | Hourly charts and seven days |
-| `5` | **Alerts** | Every active alert in full, with what to do |
-| `6` | **Outlook** | Solar activity, aurora, earthquakes, meteor showers and hazards |
-| `7` | **Lightning** | Strikes from the last 20 minutes (needs an Xweather account) |
-| `8` | **Scene** | The full scene, with live readings beneath it |
-| `9` | **Places** | Every saved place at a glance, once you’ve saved two |
+| `1` | **Radar** | Live radar, with conditions, alerts and the next two hours above it |
+| `2` | **Systems** | Storm cells, alerts, fires, tropical storms and more, sorted by threat |
+| `3` | **Forecast** | Hourly charts and seven days |
+| `4` | **Alerts** | Every active alert in full, with what to do |
+| `5` | **Outlook** | Solar activity, aurora, earthquakes, meteor showers and hazards |
+| `6` | **Lightning** | Strikes from the last 20 minutes (needs an Xweather account) |
+| `7` | **Scene** | The full scene, with live readings beneath it |
+| `8` | **Places** | Every saved place at a glance, once you’ve saved two |
 
-`Tab` and `Shift-Tab` move between tabs, `+` `−` change the radar’s range, `↑` `↓`
-scroll or select, `[` `]` switch places, `a` jumps to the most serious alert anywhere,
-`r` refreshes and `q` quits.
-`Ctrl-Z` suspends it like any other program.
+`Tab` and `Shift-Tab` move between tabs. On Radar, `space` pauses the loop, `←` `→`
+step through its frames and `+` `−` change the range. Elsewhere `↑` `↓` scroll or
+select. `[` `]` switch places, `a` jumps to the most serious alert anywhere, `r`
+refreshes, `q` quits and `Ctrl-Z` suspends it like any other program.
 
-`dread top radar` opens straight to a tab. When output is piped, or with `--plain` or
+`dread top systems` opens straight to a tab. When output is piped, or with `--plain` or
 `--json`, `dread` prints the quick look instead, so scripts and shell profiles keep
 working. The app needs a window at least 60 columns by 16 rows.
 
@@ -264,8 +261,8 @@ else too, from radar to wildfires, so switching shows it in full within moments.
 
 Dreadcast’s free scenes, redrawn for the terminal. They’re made for a dark screen, so
 each shows its sunset through the day and its night version from 8 PM, when the full
-situation arrives. Your scene sits at the top of the Now tab whenever no alert is
-active; when one is, it steps aside.
+situation arrives. Your scene fills the Scene tab (7) and `dread scene`, and heads the
+`dread now` printout whenever no alert is active; when one is, it steps aside.
 
 As in the Mac app, a scene is a whole theme: it brings its own highlight color and its
 own map colors under the radar. Asteroid Watch glows amber over a dusky purple map; UAP
@@ -275,7 +272,7 @@ Invasion is violet over blue slate. Either can be fixed instead.
 dread scene                        # your scene, full screen
 dread scene superstorm --time night
 dread config set scene uap         # pick yours, or daily for a new one each day
-dread config set scene-banner off  # keep the Now tab to the numbers
+dread config set scene-banner off  # leave it off the dread now printout
 dread config set highlight solar-mint  # a fixed highlight, or auto to follow the scene
 dread config set map graphite      # a neutral map, or theme to follow the scene
 ```
@@ -353,7 +350,7 @@ dread now --all --json | jq -r '.places[] | "\(.name) \(.now.conditions.temperat
 | `scene-banner` | `on` or `off` |
 | `highlight` | `auto` (follows the scene), `signal-blue`, `solar-mint`, `superstorm-lime`, `fallout-gold`, `lamp-glow`, `ember-red`, `afterglow-pink` or `ai-violet` |
 | `map` | `theme` (the scene’s map colors) or `graphite` |
-| `forecast` | `days`, `hourly` or `off`, beside the radar on the Now tab |
+| `forecast` | `days`, `hourly` or `off`, beside the radar’s timeline |
 | `quips` | `on` or `off` (one dry line under the quick look, never during alerts) |
 | `icons` | `emoji` or `ascii` |
 

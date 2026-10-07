@@ -29,7 +29,7 @@ public enum Dread {
                 context.write("dread \(DreadcastKit.Dreadcast.version)")
                 return .ok
             case "now", "weather":
-                return context.opensApp ? try await DreadApp.run(context, tab: .now) : try await NowCommand.run(context)
+                return context.opensApp ? try await DreadApp.run(context, tab: .radar) : try await NowCommand.run(context)
             case "radar": return try await RadarCommand.run(context)
             case "alerts": return try await AlertsCommand.run(context)
             case "prompt": return await PromptCommand.run(context)
@@ -150,16 +150,16 @@ enum Help {
             return """
             \(title) — the app
 
-              dread                        opens on Now: live radar under your scene,
-                                           conditions, alerts and the next two hours
-              dread top [view]             opens on a view: now, radar, systems, forecast,
-                                           alerts, outlook, lightning, scene or places (or 1–9)
+              dread                        opens on Radar: live radar under the conditions,
+                                           alerts and the next two hours
+              dread top [view]             opens on a view: radar, systems, forecast, alerts,
+                                           outlook, lightning, scene or places (or 1–8)
               dread -l <name>              opens on a saved place
 
-            Keys: tab and shift-tab or 1–9 switch views · [ and ] switch places · a goes to
+            Keys: tab and shift-tab or 1–8 switch views · [ and ] switch places · a goes to
             the most serious alert · ↑/↓ select or scroll · r refresh · q quits. Radar: space
-            pauses, ←/→ step frames, +/− change range. Scene: ←/→ change scene, t the time
-            of day. Places: enter shows the highlighted place in full.
+            pauses, ←/→ step frames, +/− change range. Scene: ←/→ change scene, t sunset or
+            night. Places: enter shows the highlighted place in full.
 
             Every view reads the same live data, and each source refreshes on its own
             schedule. A new alert shows in the header whichever view is open.
@@ -208,7 +208,7 @@ enum Help {
             the readings below them are real. Reduce Motion shows a still frame.
 
             `dread config set scene <name|daily>` picks your scene (Asteroid Watch by default);
-            `dread config set scene-banner off` hides it on the Now tab and in `dread now`.
+            `dread config set scene-banner off` hides it above `dread now`.
             """
         default:
             return """
