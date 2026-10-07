@@ -139,6 +139,12 @@ enum Help {
                 range 15|35|75|150|300 · renderer auto|kitty|iterm2|halfblock|256
                 quips on|off · icons emoji|ascii
                 scene <name>|daily · scene-banner on|off
+                highlight auto|signal-blue|solar-mint|superstorm-lime|fallout-gold|
+                          lamp-glow|ember-red|afterglow-pink|ai-violet
+                map theme|graphite · forecast days|hourly|off
+
+            Each scene brings its own highlight and map colors, as in the Dreadcast app;
+            highlight and map can be fixed instead.
             """
         case "top", "app":
             return """

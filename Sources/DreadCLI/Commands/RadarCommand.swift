@@ -47,7 +47,8 @@ enum RadarCommand {
         var state = LoopState(range: range, frames: [], frameIndex: 0, paused: still)
         func load(range: Double) async -> (RadarScene, Raster, [Raster], [Date]) {
             let viewport = RadarViewport(center: place.coordinate, rangeMiles: range, width: layout.pixelWidth, height: layout.pixelHeight)
-            let scene = RadarScene(viewport: viewport, palette: palette, minimumDBZ: minimumDBZ, units: ctx.units)
+            let scene = RadarScene(viewport: viewport, palette: palette, minimumDBZ: minimumDBZ, units: ctx.units,
+                                   style: ctx.mapStyle, highlight: ctx.highlight)
             let base = scene.base()
             let fields = await RadarLoader(http: ctx.http, store: ctx.tiles)
                 .fields(manifest: manifest, frames: manifest.recent(frameCount), viewport: viewport)
@@ -68,7 +69,7 @@ enum RadarCommand {
         let imageID = Int.random(in: 1000...99_999)
 
         func header() -> String {
-            var parts = [s.paint("dread radar", Theme.lamp, bold: true), place.name,
+            var parts = [s.paint("dread radar", ctx.highlight, bold: true), place.name,
                          "\(Int(ctx.units.distance(miles: state.range).rounded())) \(ctx.units.distanceUnit)",
                          palette.title]
             if let lightningFetch {
@@ -80,7 +81,7 @@ enum RadarCommand {
         func hud() -> [String] {
             let times = Array(frameTimes)
             let time = state.frameIndex < times.count ? fmt.time(times[state.frameIndex]) : "--"
-            let dots = (0..<state.frames.count).map { $0 == state.frameIndex ? s.paint("●", Theme.lamp) : s.paint("●", Theme.faint) }.joined()
+            let dots = (0..<state.frames.count).map { $0 == state.frameIndex ? s.paint("●", ctx.highlight) : s.paint("●", Theme.faint) }.joined()
             let keys = still ? "" : s.paint(state.paused ? "  paused · space play · ←/→ step · +/− zoom · q quit" : "  space pause · ←/→ step · +/− zoom · q quit", Theme.faint)
             let ramp = [18.0, 24, 30, 36, 42, 48, 54, 60, 66].map { s.paint("█", RGB(hex: palette.rgb(dbz: $0))) }.joined()
             var legend = "  dBZ " + ramp + s.paint(" 18 → 65+", Theme.faint)
@@ -89,7 +90,7 @@ enum RadarCommand {
             }
             let age = Formatter.ago(times.last ?? ctx.now, now: Date())
             return [
-                "  " + s.paint("◀ ", Theme.lamp) + time + " " + dots + s.paint(" ▶", Theme.lamp) + keys,
+                "  " + s.paint("◀ ", ctx.highlight) + time + " " + dots + s.paint(" ▶", ctx.highlight) + keys,
                 legend,
                 "  " + s.paint("RainViewer · Natural Earth · latest frame \(age)", Theme.faint)
             ]

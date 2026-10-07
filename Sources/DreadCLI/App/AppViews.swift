@@ -103,7 +103,7 @@ final class NowView: AppView {
         showingRadar = true
         let picture = radar.picture(f, width: f.width, rows: rows)
         let below = [
-            TextWidth.spread("  " + radar.timeline(f), days(report, f, room: width - 44), width: width),
+            TextWidth.spread("  " + radar.timeline(f), forecastRow(report, f, room: width - 44), width: width),
             TextWidth.spread("  " + radar.legend(f), s.paint(sources(f, lightning: lightning != nil) + "  " + radar.age(f), Theme.faint), width: width),
         ]
         switch picture {
@@ -136,6 +136,30 @@ final class NowView: AppView {
                                           width: f.width, rows: Self.sceneRows, sceneTime: time)
         sceneCache = (key, lines)
         return lines
+    }
+
+    /// Beside the timeline, as the app's header forecast: days, the coming hours, or nothing.
+    private func forecastRow(_ report: WeatherReport?, _ f: AppFrame, room: Int) -> String {
+        switch ForecastRow.named(f.ctx.config.forecast) ?? .days {
+        case .days: days(report, f, room: room)
+        case .hourly: hours(report, f, room: room)
+        case .off: ""
+        }
+    }
+
+    /// As many of the coming hours as fit: temperature and chance of rain.
+    private func hours(_ report: WeatherReport?, _ f: AppFrame, room: Int) -> String {
+        guard let report else { return "" }
+        let s = f.ctx.styler, fmt = f.fmt
+        var parts: [String] = []
+        for hour in report.hours(from: f.ctx.now, count: 12) {
+            let rain = Int(hour.precipitationProbability ?? 0)
+            let part = s.paint(fmt.hour(hour.time), Theme.mist) + " " + s.paint(fmt.temperature(hour.temperature), ForecastCommand.temperatureColor(hour.temperature ?? 0, units: f.ctx.units))
+                + " " + s.paint("\(rain)%", ForecastCommand.rainColor(Double(rain)))
+            guard TextWidth.of((parts + [part]).joined(separator: "  ")) <= room else { break }
+            parts.append(part)
+        }
+        return parts.joined(separator: "  ")
     }
 
     /// As many of the coming days as fit in `room` cells: low–high and chance of rain.
@@ -299,7 +323,7 @@ final class LightningView: ScrollingView {
         guard f.snapshot.lightningConfigured else {
             return ["", "  " + st.paint("LIGHTNING", Theme.porcelain, bold: true), "",
                     "  Lightning uses your own Xweather account.",
-                    "  Add credentials with " + st.paint("dread auth xweather", Theme.lamp) + ", then strikes appear here,",
+                    "  Add credentials with " + st.paint("dread auth xweather", f.ctx.highlight) + ", then strikes appear here,",
                     "  on the Now and Radar tabs, and in Systems."]
         }
         guard let fetched = f.snapshot.lightning else { return Self.loading("lightning", f) }

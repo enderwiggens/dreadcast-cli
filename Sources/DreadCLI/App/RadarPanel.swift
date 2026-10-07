@@ -86,9 +86,9 @@ final class RadarPanel: @unchecked Sendable {
         let s = f.ctx.styler
         guard let loop = lock.withLock({ loop }), !loop.times.isEmpty else { return "" }
         let time = index < loop.times.count ? f.fmt.time(loop.times[index]) : "--"
-        let dots = (0..<loop.frames.count).map { s.paint("●", $0 == index ? Theme.lamp : Theme.faint) }.joined()
+        let dots = (0..<loop.frames.count).map { s.paint("●", $0 == index ? f.ctx.highlight : Theme.faint) }.joined()
         let rangeText = "\(Int(f.ctx.units.distance(miles: range).rounded())) \(f.ctx.units.distanceUnit)"
-        return s.paint("◀ ", Theme.lamp) + time + " " + dots + s.paint(" ▶", Theme.lamp)
+        return s.paint("◀ ", f.ctx.highlight) + time + " " + dots + s.paint(" ▶", f.ctx.highlight)
             + s.paint("  \(rangeText)\(paused ? " · paused" : "")", Theme.mist)
     }
 
@@ -114,7 +114,8 @@ final class RadarPanel: @unchecked Sendable {
             var problem = manifest.error ?? "unknown error"
             if let radar = manifest.value {
                 let viewport = RadarViewport(center: place.coordinate, rangeMiles: range, width: width, height: rows * 2)
-                let scene = RadarScene(viewport: viewport, palette: palette, minimumDBZ: 15, units: ctx.units)
+                let scene = RadarScene(viewport: viewport, palette: palette, minimumDBZ: 15, units: ctx.units,
+                                       style: ctx.mapStyle, highlight: ctx.highlight)
                 let base = scene.base()
                 let fields = await RadarLoader(http: ctx.http, store: ctx.tiles).fields(manifest: radar, frames: radar.recent(8), viewport: viewport)
                 if fields.isEmpty {

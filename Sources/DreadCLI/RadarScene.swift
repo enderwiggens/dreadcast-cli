@@ -8,6 +8,9 @@ struct RadarScene {
     let palette: RadarPalette
     let minimumDBZ: Double
     let units: UnitSystem
+    /// The basemap's colors and the marker's, from the theme.
+    var style: MapStyle = .theme(.asteroid)
+    var highlight: RGB = Theme.lamp
     static let opacity = 0.78
 
     /// Continuous raster coordinates (pixel centers sit at index + 0.5).
@@ -29,7 +32,7 @@ struct RadarScene {
     }
 
     func base() -> Raster {
-        var raster = Raster(width: viewport.width, height: viewport.height, fill: Theme.water.hex)
+        var raster = Raster(width: viewport.width, height: viewport.height, fill: style.water)
         let box = viewport.boundingBox
         let margin = 1.0
         let south = box.south - margin, north = box.north + margin
@@ -38,27 +41,27 @@ struct RadarScene {
         let fine = viewport.milesPerPixel < 1.5
 
         for ring in map.land where ring.intersects(south: south, north: north, west: west, east: east) {
-            raster.fillPolygons([ring.points.map(project)], color: Theme.land.hex)
+            raster.fillPolygons([ring.points.map(project)], color: style.land)
         }
         for ring in map.lakes where ring.intersects(south: south, north: north, west: west, east: east) {
-            raster.fillPolygons([ring.points.map(project)], color: Theme.water.hex)
+            raster.fillPolygons([ring.points.map(project)], color: style.water)
         }
         for ring in map.stateBorders where ring.intersects(south: south, north: north, west: west, east: east) {
-            raster.strokePolyline(ring.points.map(project), color: Theme.stateBorder.hex, alpha: fine ? 0.8 : 0.6)
+            raster.strokePolyline(ring.points.map(project), color: style.stateBorder, alpha: fine ? 0.8 : 0.6)
         }
         for ring in map.countryBorders where ring.intersects(south: south, north: north, west: west, east: east) {
-            raster.strokePolyline(ring.points.map(project), color: Theme.border.hex)
+            raster.strokePolyline(ring.points.map(project), color: style.border)
         }
         for ring in map.land where ring.intersects(south: south, north: north, west: west, east: east) {
-            raster.strokePolyline(ring.points.map(project), color: Theme.coast.hex, alpha: 0.9, closed: true)
+            raster.strokePolyline(ring.points.map(project), color: style.coast, alpha: 0.9, closed: true)
         }
         for ring in map.lakes where ring.intersects(south: south, north: north, west: west, east: east) {
-            raster.strokePolyline(ring.points.map(project), color: Theme.coast.hex, alpha: 0.6, closed: true)
+            raster.strokePolyline(ring.points.map(project), color: style.coast, alpha: 0.6, closed: true)
         }
         let step = Self.ringStep(for: viewport.rangeMiles)
         var radius = step
         while radius <= viewport.rangeMiles + 0.01 {
-            raster.strokeCircle(cx: center.x, cy: center.y, radius: radius / viewport.milesPerPixel, color: Theme.ring.hex, alpha: 0.4)
+            raster.strokeCircle(cx: center.x, cy: center.y, radius: radius / viewport.milesPerPixel, color: style.ring, alpha: 0.4)
             radius += step
         }
         return raster
@@ -94,10 +97,10 @@ struct RadarScene {
 
         // Location marker and name.
         let c = cell(center)
-        _ = place("✛", column: c.c, row: c.r, color: Theme.lamp, bold: true)
+        _ = place("✛", column: c.c, row: c.r, color: highlight, bold: true)
         let short = placeName.components(separatedBy: ",").first ?? placeName
-        if !place(" " + short, column: c.c + 1, row: c.r, color: Theme.porcelain, bold: true) {
-            _ = place(short + " ", column: c.c - TextWidth.of(short) - 1, row: c.r, color: Theme.porcelain, bold: true)
+        if !place(" " + short, column: c.c + 1, row: c.r, color: style.placeLabel, bold: true) {
+            _ = place(short + " ", column: c.c - TextWidth.of(short) - 1, row: c.r, color: style.placeLabel, bold: true)
         }
 
         // Ring distance labels along the top of each ring.
@@ -107,7 +110,7 @@ struct RadarScene {
             let label = "\(Int(units.distance(miles: radius).rounded())) \(units.distanceUnit)"
             let y = center.y - radius / viewport.milesPerPixel
             let row = Int(floor(y / 2))
-            if row >= 1 { _ = place(label, column: c.c - TextWidth.of(label) / 2, row: row, color: Theme.mist) }
+            if row >= 1 { _ = place(label, column: c.c - TextWidth.of(label) / 2, row: row, color: style.label) }
             radius += step
         }
 
@@ -120,9 +123,9 @@ struct RadarScene {
                   city.coordinate.longitude >= box.west, city.coordinate.longitude <= box.east else { continue }
             let p = cell(project(city.coordinate))
             guard abs(p.c - c.c) > 2 || abs(p.r - c.r) > 1 else { continue }
-            if place("·" + city.name, column: p.c, row: p.r, color: Theme.mist) {
+            if place("·" + city.name, column: p.c, row: p.r, color: style.label) {
                 labels += 1
-            } else if place(city.name + "·", column: p.c - TextWidth.of(city.name), row: p.r, color: Theme.mist) {
+            } else if place(city.name + "·", column: p.c - TextWidth.of(city.name), row: p.r, color: style.label) {
                 labels += 1
             }
         }
@@ -142,7 +145,7 @@ struct RadarScene {
         let scale = Double(raster.width) / Double(viewport.width)
         for city in Basemap.shared.cities.prefix(400) {
             let p = project(city.coordinate)
-            raster.fillCircle(cx: p.x * scale, cy: p.y * scale, radius: max(1.2, scale * 0.6), color: Theme.mist.hex, alpha: 0.8)
+            raster.fillCircle(cx: p.x * scale, cy: p.y * scale, radius: max(1.2, scale * 0.6), color: style.label.hex, alpha: 0.8)
         }
         for strike in strikes.sorted(by: { $0.timestamp < $1.timestamp }) {
             let p = project(strike.coordinate)
@@ -153,8 +156,8 @@ struct RadarScene {
         }
         let cx = center.x * scale, cy = center.y * scale, arm = max(5, scale * 3)
         for offset in [-1.0, 0, 1] {
-            raster.line(from: (cx - arm, cy + offset), to: (cx + arm, cy + offset), color: Theme.lamp.hex)
-            raster.line(from: (cx + offset, cy - arm), to: (cx + offset, cy + arm), color: Theme.lamp.hex)
+            raster.line(from: (cx - arm, cy + offset), to: (cx + arm, cy + offset), color: highlight.hex)
+            raster.line(from: (cx + offset, cy - arm), to: (cx + offset, cy + arm), color: highlight.hex)
         }
     }
 }

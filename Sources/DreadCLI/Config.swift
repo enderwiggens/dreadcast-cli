@@ -19,6 +19,12 @@ public struct Config: Codable, Sendable {
     public var scene: String = "asteroid"
     /// Show the scene as a banner on the Now tab and above `dread now`.
     public var sceneBanner: Bool = true
+    /// The accent color: auto follows the scene, as in the app, or a fixed highlight.
+    public var highlight: String = "auto"
+    /// The radar's basemap: theme follows the scene's map palette; graphite is neutral.
+    public var map: String = "theme"
+    /// Beside the radar's timeline on the Now tab: days, hourly or off.
+    public var forecast: String = "days"
 
     /// The default place. Setting it to a saved place moves that place first; any other
     /// place replaces the default and keeps its name.
@@ -40,7 +46,7 @@ public struct Config: Codable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case version, location, places, units, palette, radarRange, renderer, quips, icons, scene, sceneBanner
+        case version, location, places, units, palette, radarRange, renderer, quips, icons, scene, sceneBanner, highlight, map, forecast
     }
 
     public init() {}
@@ -62,6 +68,9 @@ public struct Config: Codable, Sendable {
         icons = (try? c.decode(String.self, forKey: .icons)) ?? "emoji"
         scene = (try? c.decode(String.self, forKey: .scene)) ?? "asteroid"
         sceneBanner = (try? c.decode(Bool.self, forKey: .sceneBanner)) ?? true
+        highlight = (try? c.decode(String.self, forKey: .highlight)) ?? "auto"
+        map = (try? c.decode(String.self, forKey: .map)) ?? "theme"
+        forecast = (try? c.decode(String.self, forKey: .forecast)) ?? "days"
         // Early builds saved `scene: off` to hide the banner.
         if scene == "off" {
             scene = "asteroid"
@@ -82,6 +91,9 @@ public struct Config: Codable, Sendable {
         try c.encode(icons, forKey: .icons)
         try c.encode(scene, forKey: .scene)
         try c.encode(sceneBanner, forKey: .sceneBanner)
+        try c.encode(highlight, forKey: .highlight)
+        try c.encode(map, forKey: .map)
+        try c.encode(forecast, forKey: .forecast)
     }
 
     public static let ranges = [15, 35, 75, 150, 300]

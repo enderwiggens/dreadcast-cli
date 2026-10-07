@@ -77,6 +77,11 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
   rather than the terminal, and `ctx.inApp` drops titles the app header already shows.
   New views go in `App/AppViews.swift`, keep the one-shot command, and get a tab only
   when they're worth living in.
+- Themes follow the Mac app (`Appearance.swift`): a scene's highlight and map palette,
+  the app's eight fixed highlights, and Graphite. Copy values from the app's
+  `DreadcastTheme.swift`, `MapPalette.swift` and `Resources/MapPreview/style.js`, and
+  keep its free and Pro scenes, order and accents in `Scene.swift`. Themes never touch
+  hazard, alert, radar or lightning colors.
 - Radar comes first, as in the Mac app. Now is laid out like the app's window (scene
   header, readings, live radar, timeline and days) and gives the radar its room before
   the scene. Both radar tabs draw through `RadarPanel`.

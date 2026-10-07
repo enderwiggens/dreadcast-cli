@@ -70,11 +70,11 @@ enum PlacesCommand {
                 lines.append("  " + s.paint("No saved places yet.", Theme.mist))
             }
             for (i, saved) in places.enumerated() {
-                lines.append("  " + s.paint(i == 0 ? "●" : " ", Theme.lamp) + " " + s.paint(saved.name.padding(14), Theme.porcelain, bold: true)
+                lines.append("  " + s.paint(i == 0 ? "●" : " ", ctx.highlight) + " " + s.paint(saved.name.padding(14), Theme.porcelain, bold: true)
                              + saved.place.name.padding(28) + s.paint(saved.place.coordinate.formatted, Theme.faint))
             }
             lines.append("")
-            lines.append("  " + s.paint("dread places add <place> --name <name>", Theme.lamp) + s.paint("  ·  remove · default · rename", Theme.mist))
+            lines.append("  " + s.paint("dread places add <place> --name <name>", ctx.highlight) + s.paint("  ·  remove · default · rename", Theme.mist))
             lines.append("  " + s.paint("Each saved place is sent to Open-Meteo and the NWS on every refresh, rounded to about 1 km.", Theme.faint))
             lines.append("")
             ctx.write(lines)
