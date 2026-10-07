@@ -1,12 +1,9 @@
 # Changelog
 
-## 0.2.0 — unreleased
+## 0.2.0 — 2026-10-07
 
 ### Added
 
-- Linux support (x86_64 and arm64), with fully static release binaries.
-- A release workflow that builds the macOS universal binary and the Linux binaries for
-  each tag.
 - `dread` opens a full-screen app with tabs for Now, Radar, Systems, Forecast, Alerts,
   Outlook, Lightning and Scene. Every tab shares one set of live data, refreshed per
   source, and a new alert shows in the header whichever tab is open. `dread top <view>`
@@ -16,34 +13,36 @@
   header, then conditions, alerts and the next two hours, then live radar filling the
   rest, with its timeline and the coming days beneath. It falls back to text in small
   windows and without 256 colors.
-- Themes, as in the Mac app: each scene brings its own highlight color (for the selected
-  tab, keys and the map marker) and its own map colors under the radar.
-  `dread config set highlight` fixes one of the app's eight highlights, `map graphite`
-  picks the neutral map, and `forecast days|hourly|off` sets what sits beside the
-  radar's timeline. Hazard, alert, radar and lightning colors never change with a
-  theme.
 - Saved places: `dread places add|remove|default|rename`, up to eight, each usable as
   `--location <name>`. The app watches all of them, alerts every 2 minutes and
   conditions every 10, and gives the place you're viewing every source. A Places tab
   lists them, `[` and `]` switch places, and an alert at any place shows in the header
   with its name (`a` jumps to it). `dread now --all`, `dread alerts --all` and
   `dread alerts --follow --all` cover every place; `--fail-on` exits 1 when any does.
-- `dread now` prints the quick look that `dread` used to, and `dread` still prints it
-  when piped or given `--plain` or `--json`.
+- Themes, as in the Mac app: each scene brings its own highlight color (for the selected
+  tab, keys and the map marker) and its own map colors under the radar.
+  `dread config set highlight` fixes one of the app's eight highlights, `map graphite`
+  picks the neutral map, and `forecast days|hourly|off` sets what sits beside the
+  radar's timeline. Hazard, alert, radar and lightning colors never change with a
+  theme.
 - `dread scene`: the app's eight free scenes as animated pixel art, filling the
   terminal, with live conditions beneath them. Scenes show their sunset version through
   the day and their night version after 8 PM, the two drawn for a dark terminal. Keys
   change the scene and switch between sunset and night; `--still` draws one frame and
   `--png` saves the artwork.
-- `dread` shows your scene as a banner when no alert is active, and a five-day list.
 - `dread config set scene <name|daily>` picks your scene (Asteroid Watch by default), and
   `dread config set scene-banner on|off` shows or hides it on the Now tab and in
   `dread now`.
-- `dread weather` as another name for `dread`.
-- README examples of every main command, captured from live runs, and the script that
-  regenerates them.
+- `dread now` prints the quick look that `dread` used to, now with your scene as a
+  banner when no alert is active and a five-day list. `dread weather` is another name
+  for it, and `dread` still prints it when piped or given `--plain` or `--json`.
+- Linux support (x86_64 and arm64), with fully static release binaries.
+- A release workflow that builds the macOS universal binary and the Linux binaries for
+  each tag.
 - Install instructions for macOS and Linux: Homebrew, release downloads and building
   from source. `scripts/homebrew-formula.sh` writes the formula for a release.
+- A README with a recorded demo and examples of every main command, captured from live
+  runs, and the script that regenerates them.
 - End-to-end command tests that run each main command with provider responses
   stubbed, covering output, JSON shapes, exit codes, offline behavior and rounding of
   coordinates in requests.
