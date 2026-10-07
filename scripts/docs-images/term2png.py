@@ -7,10 +7,15 @@ Requires Python 3 with pyte (`pip install pyte`) and Google Chrome or Chromium
   term2png.py inline <ansi-file> <out.png> [--cols N] [--max-rows N]
   term2png.py pty <out.png> --cols N --rows N [--wait SECONDS] -- command [args...]
   term2png.py gallery <out.png> "Title=image.png" ...
+  term2png.py demo <out.gif> --cols N --rows N --script STEPS -- command [args...]
 
 Inline output is replayed into a terminal emulator sized to fit. Full-screen programs
 run in a pseudo-terminal, and the screen is captured after --wait seconds. Half-block
 characters become real two-color cells, so pixel art stays crisp at any zoom.
+
+A demo drives a full-screen program and records a looping GIF (needs ImageMagick).
+STEPS is comma-separated: w2 waits two seconds, c8x0.5 captures eight frames half a
+second apart, and k2 presses a key (a character, or tab, enter, up, down, left, right).
 """
 import fcntl, html, os, pty, select, signal, struct, subprocess, sys, tempfile, termios, time
 
@@ -105,7 +110,7 @@ def screen_html(screen, rows):
     return "\n".join(out)
 
 
-def screenshot(page, width, height, out_png):
+def screenshot(page, width, height, out_png, scale=2):
     page_path = os.path.join(WORK, "page.html")
     with open(page_path, "w", encoding="utf-8") as f:
         f.write(page)
@@ -114,7 +119,7 @@ def screenshot(page, width, height, out_png):
     # Chrome writes the screenshot, then sometimes never exits; stop it once the file lands.
     chrome = subprocess.Popen([CHROME, "--headless=new", "--disable-gpu", "--hide-scrollbars",
                                f"--user-data-dir={os.path.join(WORK, 'chrome')}", "--default-background-color=00000000",
-                               "--force-device-scale-factor=2", f"--window-size={width},{height}",
+                               f"--force-device-scale-factor={scale}", f"--window-size={width},{height}",
                                f"--screenshot={os.path.abspath(out_png)}", "file://" + page_path],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     deadline = time.time() + 45
@@ -202,6 +207,77 @@ def run_pty(out_png, cols, rows, wait, command):
         pass
 
 
+KEYS = {"tab": b"\t", "enter": b"\r", "up": b"\x1b[A", "down": b"\x1b[B", "right": b"\x1b[C", "left": b"\x1b[D"}
+
+
+def demo(out_gif, cols, rows, steps, command):
+    pid, fd = pty.fork()
+    if pid == 0:
+        os.execvpe(command[0], command, os.environ)
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+    os.kill(pid, signal.SIGWINCH)
+    screen = pyte.Screen(cols, rows)
+    stream = pyte.Stream(screen)
+    decoder = __import__("codecs").getincrementaldecoder("utf-8")("replace")
+
+    def pump(seconds):
+        deadline = time.time() + seconds
+        while True:
+            left = deadline - time.time()
+            ready, _, _ = select.select([fd], [], [], max(0, min(0.05, left)))
+            if ready:
+                try:
+                    stream.feed(protect_emoji(decoder.decode(os.read(fd, 65536))))
+                except OSError:
+                    return
+            elif left <= 0:
+                return
+
+    frames = []   # (html, seconds shown)
+    for step in steps.split(","):
+        kind, arg = step[0], step[1:]
+        if kind == "w":
+            pump(float(arg))
+        elif kind == "k":
+            os.write(fd, KEYS.get(arg, arg.encode()))
+            pump(0.15)
+        elif kind == "c":
+            count, interval = arg.split("x")
+            for _ in range(int(count)):
+                pump(float(interval))
+                frames.append((screen_html(screen, rows), float(interval)))
+    try:
+        os.write(fd, b"q")
+        time.sleep(0.3)
+        os.kill(pid, signal.SIGTERM)
+    except OSError:
+        pass
+
+    # Render a few frames per screenshot, then cut them apart and assemble the GIF.
+    width = int(cols * CELL_W + PAD * 2)
+    height = int(rows * ROW_H + PAD * 2)
+    pngs = []
+    batch = 6
+    for start in range(0, len(frames), batch):
+        chunk = frames[start:start + batch]
+        blocks = "".join(f'<div class="t">{html_}</div>' for html_, _ in chunk)
+        page = f"""<!doctype html><meta charset="utf-8"><style>
+html,body{{margin:0;background:{BACKGROUND}}}
+.t{{background:{BACKGROUND};padding:{PAD}px;width:{width - PAD * 2}px;height:{height - PAD * 2}px;overflow:hidden}}
+.r{{display:flex;height:{ROW_H}px}}
+.r span{{display:block;flex:none;height:{ROW_H}px;line-height:{ROW_H}px;white-space:pre;font:{FONT};color:{FOREGROUND}}}
+</style>{blocks}"""
+        sheet = os.path.join(WORK, f"sheet{start}.png")
+        screenshot(page, width, height * len(chunk), sheet, scale=1)
+        subprocess.run(["magick", sheet, "-crop", f"{width}x{height}", "+repage",
+                        os.path.join(WORK, f"frame{start:04d}_%02d.png")], check=True)
+        pngs += [os.path.join(WORK, f"frame{start:04d}_{i:02d}.png") for i in range(len(chunk))]
+    args = ["magick"]
+    for png, (_, seconds) in zip(pngs, frames):
+        args += ["-delay", str(max(2, round(seconds * 100))), png]
+    subprocess.run(args + ["-loop", "0", "-layers", "Optimize", out_gif], check=True)
+
+
 def gallery(out_png, items):
     figures = []
     for item in items:
@@ -234,5 +310,8 @@ if __name__ == "__main__":
                 args[args.index("--") + 1:])
     elif mode == "gallery":
         gallery(args[0], args[1:])
+    elif mode == "demo":
+        demo(args[0], int(option("--cols", "100")), int(option("--rows", "30")), option("--script", "c1x1"),
+             args[args.index("--") + 1:])
     else:
         sys.exit(__doc__)
