@@ -68,7 +68,7 @@ jobs:
             --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER" --wait
           rm "$RUNNER_TEMP/notary.p8"
       - name: Upload
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: |
             dist/*.zip
@@ -89,7 +89,7 @@ jobs:
       - name: Smoke test
         run: scripts/smoke-test.sh "$(swift build -c release --swift-sdk x86_64-swift-linux-musl --show-bin-path)/dread"
       - name: Upload
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: |
             dist/*.tar.gz
