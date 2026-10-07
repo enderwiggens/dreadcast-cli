@@ -49,7 +49,7 @@ shot outlook 100 outlook --location $LOCATION
 MAX_ROWS=30 shot alerts 100 alerts --location $ALERT_LOCATION
 
 # The app runs in a pseudo-terminal, opened on one tab per screenshot.
-$T2P pty $OUT/app.png --cols 108 --rows 44 --wait 4 -- $BIN top now --location $LOCATION   # while the wordmark greets
+$T2P pty $OUT/app.png --cols 108 --rows 44 --wait 10 -- $BIN top now --location $LOCATION
 print "  $OUT/app.png"
 $T2P pty $OUT/top.png --cols 108 --rows 40 --wait 10 -- $BIN top systems --location $LOCATION
 print "  $OUT/top.png"

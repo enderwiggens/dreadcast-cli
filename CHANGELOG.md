@@ -10,8 +10,8 @@
 - `dread` opens a full-screen app with tabs for Now, Radar, Systems, Forecast, Alerts,
   Outlook, Lightning and Scene. Every tab shares one set of live data, refreshed per
   source, and a new alert shows in the header whichever tab is open. `dread top <view>`
-  opens on a view by name or number. The DREADCAST wordmark greets you in the Now tab's
-  scene, then fades. Ctrl-Z suspends the app and `fg` brings it back redrawn.
+  opens on a view by name or number. Ctrl-Z suspends the app and `fg` brings it back
+  redrawn.
 - Saved places: `dread places add|remove|default|rename`, up to eight, each usable as
   `--location <name>`. The app watches all of them, alerts every 2 minutes and
   conditions every 10, and gives the place you're viewing every source. A Places tab

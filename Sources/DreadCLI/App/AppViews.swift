@@ -60,8 +60,6 @@ class ScrollingView: AppView {
 /// The quick look: your scene, conditions, alerts, the next two hours and five days.
 final class NowView: ScrollingView {
     override var interval: Double { 1 }
-    /// When the scene first appeared, for the wordmark that greets you.
-    var greeted: Double?
 
     override func content(_ f: AppFrame) -> [String] {
         let snapshot = f.snapshot
@@ -69,13 +67,10 @@ final class NowView: ScrollingView {
             return Self.loading("conditions", f)
         }
         // The banner appears once the body has room for it and everything below it.
-        let since = f.elapsed - (greeted ?? f.elapsed)
-        if greeted == nil { greeted = f.elapsed }
         return NowCommand.pretty(place: f.place, weather: weather, alerts: alerts,
                                  lightning: snapshot.lightningConfigured ? snapshot.lightning : nil,
                                  nowcast: snapshot.nowcast?.value, ctx: f.ctx, width: Self.textWidth(f, maximum: 96),
-                                 rows: f.height + 5, sceneTime: (f.elapsed / 4).rounded(.down) * 4,
-                                 wordmark: Wordmark.opacity(after: since))
+                                 rows: f.height + 5, sceneTime: (f.elapsed / 4).rounded(.down) * 4)
     }
 }
 
