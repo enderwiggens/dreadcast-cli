@@ -1,8 +1,8 @@
 #!/bin/zsh
 # Regenerates the README screenshots in docs/images from live runs of dread.
 #
-# Needs network access, Google Chrome (or CHROME=/path/to/chromium) and a Python with
-# pyte: `python3 -m venv .venv && .venv/bin/pip install pyte`, then
+# Needs network access, Google Chrome (or CHROME=/path/to/chromium), ImageMagick for the
+# demo GIF, and a Python with pyte: `python3 -m venv .venv && .venv/bin/pip install pyte`, then
 # `PYTHON=.venv/bin/python scripts/docs-images/capture.sh`.
 #
 # DREAD_DOCS_LOCATION and DREAD_DOCS_ALERT_LOCATION choose the places shown; pick an
@@ -63,6 +63,12 @@ $BIN places add $ALERT_LOCATION --name ${DREAD_DOCS_PLACE_NAME:-family} --plain 
 $BIN places add "${DREAD_DOCS_ABROAD:-London}" --name abroad --plain < /dev/null > /dev/null || true
 $T2P pty $OUT/places.png --cols 112 --rows 20 --wait 14 -- $BIN top places
 print "  $OUT/places.png"
+
+# The tour at the top of the README: Now, then Radar zoomed out, Systems, Places and
+# Scene. The first wait lets every source load.
+$T2P demo $OUT/demo.gif --cols 100 --rows 40 \
+  --script "w11,c7x0.6,k2,k-,w3,c14x0.4,k3,w0.3,c5x0.5,k9,w0.6,c5x0.5,k8,w0.5,c12x0.3" -- $BIN top now
+print "  $OUT/demo.gif"
 
 # Every free scene at dusk.
 items=()

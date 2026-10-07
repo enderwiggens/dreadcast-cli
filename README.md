@@ -1,121 +1,214 @@
-# Dreadcast cli
+<div align="center">
 
-**Weather and radar for the command line.** *There’s a lot in the forecast.*
+# Dreadcast CLI
 
-`dread` is a standalone, open-source companion to **Dreadcast: Weather & Radar**, the
-Mac menu-bar weather app. It doesn’t need the app or an account. It reads forecasts,
-radar and alerts from public weather providers, with the source and age of every
-reading attached. It draws animated radar in your terminal, tells you when rain
-will arrive, lists active warnings in full, fits a forecast into your shell prompt, and
-brings Dreadcast’s scenes along as pixel art.
+**Weather and radar for your terminal.**<br>
+*There’s a lot in the forecast.*
 
-![dread: the app on its Now tab, with the Asteroid Watch scene over current conditions and five days](docs/images/app.png)
+[![CI](https://github.com/enderwiggens/dreadcast-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/enderwiggens/dreadcast-cli/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/enderwiggens/dreadcast-cli?label=release&color=FF947D)](https://github.com/enderwiggens/dreadcast-cli/releases/latest)
+[![macOS and Linux](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-5B7FA6)](#install)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-5B7FA6)](LICENSE)
 
-## Install
+<img src="docs/images/demo.gif" alt="The dread app: the Now tab with the Asteroid Watch scene, animated radar, the Systems table, saved places and a full-screen scene" width="880">
 
-dreadcast runs on macOS 13 or later and on Linux (x86_64 and arm64, any distribution).
-
-### macOS
-
-With [Homebrew](https://brew.sh):
+</div>
 
 ```sh
 brew install enderwiggens/dreadcast/dreadcast
-dread setup
+dread setup     # a ZIP code, place name or lat,lon
+dread           # open the app
 ```
 
-Or download the universal binary (Apple silicon and Intel) from the
-[latest release](https://github.com/enderwiggens/dreadcast-cli/releases/latest):
+`dread` is a full-screen weather app for the terminal. Animated radar, every active
+warning in full, rain timing from radar motion and the places you care about, in one
+window that keeps itself up to date. It’s the open-source companion to
+**Dreadcast: Weather & Radar** for Mac, but it doesn’t need the app or an account, and
+it runs on macOS and Linux.
+
+## Highlights
+
+- **One app, every view.** Now, Radar, Systems, Forecast, Alerts, Outlook, Lightning and
+  Scene, one keypress apart. Like `htop`, but for the sky.
+- **Real radar in your terminal.** The last eight frames, animated and redrawn in
+  Dreadcast’s palettes over a built-in map, as crisp pixel art. `dread radar` draws
+  full-resolution images in Kitty, Ghostty, iTerm2 and WezTerm.
+- **Every warning, in full.** NWS watches, warnings and advisories with their official
+  instructions. A new alert shows up in the header whichever tab you’re on.
+- **When will it rain?** `dread eta` measures how storms moved over the last four radar
+  frames and tells you when rain reaches you, how heavy it gets and when it eases.
+- **All your places.** Save home, the cabin and your parents’ town. The app watches them
+  all, and `--all` covers them in scripts.
+- **Honest by default.** Every reading shows its source and age. Stale data says so, and
+  missing data is never reported as all clear.
+- **Made for scripts and prompts.** `--json` on every command, exit codes for alerts, and
+  a prompt segment that returns in about 15 ms.
+- **Dreadcast’s scenes.** Asteroid Watch, Deep Trouble and six more, as animated pixel
+  art that follows your local time of day. They don’t describe the weather. The numbers
+  underneath do.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/radar.png" alt="Radar at 150 miles over the built-in map"></td>
+    <td width="50%"><img src="docs/images/top.png" alt="The Systems tab listing nearby weather systems like processes"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Radar</b> · <code>dread radar</code></td>
+    <td align="center"><b>Systems</b> · tab 3</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/alerts.png" alt="An active NWS Flood Warning shown in full"></td>
+    <td width="50%"><img src="docs/images/outlook.png" alt="Solar activity, aurora, earthquakes and hazards"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Alerts</b> · <code>dread alerts</code></td>
+    <td align="center"><b>Outlook</b> · <code>dread outlook</code></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/forecast.png" alt="Hourly temperature, rain and wind, and seven days"></td>
+    <td width="50%"><img src="docs/images/eta.png" alt="Rain arrival estimated from radar motion"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Forecast</b> · <code>dread forecast</code></td>
+    <td align="center"><b>Rain timing</b> · <code>dread eta</code></td>
+  </tr>
+</table>
+
+## Contents
+
+- [Install](#install)
+- [Quick start](#quick-start)
+- [The app](#the-app)
+- [Commands](#commands)
+- [Saved places](#saved-places)
+- [Scenes](#scenes)
+- [Prompts and status lines](#prompts-and-status-lines)
+- [Scripting](#scripting)
+- [Configuration](#configuration)
+- [Terminal support](#terminal-support)
+- [Data and privacy](#data-and-privacy)
+- [FAQ](#faq)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Install
+
+Dreadcast CLI runs on **macOS 13 or later** and on **Linux** (x86_64 and arm64, any
+distribution).
+
+### macOS
+
+```sh
+brew install enderwiggens/dreadcast/dreadcast
+```
+
+Or download the universal binary (Apple silicon and Intel):
 
 ```sh
 curl -sSL https://github.com/enderwiggens/dreadcast-cli/releases/latest/download/dread-macos-universal.zip -o dread.zip
 unzip dread.zip && sudo mv dread /usr/local/bin/
-dread setup
 ```
 
-The binary isn’t notarized yet. Downloads made with `curl` or Homebrew run as is; if you
-download the zip in a browser, macOS blocks it until you clear the quarantine flag with
+The binary isn’t notarized yet. Installs with Homebrew or `curl` run as they are; if
+you download the zip in a browser, clear the quarantine flag first with
 `xattr -d com.apple.quarantine dread`.
 
 ### Linux
 
-With [Homebrew on Linux](https://docs.brew.sh/Homebrew-on-Linux), the same command:
+[Homebrew on Linux](https://docs.brew.sh/Homebrew-on-Linux) uses the same command:
 
 ```sh
 brew install enderwiggens/dreadcast/dreadcast
-dread setup
 ```
 
-Or download a release binary. They’re fully static, so they need no libraries and run
-on any distribution:
+Or download a release binary. They’re fully static, so they need no libraries:
 
 ```sh
 curl -sSL https://github.com/enderwiggens/dreadcast-cli/releases/latest/download/dread-linux-x86_64.tar.gz | tar xz
 sudo mv dread /usr/local/bin/
-dread setup
 ```
 
-Use `dread-linux-arm64.tar.gz` on ARM machines such as a Raspberry Pi 4 or 5 running a
-64-bit OS. Each archive has a `.sha256` file beside it to check the download. Times
-are shown in your place’s own time zone; if your system has no time zone data
-(`tzdata`), dread falls back to the forecast’s UTC offset.
+Use `dread-linux-arm64.tar.gz` on ARM, including a Raspberry Pi 4 or 5 with a 64-bit
+OS. Every archive has a `.sha256` file beside it.
 
 ### From source
 
-With Swift 6: Xcode 16 or later on macOS, or a
-[swift.org toolchain](https://www.swift.org/install/linux/) on Linux. There are no
-other dependencies.
+You need Swift 6: Xcode 16 or later on macOS, or a
+[swift.org toolchain](https://www.swift.org/install/linux/) on Linux. There are no other
+dependencies.
 
 ```sh
 git clone https://github.com/enderwiggens/dreadcast-cli.git
 cd dreadcast-cli
 swift build -c release
-sudo cp .build/release/dread /usr/local/bin/   # or anywhere on your PATH
-dread setup
+sudo cp .build/release/dread /usr/local/bin/
 ```
 
-### Getting started
+## Quick start
 
-`dread setup` asks for a ZIP code, place name or `lat,lon`. Coordinates are rounded to
-two decimal places (about 1 km) before they are saved or sent anywhere. Then run
-`dread`. To remove dreadcast, delete the binary (or `brew uninstall dreadcast`) and
-the folders listed in [docs/PRIVACY.md](docs/PRIVACY.md).
+```sh
+dread setup              # where are you? ZIP code, place name or lat,lon
+dread                    # the app
+dread now                # a quick look, then back to your prompt
+dread radar              # animated radar
+dread alerts             # active warnings, in full
+dread eta                # when the rain gets here
+```
 
-## What it does
+Coordinates are rounded to two decimal places (about 1 km) before they’re saved or
+sent anywhere. To uninstall, remove the binary (or `brew uninstall dreadcast`) and the
+folders listed in [docs/PRIVACY.md](docs/PRIVACY.md).
 
-The screenshots below are real runs, captured from the terminal.
+## The app
 
-### The app: `dread`
+`dread` opens a full-screen app. Every tab reads the same live data, and each source
+refreshes on its own schedule, so switching tabs never waits on the network.
 
-`dread` opens a full-screen app with a tab for each view: **1 Now**, **2 Radar**,
-**3 Systems**, **4 Forecast**, **5 Alerts**, **6 Outlook**, **7 Lightning** and
-**8 Scene**. Tab, Shift-Tab or the number keys switch views, ↑/↓ scroll or select, `r`
-refreshes, Ctrl-Z suspends and `q` quits. Every tab reads the same live data, and each
-source refreshes on its own schedule and fails on its own, so switching tabs never
-waits on the network. A new alert shows in the header whichever tab is open, with a
-count on the Alerts tab. The app needs a window at least 60 columns by 16 rows.
+| Key | Tab | What’s there |
+| :-: | --- | --- |
+| `1` | **Now** | Your scene, conditions, alerts, the next two hours and five days |
+| `2` | **Radar** | The animated loop. `space` pauses, `←` `→` step, `+` `−` change range |
+| `3` | **Systems** | Storm cells, alerts, fires, tropical storms and more, sorted by threat |
+| `4` | **Forecast** | Hourly charts and seven days |
+| `5` | **Alerts** | Every active alert in full, with what to do |
+| `6` | **Outlook** | Solar activity, aurora, earthquakes, meteor showers and hazards |
+| `7` | **Lightning** | Strikes from the last 20 minutes (needs an Xweather account) |
+| `8` | **Scene** | The full scene, with live readings beneath it |
+| `9` | **Places** | Every saved place at a glance, once you’ve saved two |
 
-Save more than one place and a ninth tab, **9 Places**, lists them all with conditions,
-alerts, rain timing and today’s range. `[` and `]` switch places from any tab, Enter
-on a row shows that place in full, and an alert at any place shows in the header with
-its name; `a` jumps to it.
+`Tab` and `Shift-Tab` move between tabs, `↑` `↓` scroll or select, `[` `]` switch
+places, `a` jumps to the most serious alert anywhere, `r` refreshes and `q` quits.
+`Ctrl-Z` suspends it like any other program.
 
-`dread top radar` (or any view's name or number) opens on that view. Piped, or with
-`--plain` or `--json`, `dread` prints the quick look below instead, so scripts and
-shell profiles keep working.
+`dread top radar` opens straight to a tab. When output is piped, or with `--plain` or
+`--json`, `dread` prints the quick look instead, so scripts and shell profiles keep
+working. The app needs a window at least 60 columns by 16 rows.
 
-### Quick look: `dread now`
+## Commands
 
-![dread now: the Asteroid Watch scene over current conditions, the next two hours and five days](docs/images/dread.png)
+| Command | What it does |
+| --- | --- |
+| `dread` | The app |
+| `dread now` | A quick look: conditions, alerts, the next two hours and five days |
+| `dread radar` | Animated radar with ranges, palettes and lightning ages |
+| `dread alerts` | Active NWS watches, warnings and advisories in full |
+| `dread forecast` | Hourly and seven-day charts |
+| `dread eta` | When rain reaches you, from recent radar motion |
+| `dread outlook` | Solar activity, aurora, earthquakes, meteor showers and hazards |
+| `dread lightning` | A strike map in Braille dots, with your own Xweather account |
+| `dread scene` | The Dreadcast scenes, full screen |
+| `dread places` | Save, list and manage places |
+| `dread prompt` | A cached segment for shell prompts and status lines |
+| `dread setup` | Choose your location |
+| `dread config` | Show or change preferences |
+| `dread auth xweather` | Save lightning credentials |
+| `dread credits` | Data sources and licenses |
 
-`dread now`, or `dread weather`, prints your scene, current conditions, active alerts,
-rain in the next two hours, recent lightning and the next five days, then exits. The
-scene appears in terminals at least 38 rows tall and steps aside whenever an alert is
-active; the dry line at the bottom never appears with an alert either.
+Every command accepts `--location` (or `-l`), `--units imperial|metric`, `--json`,
+`--plain` and `--no-color`. Run `dread help <command>` for the rest.
 
-### Radar: `dread radar`
-
-![dread radar at 150 miles, with the Natural Earth basemap and range rings](docs/images/radar.png)
+<details>
+<summary><b>Radar options</b></summary>
 
 ```sh
 dread radar                    # animate the last eight frames
@@ -124,33 +217,24 @@ dread radar --palette viridis  # dreadcast, classic, viridis or rainviewer
 dread radar --still            # just the latest frame
 ```
 
-While it animates: space pauses, ←/→ step frames, +/− zoom, q quits. dreadcast reads
-RainViewer’s free radar tiles and converts each pixel back to reflectivity with
-RainViewer’s published color table, so the radar can be redrawn in the Dreadcast
-palettes and used for timing. The basemap is Natural Earth data built into the binary.
+Dreadcast CLI reads RainViewer’s free radar tiles and converts each pixel back to
+reflectivity using RainViewer’s published color table. That’s what lets it redraw the
+radar in other palettes and measure storm motion for `dread eta`. The basemap is
+Natural Earth data built into the binary.
 
-### Alerts: `dread alerts`
+</details>
 
-![dread alerts showing an active NWS Flood Warning in full](docs/images/alerts.png)
-
-Active NWS watches, warnings and advisories for your location, in full, with the
-official instructions. `--follow` streams changes; `--fail-on` sets exit codes for
-scripts (see [Scripts and automation](#scripts-and-automation)).
-
-### Forecast: `dread forecast`
-
-![dread forecast with hourly temperature, rain and wind, and seven days](docs/images/forecast.png)
-
-### Rain timing: `dread eta`
-
-![dread eta estimating rain arrival from radar motion](docs/images/eta.png)
+<details>
+<summary><b>How rain timing works</b></summary>
 
 `dread eta` measures how echoes moved across the last four radar frames, then traces
 backward from your location to estimate when rain arrives, how heavy it gets and when
 it eases. It reports its confidence and the frames it used. It can’t foresee storms
 that form or fade along the way.
 
-### Several places: `dread places`
+</details>
+
+## Saved places
 
 ![The Places tab watching three saved places](docs/images/places.png)
 
@@ -158,73 +242,43 @@ that form or fade along the way.
 dread places add 32801 --name mom   # save a place under a short name
 dread places                        # list them; the first is your default
 dread now -l mom                    # any command takes a saved name
-dread now --all                     # one row per place
+dread now --all                     # one line per place
 dread alerts --all --fail-on severe # exit 1 if any place has a severe alert
-dread alerts --follow --all         # changes at every place, each line named
 ```
 
-The app watches every saved place: alerts every 2 minutes and conditions every 10.
-The place you’re viewing gets everything, from radar to wildfires and lightning, so
-switching places shows it in full within moments. Up to eight places; each is sent to
-Open-Meteo and the NWS on those refreshes, rounded to about 1 km.
+You can save up to eight places. The app keeps an eye on all of them, checking alerts
+every 2 minutes and conditions every 10. The place you’re looking at gets everything
+else too, from radar to wildfires, so switching shows it in full within moments.
 
-### Systems: the app’s third tab
-
-![The Systems tab listing nearby weather systems like processes](docs/images/top.png)
-
-Weather systems near you, listed like processes and sorted by threat: alerts, storm
-cells, lightning, severe outlook, tropical storms, wildfires, air quality and hazards.
-↑/↓ select a system to read its details. `dread top systems` opens straight to it.
-
-### Outlook: `dread outlook`
-
-![dread outlook with solar activity, aurora, earthquakes and hazards](docs/images/outlook.png)
-
-Solar activity and aurora chances, recent earthquakes, meteor showers with tonight’s
-cloud cover, HF radio absorption, tsunamis, volcanoes, smoke and dust. Any commentary is
-labeled and never changes a reading.
-
-### Scenes: `dread scene`
-
-![dread scene: Asteroid Watch at dusk, with the readings below it](docs/images/scene.png)
-
-The app’s free scenes as animated pixel art, filling the terminal, with live conditions
-underneath. Each scene changes with the local time of day, from a hint of trouble at
-dawn to the full situation at night, as in the app. Asteroid Watch is the default; pick
-any other, or `daily` for a different scene each day.
+## Scenes
 
 ![The eight scenes at dusk](docs/images/scenes.png)
 
+Dreadcast’s free scenes, redrawn for the terminal. Each follows your local time of day,
+from a hint of trouble at dawn to the full situation at night. Your scene sits at the
+top of the Now tab whenever no alert is active; when one is, it steps aside.
+
 ```sh
-dread scene                        # your scene, animated
-dread scene superstorm             # pick one
-dread scene uap --time night       # dawn, day, dusk, night or auto
-dread scene --still                # one frame, inline
-dread config set scene uap         # your scene: any name above, or daily to rotate
-dread config set scene-banner off  # hide it on the Now tab and in `dread now`
+dread scene                        # your scene, full screen
+dread scene superstorm --time night
+dread config set scene uap         # pick yours, or daily for a new one each day
+dread config set scene-banner off  # keep the Now tab to the numbers
 ```
 
-While it runs: ←/→ change scene, t cycles the time of day, i hides the readings, space
-pauses, q quits. Scenes are decorative and never describe the weather; the readings
-beneath them are real. With Reduce Motion, dreadcast shows a still frame. The Pro scenes
-stay in the app.
+Asteroid Watch is the default. It is not a forecast.
 
-### Lightning: `dread lightning`
+## Prompts and status lines
 
-A Braille strike map with five age bands, using your own
-[Xweather](https://www.xweather.com/) account. Save credentials with
-`dread auth xweather`; lightning then also appears on the app’s Now, Radar and Systems
-tabs, in `dread now` and in `dread radar`.
-
-### Prompts and status lines: `dread prompt`
+`dread prompt` reads only the cache, so it returns in about 15 ms. When the cache is
+more than ten minutes old, it starts one background refresh shared by every shell.
 
 ```console
 $ dread prompt
 ☁️ 76°
 ```
 
-`dread prompt` reads only the cache and returns in about 15 ms. When the cache is more
-than ten minutes old it starts one background refresh, shared by every shell.
+<details>
+<summary><b>zsh, tmux, Starship and Claude Code</b></summary>
 
 ```sh
 # zsh
@@ -248,90 +302,84 @@ when = true
 { "statusLine": { "type": "command", "command": "dread prompt" } }
 ```
 
-## Commands
+</details>
 
-| Command | What it does |
-| --- | --- |
-| `dread` | The app: Now, Radar, Systems, Forecast, Alerts, Outlook, Lightning and Scene tabs |
-| `dread now`, `dread weather` | A quick look: your scene, conditions, alerts, the next two hours, lightning and five days |
-| `dread radar` | Animated radar loop with ranges, palettes and lightning ages |
-| `dread alerts` | Active NWS watches, warnings and advisories in full |
-| `dread forecast` | Hourly and 7-day charts |
-| `dread eta` | When rain reaches you, from recent radar motion |
-| `dread top [view]` | The app, opened on a view by name or number |
-| `dread places` | Save places under short names; `--all` on `now` and `alerts` covers them all |
-| `dread outlook` | Solar activity, aurora, earthquakes, meteor showers and hazards |
-| `dread scene` | The Dreadcast scenes as animated pixel art, with live conditions |
-| `dread lightning` | Strike map in Braille dots (needs your own Xweather account) |
-| `dread prompt` | A cached segment for shell prompts and status lines |
-| `dread setup` | Choose a location: ZIP code, place name or `lat,lon` |
-| `dread auth xweather` | Save optional lightning credentials (the Keychain on macOS, a private file on Linux) |
-| `dread config` | Show or change preferences |
-| `dread credits` | Data sources and licenses |
+## Scripting
 
-Run `dread help <command>` for options. Every command accepts `--location`,
-`--units imperial|metric`, `--json`, `--plain` and `--no-color`.
-
-## Scripts and automation
-
-`--json` gives a versioned schema on every command. `dread alerts` sets exit codes:
-
-| Exit | Meaning |
-| --- | --- |
-| 0 | Nothing at or above the `--fail-on` level |
-| 1 | An alert at or above the level is active (with `--all`, at any saved place) |
-| 2 | Usage error |
-| 3 | Data unavailable or stale (with `--all`, for any US place). Never reported as all clear |
-| 4 | No location yet; run `dread setup` |
+Every command has `--json` output with a versioned schema (`dreadcast.now/1` and so
+on). `dread alerts` is built for automation:
 
 ```sh
 dread alerts --fail-on severe && ./start-field-crew.sh
 dread alerts --follow --json | jq -r '"\(.type): \(.alert.event)"'
-dread alerts --all --follow --json | jq -r '"\(.place): \(.type) \(.alert.event)"'
 dread now --all --json | jq -r '.places[] | "\(.name) \(.now.conditions.temperature)"'
 ```
 
-Other commands exit 0 on success, 2 on a usage error, 3 when their data is unavailable
-and 4 before setup.
+| Exit | Meaning |
+| :-: | --- |
+| `0` | Nothing at or above the `--fail-on` level |
+| `1` | An alert at or above the level is active (with `--all`, at any saved place) |
+| `2` | Usage error |
+| `3` | Data unavailable or stale. Never reported as all clear |
+| `4` | No location yet: run `dread setup` |
 
-### Environment
+## Configuration
+
+`dread config` shows your settings and where they’re stored. Change them with
+`dread config set <key> <value>`:
+
+| Key | Values |
+| --- | --- |
+| `units` | `imperial` or `metric` |
+| `palette` | `dreadcast`, `classic`, `viridis` or `rainviewer` |
+| `range` | `15`, `35`, `75`, `150` or `300` miles |
+| `renderer` | `auto`, `kitty`, `iterm2`, `halfblock` or `256` |
+| `scene` | a scene name, or `daily` |
+| `scene-banner` | `on` or `off` |
+| `quips` | `on` or `off` (one dry line under the quick look, never during alerts) |
+| `icons` | `emoji` or `ascii` |
+
+<details>
+<summary><b>Environment variables</b></summary>
 
 | Variable | Effect |
 | --- | --- |
-| `DREADCAST_LOCATION` | A location for this run: a saved place's name, ZIP code, place name or `lat,lon` |
-| `DREADCAST_CONFIG_DIR`, `DREADCAST_CACHE_DIR` | Where preferences and the cache live (otherwise `XDG_CONFIG_HOME` and `XDG_CACHE_HOME`, then the platform defaults) |
-| `DREADCAST_XWEATHER_CLIENT_ID`, `DREADCAST_XWEATHER_CLIENT_SECRET` | Lightning credentials, instead of saved ones (`XWEATHER_CLIENT_ID` and `XWEATHER_CLIENT_SECRET` also work) |
-| `DREADCAST_CREDENTIAL_STORE=none` | Ignore saved credentials, for CI and tests |
-| `NO_COLOR` | No color. `FORCE_COLOR` or `CLICOLOR_FORCE` keep it when piped |
-| `DREAD_GRAPHICS` | Force a graphics protocol for radar: `kitty`, `iterm2` or `none` |
+| `DREADCAST_LOCATION` | A location for this run: a saved name, ZIP code, place name or `lat,lon` |
+| `DREADCAST_CONFIG_DIR`, `DREADCAST_CACHE_DIR` | Where settings and the cache live. Otherwise `XDG_CONFIG_HOME` and `XDG_CACHE_HOME`, then the platform defaults |
+| `DREADCAST_XWEATHER_CLIENT_ID`, `DREADCAST_XWEATHER_CLIENT_SECRET` | Lightning credentials instead of saved ones |
+| `DREADCAST_CREDENTIAL_STORE=none` | Ignore saved credentials, for CI |
+| `NO_COLOR` | Turn color off. `FORCE_COLOR` or `CLICOLOR_FORCE` keep it when piped |
+| `DREAD_GRAPHICS` | Force a radar graphics protocol: `kitty`, `iterm2` or `none` |
 | `DREAD_REDUCE_MOTION=1` | Still frames instead of animation (macOS also follows Reduce Motion) |
 
-## How it draws
+</details>
 
-dreadcast detects what your terminal supports and uses the best renderer available:
+## Terminal support
+
+Dreadcast CLI checks what your terminal can do and picks the best way to draw:
 
 | Renderer | Terminals | Result |
 | --- | --- | --- |
 | Kitty graphics | Kitty, Ghostty | Full-resolution radar, animated in place |
-| Inline images | iTerm2, WezTerm | Full-resolution radar, redrawn each frame |
-| Truecolor half-blocks | Most modern terminals | Two pixels per character cell; scenes and radar |
-| 256-color | Older terminals, many SSH sessions | Same layout, quantized colors |
-| Plain text and JSON | Pipes, CI, screen readers | Readings as sentences, or structured data |
+| Inline images | iTerm2, WezTerm | Full-resolution radar |
+| Truecolor half-blocks | Most modern terminals | Two pixels per character cell |
+| 256 colors | Older terminals, many SSH sessions | The same, with fewer colors |
+| Plain text and JSON | Pipes, CI, screen readers | Sentences, or structured data |
 
-Force a renderer with `--renderer`, or with `dread config set renderer halfblock`.
-Inside tmux, graphics protocols are off by default. dreadcast honors `NO_COLOR` and the
-macOS Reduce Motion setting; on Linux set `DREAD_REDUCE_MOTION=1`, and `--still` stops
-animation anywhere.
-
-On Linux, lightning credentials are saved to `~/.config/dreadcast/credentials.json`,
-readable only by you, instead of the macOS Keychain.
+Inside tmux, graphics protocols are off by default. Dreadcast CLI honors `NO_COLOR` and
+Reduce Motion, and `--still` stops animation anywhere.
 
 ## Data and privacy
 
-dreadcast needs no account and has no analytics. This version requests data directly
-from each provider, and coordinates are rounded to two decimal places (about 1 km)
-before they are stored or sent. See [docs/PRIVACY.md](docs/PRIVACY.md) and
+There’s no account and no analytics. This version asks each provider directly, and
+your coordinates are rounded to about 1 km before they’re stored or sent. Lightning
+credentials stay in the macOS Keychain, or in a file only you can read on Linux.
+
+Details: [docs/PRIVACY.md](docs/PRIVACY.md) and
 [docs/DATA_PROVIDERS.md](docs/DATA_PROVIDERS.md).
+
+<details>
+<summary><b>Where the data comes from</b></summary>
 
 | Data | Provider |
 | --- | --- |
@@ -342,39 +390,55 @@ before they are stored or sent. See [docs/PRIVACY.md](docs/PRIVACY.md) and
 | Wildfires | NIFC |
 | Solar activity, aurora, HF radio | NOAA SWPC |
 | Earthquakes, volcanoes | USGS |
-| Tsunamis | NTWC / PTWC |
+| Tsunamis | NTWC and PTWC |
 | Smoke | NOAA HMS |
 | Lightning (optional) | [Xweather](https://www.xweather.com/), with your own credentials |
 | ZIP lookup | [Zippopotam.us](https://zippopotam.us/) |
 | Basemap | [Natural Earth](https://www.naturalearthdata.com/) (public domain) |
 
-NWS, SPC, NHC and NIFC data cover the United States. Conditions, forecasts, radar and
-the outlook work worldwide.
+</details>
 
-## Development
+## FAQ
+
+**Does it work outside the US?**
+Conditions, forecasts, radar, rain timing and the outlook work worldwide. Official
+alerts, the severe outlook and wildfires come from US agencies, so they cover the
+United States, and the app says so instead of showing an empty list.
+
+**Do I need the Dreadcast app?**
+No. This is a separate project that shares no code with the Mac app and never needs it.
+
+**Why does the radar look blocky?**
+Terminals draw two pixels per character cell, so the app’s radar is pixel art. In Kitty,
+Ghostty, iTerm2 or WezTerm, `dread radar` shows full-resolution images instead.
+
+**What does lightning need?**
+Lightning comes from your own [Xweather](https://www.xweather.com/) account. Add your
+credentials with `dread auth xweather`. Nothing else needs an account.
+
+**Can I put it in my shell profile?**
+Use `dread now` there, or `dread prompt` in your prompt. Plain `dread` opens the app
+when you’re at a terminal.
+
+## Contributing
+
+Bug reports and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers
+setup and what to expect in review, and [CLAUDE.md](CLAUDE.md) describes the
+architecture.
 
 ```sh
-scripts/test.sh                  # the test suite; never touches the network
-swift run dread --location 33602 # try it
-scripts/build-basemap.py         # regenerate the embedded Natural Earth basemap
-scripts/docs-images/capture.sh   # regenerate the README screenshots from live runs
+scripts/test.sh                  # the full suite; never touches the network
+swift run dread --location 33602 # try your changes
+scripts/docs-images/capture.sh   # regenerate these screenshots from live runs
 ```
 
-The package has three libraries: `DreadcastKit` (providers, decoders, models),
-`DreadTerminal` (capabilities, color, rasters, pixel art, image protocols) and
-`DreadCLI` (commands, the app, scenes, configuration, cache, output). See
-[CONTRIBUTING.md](CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md).
-
-The test suite covers provider decoding, rendering, the app's views and keys, and every
-main command end to end, from argument parsing to exit codes, with provider responses
-stubbed. It runs on macOS and Linux in CI, which also builds and smoke-tests the
-static Linux binaries.
-
-## License and trademark
+## License
 
 The code is licensed under the [Apache License 2.0](LICENSE). The Dreadcast name,
-wordmark and scene names are trademarks of Dreadcast Weather and are not licensed for
+wordmark and scene names are trademarks of Dreadcast Weather and aren’t licensed for
 use by forks; see [TRADEMARKS.md](TRADEMARKS.md). Third-party notices are in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-*A chance of rain. Among other things.*
+<br>
+
+<p align="center"><i>A chance of rain. Among other things.</i></p>
