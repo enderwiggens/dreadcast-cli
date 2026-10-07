@@ -2,7 +2,7 @@
 
 # Dreadcast CLI
 
-**Weather and radar for your terminal.**<br>
+**Radar-first weather for your terminal.**<br>
 *There’s a lot in the forecast.*
 
 [![CI](https://github.com/enderwiggens/dreadcast-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/enderwiggens/dreadcast-cli/actions/workflows/ci.yml)
