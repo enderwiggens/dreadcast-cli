@@ -1,6 +1,6 @@
 # Privacy
 
-dreadcast runs on your machine. This version has no account, analytics or crash
+Dreadcast CLI runs on your machine. This version has no account, analytics or crash
 reporting, and it requests data directly from each provider below.
 
 ## What is sent, and where
@@ -40,7 +40,7 @@ Each provider also sees your IP address, as with any internet request.
 | Xweather credentials | macOS: the login Keychain, service `dreadcast-cli`. Linux: `~/.config/dreadcast/credentials.json`, created readable only by you |
 
 Radar tiles older than three hours are pruned automatically. Delete the cache folder
-at any time; dreadcast rebuilds it. `dread auth remove` deletes saved credentials.
+at any time; Dreadcast CLI rebuilds it. `dread auth remove` deletes saved credentials.
 
 Credentials are never written to the config file, the cache, logs or command output,
 including `--json`.

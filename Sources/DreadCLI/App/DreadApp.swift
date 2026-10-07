@@ -32,10 +32,10 @@ enum AppTab: Int, CaseIterable, Sendable {
     }
 }
 
-/// What a view draws in the body: text, or pixels with text beneath them.
+/// What a view draws in the body: text, or pixel art with text above and below it.
 enum AppBody {
     case lines([String])
-    case pixels(HalfBlockFrame, below: [String])
+    case pixels(HalfBlockFrame, above: [String] = [], below: [String])
 }
 
 /// A place the app watches, with its latest data.
@@ -124,7 +124,7 @@ enum DreadApp {
         for state in states { state.with { $0.lightningConfigured = configured } }
         let placesView = PlacesView()
         let views: [AppTab: AppView] = [
-            .now: NowView(), .systems: SystemsView(), .radar: RadarView(ctx: ctx), .forecast: ForecastView(),
+            .now: NowView(ctx: ctx), .systems: SystemsView(), .radar: RadarView(ctx: ctx), .forecast: ForecastView(),
             .alerts: AlertsView(), .outlook: OutlookView(), .lightning: LightningView(), .scene: SceneView(ctx: ctx),
             .places: placesView,
         ]
@@ -286,6 +286,7 @@ struct AppScreen {
     private var rows: [String] = []
     private var width = 0
     private var pixels: HalfBlockFrame?
+    private var pixelRow = 0
 
     mutating func reset() {
         rows = []
@@ -315,10 +316,21 @@ struct AppScreen {
         switch view.body(f) {
         case .lines(let lines):
             for i in 0..<f.height { text[DreadApp.headerRows + i] = i < lines.count ? lines[i] : "" }
-        case .pixels(let art, let below):
-            frame = art
-            let start = DreadApp.headerRows + art.rows
-            for i in 0..<max(0, f.height - art.rows) { text[start + i] = i < below.count ? below[i] : "" }
+        case .pixels(let art, let above, let below):
+            let top = min(above.count, f.height)
+            for i in 0..<top { text[DreadApp.headerRows + i] = above[i] }
+            if top + art.rows <= f.height {
+                frame = art
+                let start = DreadApp.headerRows + top + art.rows
+                for i in 0..<(f.height - top - art.rows) { text[start + i] = i < below.count ? below[i] : "" }
+            } else {
+                // Art that doesn't fit is left out rather than drawn over the footer.
+                for i in top..<f.height { text[DreadApp.headerRows + i] = "" }
+            }
+            if frame != nil, pixelRow != DreadApp.headerRows + top {
+                pixels = nil
+                pixelRow = DreadApp.headerRows + top
+            }
         }
         for (i, line) in footer.enumerated() { text[total - DreadApp.footerRows + i] = line }
 
@@ -339,7 +351,7 @@ struct AppScreen {
             written.append(fitted)
         }
         if let frame {
-            out += frame.update(from: pixels, styler: s, row: DreadApp.headerRows + 1, column: 1)
+            out += frame.update(from: pixels, styler: s, row: pixelRow + 1, column: 1)
         }
         rows = written
         pixels = frame

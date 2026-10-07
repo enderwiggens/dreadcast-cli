@@ -54,7 +54,7 @@ enum SetupCommand {
         if query.isEmpty {
             guard interactive else { return ctx.fail("Pass a ZIP code, place name or lat,lon: dread setup 33602", code: .usage) }
             ctx.write(["", "  " + s.paint("DREADCAST", Theme.porcelain, bold: true) + s.paint("  ·  setup", Theme.faint), ""])
-            guard let answer = Prompt.ask("  Where should dreadcast forecast? ZIP code, place name, or lat,lon: "), !answer.isEmpty else {
+            guard let answer = Prompt.ask("  Where should Dreadcast forecast? ZIP code, place name, or lat,lon: "), !answer.isEmpty else {
                 return ctx.fail("No location entered.", code: .usage)
             }
             query = answer
@@ -170,7 +170,7 @@ enum ConfigCommand {
                 } else if case .scene(let scene) = SceneID.lookup(value) {
                     config.scene = scene.rawValue
                 } else if case .pro(let title) = SceneID.lookup(value) {
-                    return ctx.fail("\(title) is a Pro scene in Dreadcast: Weather & Radar. Free scenes: \(SceneID.names).", code: .usage)
+                    return ctx.fail("\(title) is a Pro scene in the Dreadcast app. Free scenes: \(SceneID.names).", code: .usage)
                 } else {
                     return ctx.fail("scene: daily, or one of \(SceneID.names).", code: .usage)
                 }

@@ -86,42 +86,12 @@ enum NowCommand {
         let clock = s.paint(fmt.time(ctx.now) + " " + fmt.zoneAbbreviation(ctx.now), Theme.faint)
         if !ctx.inApp { lines.append(TextWidth.spread(brand, clock, width: width)) }
 
-        if let report {
-            let c = report.current
-            let left = "  " + ctx.icon(c.weatherCode, isDay: c.isDay) + "  " + s.bold(fmt.temperature(c.temperature, unit: true))
-                + "  " + WeatherCondition.description(c.weatherCode)
-            let right = s.paint("Feels \(fmt.temperature(c.apparentTemperature)) · Humidity \(fmt.percent(c.humidity)) · Wind \(fmt.wind(speed: c.windSpeed, gust: c.windGusts, direction: c.windDirection))", Theme.mist)
-            if TextWidth.of(left) + TextWidth.of(right) + 2 <= width {
-                lines.append(TextWidth.spread(left, right, width: width))
-            } else {
-                lines.append(left)
-                lines.append("      " + right)
-            }
-        } else {
-            lines.append("  " + s.paint("Current conditions are unavailable. \(weather.error ?? "")", Theme.warning))
-        }
+        lines.append(contentsOf: conditionsLines(report: report, weather: weather, fmt: fmt, ctx: ctx, width: width))
         lines.append("")
 
         // Alerts: hazard, time and the official instruction. No jokes here.
-        var alertsActive = false
-        if let list = alerts.value {
-            alertsActive = !list.isEmpty
-            if list.isEmpty {
-                let note = alerts.isStale ? "No alerts as of \(Formatter.ago(alerts.storedAt ?? ctx.now, now: ctx.now)); refresh failed." : "No active alerts for this location."
-                lines.append(TextWidth.spread("  " + s.paint(note, alerts.isStale ? Theme.advisory : Theme.mint), s.paint("NWS", Theme.faint), width: width))
-            } else {
-                for alert in list.prefix(2) {
-                    lines.append(contentsOf: alertLines(alert, fmt: fmt, ctx: ctx, width: width))
-                }
-                if list.count > 2 {
-                    lines.append("  " + s.paint("+\(list.count - 2) more · dread alerts", Theme.faint))
-                }
-            }
-        } else if place.isUnitedStates {
-            lines.append("  " + s.paint("Alerts unavailable: \(alerts.error ?? "unknown error"). This is not an all-clear.", Theme.advisory))
-        } else {
-            lines.append("  " + s.paint("Official alerts are available for US locations.", Theme.faint))
-        }
+        let alertsActive = alerts.value?.isEmpty == false
+        lines.append(contentsOf: alertSummary(place: place, alerts: alerts, fmt: fmt, ctx: ctx, width: width))
         lines.append("")
 
         if let report {
@@ -140,23 +110,69 @@ enum NowCommand {
             }
         }
         lines.append("")
+        lines.append(sourcesLine(place: place, weather: weather, lightning: lightning != nil, radar: nowcast != nil, ctx: ctx, width: width))
+        if let report, ctx.quipsEnabled, let quip = Quip.line(report: report, alertsActive: alertsActive, now: ctx.now) {
+            lines.append("  " + s.paint(quip, Theme.lime, italic: true))
+        }
+        lines.append("")
+        return lines
+    }
 
+    /// Temperature and conditions, with feels-like, humidity and wind beside them, or on a
+    /// second line when the width is short.
+    static func conditionsLines(report: WeatherReport?, weather: Fetched<WeatherReport>, fmt: Formatter, ctx: Context, width: Int) -> [String] {
+        let s = ctx.styler
+        guard let report else {
+            return ["  " + s.paint("Current conditions are unavailable. \(weather.error ?? "")", Theme.warning)]
+        }
+        let c = report.current
+        let left = "  " + ctx.icon(c.weatherCode, isDay: c.isDay) + "  " + s.bold(fmt.temperature(c.temperature, unit: true))
+            + "  " + WeatherCondition.description(c.weatherCode)
+        let right = s.paint("Feels \(fmt.temperature(c.apparentTemperature)) · Humidity \(fmt.percent(c.humidity)) · Wind \(fmt.wind(speed: c.windSpeed, gust: c.windGusts, direction: c.windDirection))", Theme.mist)
+        if TextWidth.of(left) + TextWidth.of(right) + 2 <= width {
+            return [TextWidth.spread(left, right, width: width)]
+        }
+        return [left, "      " + right]
+    }
+
+    /// The alert picture in a few lines: the first `limit` alerts, or why there are none.
+    /// Missing alert data is said plainly and never reads as clear.
+    static func alertSummary(place: Place, alerts: Fetched<[WeatherAlert]>, fmt: Formatter, ctx: Context, width: Int, limit: Int = 2) -> [String] {
+        let s = ctx.styler
+        guard let list = alerts.value else {
+            if place.isUnitedStates {
+                return ["  " + s.paint("Alerts unavailable: \(alerts.error ?? "unknown error"). This is not an all-clear.", Theme.advisory)]
+            }
+            return ["  " + s.paint("Official alerts are available for US locations.", Theme.faint)]
+        }
+        if list.isEmpty {
+            let note = alerts.isStale ? "No alerts as of \(Formatter.ago(alerts.storedAt ?? ctx.now, now: ctx.now)); refresh failed." : "No active alerts for this location."
+            return [TextWidth.spread("  " + s.paint(note, alerts.isStale ? Theme.advisory : Theme.mint), s.paint("NWS", Theme.faint), width: width)]
+        }
+        var lines: [String] = []
+        for alert in list.prefix(limit) {
+            lines.append(contentsOf: alertLines(alert, fmt: fmt, ctx: ctx, width: width))
+        }
+        if list.count > limit {
+            lines.append("  " + s.paint("+\(list.count - limit) more · \(ctx.inApp ? "5 Alerts" : "dread alerts")", Theme.faint))
+        }
+        return lines
+    }
+
+    /// Where the readings came from and how old they are.
+    static func sourcesLine(place: Place, weather: Fetched<WeatherReport>, lightning: Bool, radar: Bool, ctx: Context, width: Int) -> String {
+        let s = ctx.styler
         var sources = ["OPEN-METEO"]
         if place.isUnitedStates { sources.append("NWS") }
-        if lightning != nil { sources.append("XWEATHER") }
-        if nowcast != nil { sources.append("RAINVIEWER") }
+        if lightning { sources.append("XWEATHER") }
+        if radar { sources.append("RAINVIEWER") }
         let updated: String
         if let stored = weather.storedAt {
             updated = (weather.isStale ? "stale · " : "") + "updated " + Formatter.ago(stored, now: ctx.now)
         } else {
             updated = "not updated"
         }
-        lines.append(TextWidth.spread("  " + s.paint(sources.joined(separator: " · "), Theme.faint), s.paint(updated, weather.isStale ? Theme.advisory : Theme.faint), width: width))
-        if let report, ctx.quipsEnabled, let quip = Quip.line(report: report, alertsActive: alertsActive, now: ctx.now) {
-            lines.append("  " + s.paint(quip, Theme.lime, italic: true))
-        }
-        lines.append("")
-        return lines
+        return TextWidth.spread("  " + s.paint(sources.joined(separator: " · "), Theme.faint), s.paint(updated, weather.isStale ? Theme.advisory : Theme.faint), width: width)
     }
 
     /// Your scene as a strip above the readings. It is decorative, so it steps aside
@@ -165,15 +181,23 @@ enum NowCommand {
                        rows: Int? = nil, sceneTime: Double? = nil) -> [String] {
         guard ctx.styler.mode >= .ansi256, !ctx.arguments.has("no-scene"), width >= 50,
               (rows ?? ctx.terminal.rows) >= bannerMinimumRows else { return [] }
+        return sceneStrip(place: place, alerts: alerts, report: report, ctx: ctx, width: width - 2, rows: 10, sceneTime: sceneTime)
+            .map { "  " + $0 }
+    }
+
+    /// The scene as `rows` lines of half-block art, or nothing when it should step aside:
+    /// while an alert is active or alert data is unknown (US places), or when it's off.
+    static func sceneStrip(place: Place, alerts: Fetched<[WeatherAlert]>, report: WeatherReport?, ctx: Context,
+                           width: Int, rows: Int, sceneTime: Double?) -> [String] {
+        guard ctx.styler.mode >= .ansi256, !ctx.arguments.has("no-scene"), ctx.config.sceneBanner, width >= 20, rows >= 3 else { return [] }
         if place.isUnitedStates, alerts.value?.isEmpty != true { return [] }
         let zone = report?.timeZone ?? ctx.timeZone(for: place)
-        guard ctx.config.sceneBanner else { return [] }
         let scene = SceneCommand.configuredScene(ctx, timeZone: zone)
         let period = ScenePeriod.at(ctx.now, timeZone: zone)
         let strip = ScenePainter(scene: scene, period: period, time: sceneTime ?? 0, still: sceneTime == nil || ctx.terminal.reduceMotion,
                                  moon: LunarPhase(at: ctx.now), layout: .strip)
-            .paint(width: width - 2, height: 20)
-        return HalfBlockFrame(raster: strip).lines(styler: ctx.styler).map { "  " + $0 }
+            .paint(width: width, height: rows * 2)
+        return HalfBlockFrame(raster: strip).lines(styler: ctx.styler)
     }
 
     /// The banner adds eleven lines; below this height the readings would scroll away.

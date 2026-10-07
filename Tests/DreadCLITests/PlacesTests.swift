@@ -22,7 +22,8 @@ struct PlacesTests {
         try ConfigStore.save(config, to: Paths.resolve(environment: environment))
         let terminal = TerminalInfo(isOutputTTY: true, isInputTTY: true, columns: 120, rows: 44, colorMode: .truecolor,
                                     graphics: .none, program: nil, insideMultiplexer: false, reduceMotion: false)
-        return Context(arguments: arguments, environment: environment, terminal: terminal, now: ISODate.parse("2026-10-06T23:30:00Z")!)
+        return Context(arguments: arguments, environment: environment, terminal: terminal, http: OfflineProtocol.http,
+                       now: ISODate.parse("2026-10-06T23:30:00Z")!)
     }
 
     // MARK: Config
@@ -180,7 +181,7 @@ struct PlacesTests {
         let here = DreadApp.header(tab: .now, frame: Self.frame(ctx, alertsAt: 0), styler: ctx.styler).map(TextWidth.strippingANSI)
         #expect(here[0].contains("TORNADO WARNING") && !here[0].contains("· mom"))
         #expect(here[1].contains("Alerts 1"))
-        let footer = DreadApp.footer(view: NowView(), frame: Self.frame(ctx, alertsAt: 1), styler: ctx.styler).map(TextWidth.strippingANSI)
+        let footer = DreadApp.footer(view: NowView(ctx: ctx), frame: Self.frame(ctx, alertsAt: 1), styler: ctx.styler).map(TextWidth.strippingANSI)
         #expect(footer[1].contains("1–9 views") && footer[1].contains("[ ] place") && footer[1].contains("a go to alert"))
     }
 

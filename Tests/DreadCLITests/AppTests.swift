@@ -44,38 +44,86 @@ struct AppTests {
         AppFrame(ctx: ctx, place: SceneTests.tampa, snapshot: snapshot, width: width, height: height, elapsed: 7)
     }
 
-    /// Every view except radar, which loads tiles, fits any body size with or without data.
+    static func now(_ ctx: Context) -> NowView {
+        let view = NowView(ctx: ctx)
+        view.radar.fixture = { RadarPanel.basemapLoop($0, width: $1, rows: $2) }
+        return view
+    }
+
+    /// Every view fits any body size with or without data; radar draws the basemap.
     @Test func viewsFitTheirBody() throws {
         let ctx = try SceneTests.context()
-        let views: [AppView] = [NowView(), SystemsView(), ForecastView(), AlertsView(), OutlookView(), LightningView(), SceneView(ctx: ctx)]
+        let radar = RadarView(ctx: ctx)
+        radar.panel.fixture = { RadarPanel.basemapLoop($0, width: $1, rows: $2) }
+        let views: [AppView] = [Self.now(ctx), radar, SystemsView(), ForecastView(), AlertsView(), OutlookView(), LightningView(), SceneView(ctx: ctx)]
         for view in views {
             for snapshot in [TopCommand.Snapshot(), Self.snapshot(), Self.snapshot(alerts: [SceneTests.warning()])] {
                 for (width, height) in [(60, 7), (80, 19), (120, 40), (200, 60)] {
                     switch view.body(Self.frame(ctx, snapshot, width: width, height: height)) {
                     case .lines(let lines):
                         #expect(lines.count <= height, "\(type(of: view)) at \(width)x\(height)")
-                    case .pixels(let art, let below):
+                    case .pixels(let art, let above, let below):
                         #expect(art.columns == width)
-                        #expect(art.rows + below.count <= height + 1, "\(type(of: view)) at \(width)x\(height)")
+                        #expect(above.count + art.rows + below.count <= height + 1, "\(type(of: view)) at \(width)x\(height)")
                     }
                 }
             }
         }
     }
 
-    @Test func nowShowsTheSceneOnlyWhenClearAndTall() throws {
+    /// Now is laid out like the Dreadcast window: scene, readings, radar, then the timeline
+    /// and coming days. The scene steps aside for alerts and short windows; without room
+    /// for radar, or without color, it falls back to the quick look's text.
+    @Test func nowIsTheRadarPanel() throws {
         let ctx = try SceneTests.context()
-        func hasBanner(_ snapshot: TopCommand.Snapshot, height: Int) -> Bool {
-            guard case .lines(let lines) = NowView().body(Self.frame(ctx, snapshot, width: 100, height: height)) else { return false }
-            return lines.contains { $0.contains("▀") }
+        func layout(_ snapshot: TopCommand.Snapshot, _ context: Context? = nil, height: Int)
+            -> (above: [String], below: [String], art: HalfBlockFrame?, lines: [String]) {
+            let c = context ?? ctx
+            switch Self.now(c).body(Self.frame(c, snapshot, width: 100, height: height)) {
+            case .pixels(let art, let above, let below): return (above, below, art, [])
+            case .lines(let lines): return ([], [], nil, lines)
+            }
         }
-        #expect(hasBanner(Self.snapshot(), height: 40))
-        #expect(!hasBanner(Self.snapshot(), height: 24))
-        #expect(!hasBanner(Self.snapshot(alerts: [SceneTests.warning()]), height: 40))
-        #expect(!hasBanner(Self.snapshot(alerts: nil), height: 40))
-        let off = try SceneTests.context(banner: false)
-        guard case .lines(let lines) = NowView().body(Self.frame(off, Self.snapshot(), width: 100, height: 40)) else { return }
-        #expect(!lines.contains { $0.contains("▀") })
+        let full = layout(Self.snapshot(), height: 40)
+        #expect(full.above.filter { $0.contains("▀") }.count == NowView.sceneRows)
+        let readings = full.above.map(TextWidth.strippingANSI).joined(separator: "\n")
+        #expect(readings.contains("75°F") && readings.contains("No active alerts") && readings.contains("Next 2 h"))
+        let art = try #require(full.art)
+        #expect(art.rows >= NowView.minimumRadarRows)
+        #expect(full.above.count + art.rows + full.below.count == 40)
+        #expect(TextWidth.strippingANSI(full.below[0]).contains("◀"))
+        #expect(TextWidth.strippingANSI(full.below[1]).contains("dBZ"))
+
+        // An alert takes the scene's place; the radar stays.
+        let warned = layout(Self.snapshot(alerts: [SceneTests.warning()]), height: 40)
+        #expect(!warned.above.contains { $0.contains("▀") })
+        #expect(warned.above.map(TextWidth.strippingANSI).joined().contains("TORNADO WARNING"))
+        #expect(warned.art != nil)
+        // Unknown alerts never read as clear, and hide the scene too.
+        let unknown = layout(Self.snapshot(alerts: nil), height: 40)
+        #expect(!unknown.above.contains { $0.contains("▀") })
+        #expect(unknown.above.map(TextWidth.strippingANSI).joined().contains("not an all-clear"))
+
+        // Shorter windows drop the scene first, then the radar.
+        let short = layout(Self.snapshot(), height: 22)
+        #expect(short.art != nil && !short.above.contains { $0.contains("▀") })
+        #expect((short.art?.rows ?? 0) >= NowView.radarRowsWithScene)
+        let tiny = layout(Self.snapshot(), height: 12)
+        #expect(tiny.art == nil && tiny.lines.count <= 12 && tiny.lines.map(TextWidth.strippingANSI).joined().contains("75°F"))
+
+        let off = layout(Self.snapshot(), try SceneTests.context(banner: false), height: 40)
+        #expect(off.art != nil && !off.above.contains { $0.contains("▀") })
+        let plain = layout(Self.snapshot(), try SceneTests.context(arguments: Arguments.parse(["--no-color"])), height: 40)
+        #expect(plain.art == nil && plain.lines.map(TextWidth.strippingANSI).joined().contains("75°F"))
+    }
+
+    @Test func nowWaitsForRadarWithoutLosingItsPlace() throws {
+        let ctx = try SceneTests.context()
+        guard case .lines(let lines) = NowView(ctx: ctx).body(Self.frame(ctx, Self.snapshot(), width: 100, height: 40)) else {
+            Issue.record("expected text while radar loads"); return
+        }
+        #expect(lines.count == 40)
+        #expect(lines.map(TextWidth.strippingANSI).contains { $0.contains("Loading radar") })
     }
 
     @Test func scrollingStopsAtTheEnd() throws {
