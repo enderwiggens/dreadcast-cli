@@ -7,24 +7,27 @@ public struct CellOverlay: Sendable {
     public let character: Character
     public let color: RGB
     public let bold: Bool
+    public let italic: Bool
     /// When set, replaces the cell background; otherwise the averaged pixels show through.
     public let background: RGB?
 
-    public init(column: Int, row: Int, character: Character, color: RGB, bold: Bool = false, background: RGB? = nil) {
+    public init(column: Int, row: Int, character: Character, color: RGB, bold: Bool = false, italic: Bool = false, background: RGB? = nil) {
         self.column = column
         self.row = row
         self.character = character
         self.color = color
         self.bold = bold
+        self.italic = italic
         self.background = background
     }
 
     /// One overlay per character of `text`, starting at (column, row).
-    public static func text(_ text: String, column: Int, row: Int, color: RGB, bold: Bool = false, background: RGB? = nil) -> [CellOverlay] {
+    public static func text(_ text: String, column: Int, row: Int, color: RGB, bold: Bool = false, italic: Bool = false,
+                            background: RGB? = nil) -> [CellOverlay] {
         var result: [CellOverlay] = []
         var c = column
         for character in text {
-            result.append(CellOverlay(column: c, row: row, character: character, color: color, bold: bold, background: background))
+            result.append(CellOverlay(column: c, row: row, character: character, color: color, bold: bold, italic: italic, background: background))
             c += max(1, TextWidth.of(character))
         }
         return result

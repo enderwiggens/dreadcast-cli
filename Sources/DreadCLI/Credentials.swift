@@ -17,6 +17,8 @@ public enum Credentials {
         if let id, let secret, !id.isEmpty, !secret.isEmpty {
             return LightningCredentials(clientID: id, clientSecret: secret)
         }
+        // DREADCAST_CREDENTIAL_STORE=none ignores saved credentials, for tests and CI.
+        guard environment["DREADCAST_CREDENTIAL_STORE"] != "none" else { return nil }
         guard let storedID = read(idAccount), let storedSecret = read(secretAccount),
               !storedID.isEmpty, !storedSecret.isEmpty else { return nil }
         return LightningCredentials(clientID: storedID, clientSecret: storedSecret)
@@ -24,7 +26,11 @@ public enum Credentials {
 
     public static func source(environment: [String: String] = ProcessInfo.processInfo.environment) -> String? {
         if (environment["DREADCAST_XWEATHER_CLIENT_ID"] ?? environment["XWEATHER_CLIENT_ID"]) != nil { return "environment" }
+        #if canImport(Security)
         return read(idAccount) != nil ? "Keychain" : nil
+        #else
+        return read(idAccount) != nil ? "credentials file" : nil
+        #endif
     }
 
     public static func saveXweather(_ credentials: LightningCredentials) throws {
@@ -43,7 +49,7 @@ public enum Credentials {
 
         var errorDescription: String? {
             switch self {
-            case .status(let status): "The Keychain refused the change (status \(status))."
+            case .status(let status): status == -1 ? "The credentials file couldn’t be written." : "The Keychain refused the change (status \(status))."
             case .unsupported: "Saving credentials needs the macOS Keychain. Set DREADCAST_XWEATHER_CLIENT_ID and DREADCAST_XWEATHER_CLIENT_SECRET instead."
             }
         }
@@ -86,8 +92,47 @@ public enum Credentials {
         SecItemDelete(query as CFDictionary)
     }
     #else
-    static func read(_ account: String) -> String? { nil }
-    static func write(_ value: String, account: String) throws { throw KeychainError.unsupported }
-    static func delete(_ account: String) {}
+    /// Without a Keychain, credentials live in their own file, created with owner-only
+    /// permissions. They are still never written to config.json, the cache or output.
+    static var credentialsFile: URL {
+        Paths.resolve().configDirectory.appendingPathComponent("credentials.json")
+    }
+
+    static func load() -> [String: String] {
+        guard let data = try? Data(contentsOf: credentialsFile),
+              let values = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
+        return values
+    }
+
+    static func save(_ values: [String: String]) throws {
+        let directory = credentialsFile.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
+                                                attributes: [.posixPermissions: 0o700])
+        let data = try JSONEncoder().encode(values)
+        let temporary = directory.appendingPathComponent(".credentials-\(UUID().uuidString)")
+        guard FileManager.default.createFile(atPath: temporary.path, contents: data, attributes: [.posixPermissions: 0o600]) else {
+            throw KeychainError.status(-1)
+        }
+        _ = try? FileManager.default.removeItem(at: credentialsFile)
+        try FileManager.default.moveItem(at: temporary, to: credentialsFile)
+    }
+
+    static func read(_ account: String) -> String? { load()[account] }
+
+    static func write(_ value: String, account: String) throws {
+        var values = load()
+        values[account] = value
+        try save(values)
+    }
+
+    static func delete(_ account: String) {
+        var values = load()
+        guard values.removeValue(forKey: account) != nil else { return }
+        if values.isEmpty {
+            try? FileManager.default.removeItem(at: credentialsFile)
+        } else {
+            try? save(values)
+        }
+    }
     #endif
 }

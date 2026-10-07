@@ -1,7 +1,7 @@
 # Privacy
 
-dreadcast runs entirely on your machine. It has no account, no server, no analytics
-and no crash reporting.
+dreadcast runs on your machine. This version has no account, analytics or crash
+reporting, and it requests data directly from each provider below.
 
 ## What is sent, and where
 
@@ -11,6 +11,13 @@ which the National Weather Service asks clients to send.
 
 Coordinates are rounded to two decimal places (about 1 km) before they are stored or
 included in any request.
+
+If you save more than one place (`dread places`), each is a location in this sense.
+While the app runs, it checks every saved place's conditions with Open-Meteo every 10
+minutes and, for US places, its alerts with the National Weather Service every 2
+minutes. Radar tiles and the other location-specific sources are requested only for the
+place you're viewing, and rain timing also for the row highlighted on the Places tab.
+`dread now --all` and `dread alerts --all` make the same per-place requests once.
 
 | Provider | What it receives |
 | --- | --- |
@@ -28,9 +35,9 @@ Each provider also sees your IP address, as with any internet request.
 
 | What | Where |
 | --- | --- |
-| Preferences and saved location | `~/.config/dreadcast/config.json` (or `$XDG_CONFIG_HOME/dreadcast`) |
+| Preferences and saved places | `~/.config/dreadcast/config.json` (or `$XDG_CONFIG_HOME/dreadcast`) |
 | Cached readings and radar tiles | `~/Library/Caches/dreadcast` on macOS, `~/.cache/dreadcast` elsewhere |
-| Xweather credentials | The login Keychain, service `dreadcast-cli` |
+| Xweather credentials | macOS: the login Keychain, service `dreadcast-cli`. Linux: `~/.config/dreadcast/credentials.json`, created readable only by you |
 
 Radar tiles older than three hours are pruned automatically. Delete the cache folder
 at any time; dreadcast rebuilds it. `dread auth remove` deletes saved credentials.

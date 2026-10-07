@@ -4,7 +4,8 @@ import DreadcastKit
 /// Saved preferences, stored as JSON in the user's config directory.
 public struct Config: Codable, Sendable {
     public var version = 1
-    public var location: Place?
+    /// Saved places; the first is the default. Older builds read only `location`.
+    public var places: [SavedPlace] = []
     public var units: UnitSystem = .imperial
     public var palette: RadarPalette = .dreadcast
     public var radarRange: Int = 35
@@ -14,6 +15,33 @@ public struct Config: Codable, Sendable {
     public var quips: Bool = true
     /// emoji or ascii weather glyphs.
     public var icons: String = "emoji"
+    /// The scene for `dread scene` and the banners: a scene name, or daily to rotate.
+    public var scene: String = "asteroid"
+    /// Show the scene as a banner on the Now tab and above `dread now`.
+    public var sceneBanner: Bool = true
+
+    /// The default place. Setting it to a saved place moves that place first; any other
+    /// place replaces the default and keeps its name.
+    public var location: Place? {
+        get { places.first?.place }
+        set {
+            guard let newValue else {
+                if !places.isEmpty { places.removeFirst() }
+                return
+            }
+            if let i = places.firstIndex(where: { $0.place.coordinate == newValue.coordinate }) {
+                places.insert(places.remove(at: i), at: 0)
+            } else if places.isEmpty {
+                places = [SavedPlace(name: "home", place: newValue)]
+            } else {
+                places[0].place = newValue
+            }
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case version, location, places, units, palette, radarRange, renderer, quips, icons, scene, sceneBanner
+    }
 
     public init() {}
 
@@ -21,13 +49,39 @@ public struct Config: Codable, Sendable {
         // Tolerate missing keys so older files keep loading.
         let c = try decoder.container(keyedBy: CodingKeys.self)
         version = (try? c.decode(Int.self, forKey: .version)) ?? 1
-        location = try? c.decode(Place.self, forKey: .location)
+        places = (try? c.decode([SavedPlace].self, forKey: .places)) ?? []
+        // Files from before saved places hold only `location`; it becomes "home".
+        if places.isEmpty, let legacy = try? c.decode(Place.self, forKey: .location) {
+            places = [SavedPlace(name: "home", place: legacy)]
+        }
         units = (try? c.decode(UnitSystem.self, forKey: .units)) ?? .imperial
         palette = (try? c.decode(RadarPalette.self, forKey: .palette)) ?? .dreadcast
         radarRange = (try? c.decode(Int.self, forKey: .radarRange)) ?? 35
         renderer = (try? c.decode(String.self, forKey: .renderer)) ?? "auto"
         quips = (try? c.decode(Bool.self, forKey: .quips)) ?? true
         icons = (try? c.decode(String.self, forKey: .icons)) ?? "emoji"
+        scene = (try? c.decode(String.self, forKey: .scene)) ?? "asteroid"
+        sceneBanner = (try? c.decode(Bool.self, forKey: .sceneBanner)) ?? true
+        // Early builds saved `scene: off` to hide the banner.
+        if scene == "off" {
+            scene = "asteroid"
+            sceneBanner = false
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(version, forKey: .version)
+        try c.encodeIfPresent(location, forKey: .location)
+        try c.encode(places, forKey: .places)
+        try c.encode(units, forKey: .units)
+        try c.encode(palette, forKey: .palette)
+        try c.encode(radarRange, forKey: .radarRange)
+        try c.encode(renderer, forKey: .renderer)
+        try c.encode(quips, forKey: .quips)
+        try c.encode(icons, forKey: .icons)
+        try c.encode(scene, forKey: .scene)
+        try c.encode(sceneBanner, forKey: .sceneBanner)
     }
 
     public static let ranges = [15, 35, 75, 150, 300]

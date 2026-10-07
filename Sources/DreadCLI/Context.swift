@@ -27,7 +27,10 @@ public final class Context: @unchecked Sendable {
     public let cache: DiskCache
     /// Created on first use so fast commands like `prompt` skip the tile directory.
     public lazy var tiles = DiskTileStore(directory: paths.cacheDirectory.appendingPathComponent("radar", isDirectory: true))
-    public private(set) var now: Date
+    private let clockLock = NSLock()
+    private var clock: Date
+    /// The time for this run. Background fetches read it while the app's loop advances it.
+    public var now: Date { clockLock.withLock { clock } }
 
     public init(arguments: Arguments,
                 environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -55,10 +58,10 @@ public final class Context: @unchecked Sendable {
         styler = Styler(mode: colors)
         self.http = http
         cache = DiskCache(directory: paths.cacheDirectory)
-        self.now = now
+        self.clock = now
     }
 
-    public func refreshClock() { now = Date() }
+    public func refreshClock() { clockLock.withLock { clock = Date() } }
 
     // MARK: Preferences
 
@@ -78,22 +81,58 @@ public final class Context: @unchecked Sendable {
         useEmoji ? WeatherCondition.emoji(code, isDay: isDay) : WeatherCondition.ascii(code, isDay: isDay)
     }
 
+    /// Set while the app is running: its header already names the place.
+    var inApp = false
+
+    /// A section title, followed by the place outside the app.
+    func title(_ name: String, place: Place) -> String {
+        "  " + styler.paint(name, Theme.porcelain, bold: true) + (inApp ? "" : styler.paint("  ·  ", Theme.faint) + place.name)
+    }
+
+    /// Plain `dread` opens the app when a person is at the terminal; piped, or with
+    /// --pretty, --plain or --json, it prints the quick look instead.
+    var opensApp: Bool {
+        !arguments.commandGiven && mode == .pretty && !arguments.has("pretty") && !arguments.has("all")
+            && terminal.isInputTTY && terminal.isOutputTTY
+    }
+
     public var quipsEnabled: Bool { config.quips && !arguments.has("no-quip") && mode == .pretty }
 
     // MARK: Output
 
+    /// Collects output instead of writing it, for tests.
+    public final class OutputBuffer: @unchecked Sendable {
+        private let lock = NSLock()
+        private var out = "", err = ""
+        public init() {}
+        public var text: String { lock.withLock { out } }
+        public var errors: String { lock.withLock { err } }
+        func append(_ text: String, error: Bool) { lock.withLock { if error { err += text } else { out += text } } }
+    }
+
+    /// When set, output goes here instead of standard output and standard error.
+    public var output: OutputBuffer?
+
+    func emit(_ text: String) {
+        if let output { output.append(text, error: false) } else { Console.write(text) }
+    }
+
+    func emitError(_ text: String) {
+        if let output { output.append(text, error: true) } else { Console.writeError(text) }
+    }
+
     public func write(_ lines: [String]) {
-        Console.write(lines.joined(separator: "\n") + "\n")
+        emit(lines.joined(separator: "\n") + "\n")
     }
 
     public func write(_ line: String) {
-        Console.write(line + "\n")
+        emit(line + "\n")
     }
 
     public func writeJSON<T: Encodable>(_ value: T) {
         let encoder = JSONEncoder.dreadcast
         guard let data = try? encoder.encode(value), let text = String(data: data, encoding: .utf8) else { return }
-        Console.write(text + "\n")
+        emit(text + "\n")
     }
 
     public func fail(_ message: String, code: ExitCode) -> ExitCode {
@@ -101,7 +140,7 @@ public final class Context: @unchecked Sendable {
             struct ErrorBody: Encodable { let error: String; let code: Int32 }
             writeJSON(ErrorBody(error: message, code: code.rawValue))
         } else {
-            Console.writeError(styler.paint("dread: ", Theme.faint) + message + "\n")
+            emitError(styler.paint("dread: ", Theme.faint) + message + "\n")
         }
         return code
     }
@@ -118,6 +157,8 @@ public final class Context: @unchecked Sendable {
 
     public func resolveLocation() async throws -> Place {
         if let query = arguments.value("location") ?? environment["DREADCAST_LOCATION"], !query.isEmpty {
+            // A saved place's name wins over a search.
+            if let i = PlaceBook.index(of: query, in: config.places) { return config.places[i].place }
             let key = "place-" + query.lowercased()
             if let cached = cache.read(Place.self, key: key), now.timeIntervalSince(cached.storedAt) < 30 * 86400 {
                 return cached.value

@@ -4,23 +4,25 @@ import Foundation
 /// small parser replaces swift-argument-parser.
 public struct Arguments: Sendable {
     public var command: String
+    /// False when no command was typed, so `command` is the default.
+    public var commandGiven = false
     public var positionals: [String] = []
     public var options: [String: String] = [:]
     public var flags: Set<String> = []
 
     public static let commands: Set<String> = [
-        "now", "radar", "alerts", "prompt", "forecast", "outlook", "top", "lightning", "eta",
-        "setup", "auth", "config", "credits", "refresh", "help", "version"
+        "now", "weather", "radar", "alerts", "prompt", "forecast", "outlook", "top", "lightning", "eta", "scene",
+        "setup", "places", "auth", "config", "credits", "refresh", "help", "version"
     ]
 
     static let valueOptions: Set<String> = [
         "location", "units", "range", "palette", "renderer", "frames", "loops", "hours", "fail-on",
-        "radius", "format", "min-dbz", "interval", "width", "client-id", "client-secret"
+        "radius", "format", "min-dbz", "interval", "width", "client-id", "client-secret", "time", "size", "png", "layout", "at", "name"
     ]
 
     static let booleanFlags: Set<String> = [
         "json", "plain", "no-color", "help", "version", "still", "once", "follow", "watch", "quiet",
-        "ascii", "no-quip", "all", "no-lightning", "debug", "pretty"
+        "ascii", "no-quip", "all", "no-lightning", "debug", "pretty", "no-scene"
     ]
 
     static let shortOptions: [String: String] = [
@@ -84,6 +86,7 @@ public struct Arguments: Sendable {
             index += 1
         }
         if result.flags.contains("version"), !commandSet { result.command = "version" }
+        result.commandGiven = commandSet
         return result
     }
 

@@ -7,3 +7,4 @@ xcuserdata/
 DerivedData/
 .netrc
 /dist
+__pycache__/

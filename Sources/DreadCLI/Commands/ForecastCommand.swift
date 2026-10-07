@@ -24,9 +24,7 @@ enum ForecastCommand {
             for hour in hours {
                 lines.append("\(fmt.hour(hour.time)): \(fmt.temperature(hour.temperature, unit: true)), \(WeatherCondition.description(hour.weatherCode).lowercased()), \(fmt.percent(hour.precipitationProbability)) chance of rain, wind \(fmt.wind(speed: hour.windSpeed, gust: nil, direction: hour.windDirection)).")
             }
-            for day in days {
-                lines.append("\(fmt.weekday(day.date, short: false)): high \(fmt.temperature(day.high)), low \(fmt.temperature(day.low)), \(WeatherCondition.description(day.weatherCode).lowercased()), \(fmt.percent(day.precipitationProbability)) chance of rain.")
-            }
+            lines.append(contentsOf: DayRows.plain(days, fmt: fmt))
             ctx.write(lines)
         case .pretty:
             ctx.write(pretty(place: place, report: report, hours: hours, days: days, fetched: fetched, fmt: fmt, ctx: ctx, width: width))
@@ -56,7 +54,7 @@ enum ForecastCommand {
         let label = { (text: String) in "  " + s.paint(TextWidth.pad(text, to: 10), Theme.mist) }
         var lines = [""]
         let issued = fetched.storedAt.map { "OPEN-METEO · " + (fetched.isStale ? "stale, " : "") + "updated " + Formatter.ago($0, now: ctx.now) } ?? "OPEN-METEO"
-        lines.append(TextWidth.spread("  " + s.paint("FORECAST", Theme.porcelain, bold: true) + s.paint("  ·  ", Theme.faint) + place.name,
+        lines.append(TextWidth.spread(ctx.title("FORECAST", place: place),
                                       s.paint(issued, fetched.isStale ? Theme.advisory : Theme.faint), width: width))
         lines.append("")
         lines.append("  " + s.bold("NEXT \(hours.count) HOURS"))
@@ -89,27 +87,7 @@ enum ForecastCommand {
         lines.append("")
 
         lines.append("  " + s.bold("NEXT 7 DAYS") + s.paint("   low · high · chance of rain", Theme.faint))
-        let lows = days.compactMap(\.low), highs = days.compactMap(\.high)
-        let scaleLow = (lows.min() ?? 0).rounded(.down) - 1
-        let scaleHigh = (highs.max() ?? 1).rounded(.up) + 1
-        let span = 28
-        for day in days {
-            var bar = ""
-            for i in 0..<span {
-                let t = scaleLow + (Double(i) + 0.5) / Double(span) * (scaleHigh - scaleLow)
-                let inside = (day.low ?? .infinity) <= t && t <= (day.high ?? -.infinity)
-                bar += inside ? s.paint("━", temperatureColor(t, units: ctx.units)) : s.paint("─", Theme.faint)
-            }
-            let p = day.precipitationProbability ?? 0
-            var calendar = Calendar(identifier: .gregorian)
-            calendar.timeZone = fmt.timeZone
-            let name = calendar.isDate(day.date, inSameDayAs: ctx.now) ? "Today" : fmt.weekday(day.date)
-            lines.append("  " + TextWidth.pad(name, to: 6) + TextWidth.pad(ctx.icon(day.weatherCode), to: 3)
-                         + s.paint(TextWidth.pad(fmt.temperature(day.low), to: 5, align: .right), Theme.information) + " " + bar + " "
-                         + s.paint(TextWidth.pad(fmt.temperature(day.high), to: 5), Theme.warning)
-                         + s.paint(TextWidth.pad("\(Int(p))%", to: 5, align: .right), rainColor(p)) + "  "
-                         + s.paint(WeatherCondition.description(day.weatherCode), Theme.mist))
-        }
+        lines.append(contentsOf: DayRows.lines(days, fmt: fmt, ctx: ctx, barWidth: 28))
         if let today = days.first, let sunrise = today.sunrise, let sunset = today.sunset {
             lines.append("")
             lines.append("  " + s.paint("Sunrise \(fmt.time(sunrise)) · sunset \(fmt.time(sunset))", Theme.faint)
@@ -161,11 +139,15 @@ struct ForecastJSON: Encodable {
                  precipitationProbability: $0.precipitationProbability, precipitation: $0.precipitation,
                  condition: WeatherCondition.description($0.weatherCode), windSpeed: $0.windSpeed, windDirection: $0.windDirection)
         }
+        self.days = Self.days(days, timeZone: report.timeZone)
+    }
+
+    static func days(_ days: [WeatherReport.Day], timeZone: TimeZone) -> [Day] {
         let dateFormatter = DateFormatter()
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-        dateFormatter.timeZone = report.timeZone
+        dateFormatter.timeZone = timeZone
         dateFormatter.dateFormat = "yyyy-MM-dd"
-        self.days = days.map {
+        return days.map {
             Day(date: dateFormatter.string(from: $0.date), high: $0.high, low: $0.low,
                 condition: WeatherCondition.description($0.weatherCode), precipitationProbability: $0.precipitationProbability,
                 precipitation: $0.precipitation, uvIndex: $0.uvIndex, sunrise: $0.sunrise, sunset: $0.sunset)

@@ -1,6 +1,13 @@
 import Foundation
 import DreadcastKit
 import DreadTerminal
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#endif
 
 /// `dread prompt`: reads only the cache, so it is fast enough for every shell prompt.
 /// When the cache is stale it starts a single background refresh.

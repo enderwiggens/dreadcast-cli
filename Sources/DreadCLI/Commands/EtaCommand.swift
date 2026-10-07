@@ -115,7 +115,9 @@ enum EtaCommand {
             }
         }
         lines.append("")
-        lines.append("  " + s.paint("Timing guidance only, not a rainfall total. Storms that form or fade along the way aren’t foreseen.", Theme.faint))
+        for line in TextWidth.wrap("Timing guidance only, not a rainfall total. Storms that form or fade along the way aren’t foreseen.", width: width - 2) {
+            lines.append("  " + s.paint(line, Theme.faint))
+        }
         lines.append("")
         return lines
     }

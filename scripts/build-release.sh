@@ -26,5 +26,7 @@ if [[ -n "${DREADCAST_SIGNING_IDENTITY:-}" ]]; then
 fi
 
 lipo -info dist/dread
-(cd dist && ditto -c -k --keepParent dread "dread-$VERSION-macos.zip" && shasum -a 256 "dread-$VERSION-macos.zip" > "dread-$VERSION-macos.zip.sha256")
-echo "Built dist/dread-$VERSION-macos.zip"
+# A flat zip with only the binary: no parent folder, resource forks or extended attributes.
+ARCHIVE="dread-macos-universal.zip"
+(cd dist && rm -f "$ARCHIVE" && ditto -c -k --norsrc --noextattr --noqtn --noacl dread "$ARCHIVE" && shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256")
+echo "Built dist/$ARCHIVE"

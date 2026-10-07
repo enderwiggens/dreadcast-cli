@@ -2,9 +2,11 @@ import Foundation
 import DreadcastKit
 import DreadTerminal
 
-/// `dread`: current conditions, active alerts, the next two hours and recent lightning.
+/// `dread` (or `dread weather`): your scene, current conditions, active alerts, the
+/// next two hours, recent lightning and the next five days.
 enum NowCommand {
     static func run(_ ctx: Context) async throws -> ExitCode {
+        if ctx.arguments.has("all") { return await all(ctx) }
         let place = try await ctx.resolveLocation()
         async let weatherResult = ctx.weather(place)
         async let alertsResult = ctx.alerts(place)
@@ -25,19 +27,64 @@ enum NowCommand {
         return weather.value == nil ? .unavailable : .ok
     }
 
+    // MARK: Every place
+
+    /// `dread now --all`: one row per saved place.
+    static func all(_ ctx: Context) async -> ExitCode {
+        let places = ctx.config.places
+        guard !places.isEmpty else {
+            return ctx.fail("No saved places. Run `dread setup` or `dread places add <place>`.", code: .setupRequired)
+        }
+        let readings = await withTaskGroup(of: (Int, PlaceRows.Reading).self) { group in
+            for (i, saved) in places.enumerated() {
+                group.addTask {
+                    async let weather = ctx.weather(saved.place)
+                    async let alerts = ctx.alerts(saved.place)
+                    let nowcast = ctx.cached(Nowcast.self, key: "nowcast-\(Context.placeKey(saved.place))")
+                        .flatMap { ctx.now.timeIntervalSince($0.storedAt) < 600 ? $0.value : nil }
+                    return (i, PlaceRows.Reading(saved: saved, weather: await weather, alerts: await alerts, nowcast: nowcast))
+                }
+            }
+            var result = [PlaceRows.Reading?](repeating: nil, count: places.count)
+            for await (i, reading) in group { result[i] = reading }
+            return result.compactMap { $0 }
+        }
+        switch ctx.mode {
+        case .json:
+            ctx.writeJSON(NowAllJSON(readings, now: ctx.now))
+        case .plain:
+            ctx.write(readings.map { PlaceRows.plain($0, ctx: ctx) })
+        case .pretty:
+            let s = ctx.styler
+            let width = min(max(ctx.terminal.columns - 1, 80), 130)
+            var lines = ["", TextWidth.spread("  " + s.paint("PLACES", Theme.porcelain, bold: true) + s.paint("  ·  now", Theme.faint),
+                                              s.paint("OPEN-METEO · NWS", Theme.faint), width: width), ""]
+            lines.append(PlaceRows.header(styler: s, width: width))
+            lines += readings.enumerated().map { PlaceRows.line($1, ctx: ctx, width: width, highlighted: false, viewing: $0 == 0) }
+            lines += ["", "  " + s.paint("● your default · ", Theme.faint) + s.paint("dread now -l <name>", Theme.lamp) + s.paint(" for one place in full", Theme.faint), ""]
+            ctx.write(lines)
+        }
+        return readings.allSatisfy { $0.weather?.value == nil } ? .unavailable : .ok
+    }
+
     // MARK: Pretty
 
+    /// `width` and `rows` default to the terminal; the app passes its own. `sceneTime`
+    /// animates the banner in slow steps instead of a still frame.
     static func pretty(place: Place, weather: Fetched<WeatherReport>, alerts: Fetched<[WeatherAlert]>,
-                       lightning: Fetched<LightningSnapshot>?, nowcast: Nowcast?, ctx: Context) -> [String] {
+                       lightning: Fetched<LightningSnapshot>?, nowcast: Nowcast?, ctx: Context,
+                       width requested: Int? = nil, rows: Int? = nil, sceneTime: Double? = nil, wordmark: Double = 0) -> [String] {
         let s = ctx.styler
-        let width = min(max(ctx.terminal.columns - 2, 60), 86)
+        let width = requested ?? min(max(ctx.terminal.columns - 2, 60), 86)
         let report = weather.value
         let fmt = Formatter(units: ctx.units, timeZone: report?.timeZone ?? ctx.timeZone(for: place))
         var lines: [String] = [""]
+        let art = banner(place: place, alerts: alerts, report: report, ctx: ctx, width: width, rows: rows, sceneTime: sceneTime, wordmark: wordmark)
+        if !art.isEmpty { lines.append(contentsOf: art + [""]) }
 
         let brand = "  " + s.paint("DREADCAST", Theme.porcelain, bold: true) + s.paint("  ·  ", Theme.faint) + place.name
         let clock = s.paint(fmt.time(ctx.now) + " " + fmt.zoneAbbreviation(ctx.now), Theme.faint)
-        lines.append(TextWidth.spread(brand, clock, width: width))
+        if !ctx.inApp { lines.append(TextWidth.spread(brand, clock, width: width)) }
 
         if let report {
             let c = report.current
@@ -85,6 +132,12 @@ enum NowCommand {
         }
         if let report {
             lines.append(dayLine(report: report, fmt: fmt, ctx: ctx))
+            let days = DayRows.upcoming(report, from: ctx.now, count: 5)
+            if !days.isEmpty {
+                lines.append("")
+                lines.append("  " + s.bold("NEXT 5 DAYS") + s.paint("   low · high · chance of rain", Theme.faint))
+                lines.append(contentsOf: DayRows.lines(days, fmt: fmt, ctx: ctx, barWidth: 16))
+            }
         }
         lines.append("")
 
@@ -105,6 +158,27 @@ enum NowCommand {
         lines.append("")
         return lines
     }
+
+    /// Your scene as a strip above the readings. It is decorative, so it steps aside
+    /// for active or unknown alerts, plain output and short terminals.
+    static func banner(place: Place, alerts: Fetched<[WeatherAlert]>, report: WeatherReport?, ctx: Context, width: Int,
+                       rows: Int? = nil, sceneTime: Double? = nil, wordmark: Double = 0) -> [String] {
+        guard ctx.styler.mode >= .ansi256, !ctx.arguments.has("no-scene"), width >= 50,
+              (rows ?? ctx.terminal.rows) >= bannerMinimumRows else { return [] }
+        if place.isUnitedStates, alerts.value?.isEmpty != true { return [] }
+        let zone = report?.timeZone ?? ctx.timeZone(for: place)
+        guard ctx.config.sceneBanner else { return [] }
+        let scene = SceneCommand.configuredScene(ctx, timeZone: zone)
+        let period = ScenePeriod.at(ctx.now, timeZone: zone)
+        var strip = ScenePainter(scene: scene, period: period, time: sceneTime ?? 0, still: sceneTime == nil || ctx.terminal.reduceMotion,
+                                 moon: LunarPhase(at: ctx.now), layout: .strip)
+            .paint(width: width - 2, height: 20)
+        Wordmark.draw(on: &strip, opacity: wordmark)
+        return HalfBlockFrame(raster: strip).lines(styler: ctx.styler).map { "  " + $0 }
+    }
+
+    /// The banner adds eleven lines; below this height the readings would scroll away.
+    static let bannerMinimumRows = 38
 
     static func alertColor(_ alert: WeatherAlert) -> RGB {
         switch alert.level {
@@ -271,6 +345,10 @@ enum NowCommand {
         if let nowcast {
             lines.append("Rain: " + TextWidth.strippingANSI(nowcastSummary(nowcast, fmt: fmt, ctx: ctx)) + ".")
         }
+        if let report {
+            let days = DayRows.upcoming(report, from: ctx.now, count: 5)
+            if !days.isEmpty { lines.append(contentsOf: ["Next 5 days:"] + DayRows.plain(days, fmt: fmt)) }
+        }
         if let lightning {
             lines.append(TextWidth.strippingANSI(lightningLine(lightning, fmt: fmt, ctx: ctx)).trimmingCharacters(in: .whitespaces)
                 .replacingOccurrences(of: "Lightning   ", with: "Lightning: ") + ".")
@@ -284,6 +362,26 @@ enum NowCommand {
 
 // MARK: JSON
 
+struct NowAllJSON: Encodable {
+    struct Entry: Encodable {
+        let name: String
+        let isDefault: Bool
+        let now: NowJSON
+    }
+    let schema = "dreadcast.now-all/1"
+    let generatedAt: Date
+    let places: [Entry]
+
+    init(_ readings: [PlaceRows.Reading], now: Date) {
+        generatedAt = now
+        places = readings.enumerated().map { i, r in
+            Entry(name: r.saved.name, isDefault: i == 0,
+                  now: NowJSON(place: r.saved.place, weather: r.weather ?? .failure("Not loaded."), alerts: r.alerts ?? .failure("Not loaded."),
+                               lightning: nil, nowcast: r.nowcast, now: now))
+        }
+    }
+}
+
 struct NowJSON: Encodable {
     let schema = "dreadcast.now/1"
     let generatedAt: Date
@@ -293,6 +391,7 @@ struct NowJSON: Encodable {
     let alertsError: String?
     let nowcast: NowcastSummaryJSON?
     let lightning: LightningJSON?
+    let days: [ForecastJSON.Day]
     let stale: [String]
 
     init(place: Place, weather: Fetched<WeatherReport>, alerts: Fetched<[WeatherAlert]>,
@@ -304,6 +403,7 @@ struct NowJSON: Encodable {
         alertsError = alerts.value == nil ? alerts.error : nil
         self.nowcast = nowcast.map(NowcastSummaryJSON.init)
         self.lightning = lightning?.value.map { LightningJSON($0, now: now) }
+        days = weather.value.map { ForecastJSON.days(DayRows.upcoming($0, from: now, count: 5), timeZone: $0.timeZone) } ?? []
         var stale: [String] = []
         if weather.isStale { stale.append("conditions") }
         if alerts.isStale { stale.append("alerts") }

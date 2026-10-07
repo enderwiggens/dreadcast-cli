@@ -5,6 +5,8 @@ import DreadTerminal
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif canImport(Musl)
+import Musl
 #endif
 
 /// Reads one line from standard input, optionally without echo (for secrets).
@@ -30,6 +32,20 @@ enum Prompt {
 
 /// `dread setup`: choose a location and units.
 enum SetupCommand {
+    /// The first match, or the one the person picks when several match.
+    static func choose(_ places: [Place], ctx: Context, interactive: Bool) -> Place {
+        guard places.count > 1, interactive else { return places[0] }
+        let s = ctx.styler
+        ctx.write("")
+        for (index, candidate) in places.enumerated() {
+            ctx.write("  " + s.paint("\(index + 1)", Theme.lamp) + "  " + candidate.name + s.paint("  \(candidate.coordinate.formatted)", Theme.faint))
+        }
+        if let answer = Prompt.ask("\n  Which one? [1]: "), let choice = Int(answer), (1...places.count).contains(choice) {
+            return places[choice - 1]
+        }
+        return places[0]
+    }
+
     static func run(_ ctx: Context) async throws -> ExitCode {
         let s = ctx.styler
         let interactive = ctx.terminal.isInputTTY && ctx.mode != .json
@@ -44,17 +60,7 @@ enum SetupCommand {
             query = answer
         }
 
-        let places = try await PlaceService(http: ctx.http).resolve(query)
-        var place = places[0]
-        if places.count > 1, interactive {
-            ctx.write("")
-            for (index, candidate) in places.enumerated() {
-                ctx.write("  " + s.paint("\(index + 1)", Theme.lamp) + "  " + candidate.name + s.paint("  \(candidate.coordinate.formatted)", Theme.faint))
-            }
-            if let answer = Prompt.ask("\n  Which one? [1]: "), let choice = Int(answer), (1...places.count).contains(choice) {
-                place = places[choice - 1]
-            }
-        }
+        let place = choose(try await PlaceService(http: ctx.http).resolve(query), ctx: ctx, interactive: interactive)
 
         var config = ctx.config
         config.location = place
@@ -104,8 +110,12 @@ enum AuthCommand {
                 guard ctx.terminal.isInputTTY else {
                     return ctx.fail("Run this in a terminal, or set DREADCAST_XWEATHER_CLIENT_ID and DREADCAST_XWEATHER_CLIENT_SECRET.", code: .usage)
                 }
-                ctx.write(["", "  Lightning uses your own Xweather account (https://www.xweather.com/).",
-                           "  Credentials are stored in the login Keychain and never written to files or output.", ""])
+                #if canImport(Security)
+                let storage = "  Credentials are stored in the login Keychain and never written to files or output."
+                #else
+                let storage = "  Credentials are stored in \(Credentials.credentialsFile.path), readable only by you."
+                #endif
+                ctx.write(["", "  Lightning uses your own Xweather account (https://www.xweather.com/).", storage, ""])
                 id = Prompt.ask("  Client ID: ")
                 secret = Prompt.ask("  Client secret (hidden): ", secret: true)
             }
@@ -148,6 +158,27 @@ enum ConfigCommand {
             case "icons":
                 guard ["emoji", "ascii"].contains(value) else { return ctx.fail("icons: emoji or ascii.", code: .usage) }
                 config.icons = value
+            case "scene":
+                if value == "off" {
+                    // Hiding the art is its own setting; accept the obvious phrasing too.
+                    config.sceneBanner = false
+                    try ConfigStore.save(config, to: ctx.paths)
+                    ctx.write("  Saved scene-banner = off.")
+                    return .ok
+                } else if value == "daily" {
+                    config.scene = value
+                } else if case .scene(let scene) = SceneID.lookup(value) {
+                    config.scene = scene.rawValue
+                } else if case .pro(let title) = SceneID.lookup(value) {
+                    return ctx.fail("\(title) is a Pro scene in Dreadcast: Weather & Radar. Free scenes: \(SceneID.names).", code: .usage)
+                } else {
+                    return ctx.fail("scene: daily, or one of \(SceneID.names).", code: .usage)
+                }
+            case "scene-banner", "banner":
+                guard ["on", "off", "true", "false", "yes", "no", "1", "0"].contains(value) else {
+                    return ctx.fail("scene-banner: on or off.", code: .usage)
+                }
+                config.sceneBanner = ["on", "true", "yes", "1"].contains(value)
             default:
                 return ctx.fail("Unknown setting \(parts[1]).", code: .usage)
             }
@@ -162,13 +193,17 @@ enum ConfigCommand {
         let c = ctx.config
         ctx.write([
             "",
-            "  " + s.paint("Location", Theme.mist) + "   " + (c.location.map { "\($0.name) (\($0.coordinate.formatted))" } ?? s.paint("not set · dread setup", Theme.advisory)),
+            "  " + s.paint("Location", Theme.mist) + "   " + (c.location.map { "\($0.name) (\($0.coordinate.formatted))" } ?? s.paint("not set · dread setup", Theme.advisory))
+                + (c.places.count > 1 ? s.paint("  +\(c.places.count - 1) more: \(c.places.dropFirst().map(\.name).joined(separator: ", ")) · dread places", Theme.faint) : ""),
             "  " + s.paint("Units", Theme.mist) + "      " + c.units.rawValue,
             "  " + s.paint("Palette", Theme.mist) + "    " + c.palette.title,
             "  " + s.paint("Range", Theme.mist) + "      \(c.radarRange) mi",
             "  " + s.paint("Renderer", Theme.mist) + "   " + c.renderer + s.paint("  (detected: \(ctx.terminal.graphics.rawValue), \(ctx.terminal.colorMode))", Theme.faint),
             "  " + s.paint("Quips", Theme.mist) + "      " + (c.quips ? "on" : "off"),
             "  " + s.paint("Icons", Theme.mist) + "      " + c.icons,
+            "  " + s.paint("Scene", Theme.mist) + "      " + (c.scene == "daily" ? "daily (a different scene each day)"
+                : SceneID(rawValue: c.scene).map { "\($0.title) (\($0.rawValue))" } ?? c.scene),
+            "  " + s.paint("Banner", Theme.mist) + "     " + (c.sceneBanner ? "on" : "off") + s.paint("  (the scene on the Now tab and in dread now)", Theme.faint),
             "  " + s.paint("Lightning", Theme.mist) + "  " + (Credentials.source(environment: ctx.environment) ?? "not configured"),
             "",
             "  " + s.paint("Config  " + ctx.paths.configFile.path, Theme.faint),
@@ -205,8 +240,7 @@ enum CreditsCommand {
             lines.append("  " + s.bold(TextWidth.pad(name, to: 24)) + detail)
             lines.append("  " + String(repeating: " ", count: 24) + s.paint(url, Theme.faint))
         }
-        lines.append(contentsOf: ["", "  Requests go straight from this machine to each provider. dreadcast has no",
-                                  "  account, server or analytics. Locations are rounded to two decimals first.", ""])
+        lines.append(contentsOf: ["", "  Locations are rounded to two decimals (about 1 km) before they're stored or sent.", ""])
         ctx.write(lines)
         return .ok
     }

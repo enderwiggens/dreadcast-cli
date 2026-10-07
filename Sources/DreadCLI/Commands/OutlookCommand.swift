@@ -39,11 +39,11 @@ enum OutlookCommand {
 
     static func pretty(place: Place, solar: Fetched<SolarOutlook>, quakes: Fetched<EarthquakeSnapshot>,
                        aurora: Fetched<AuroraReading>, hazards: Fetched<HazardSummary>, weather: WeatherReport?,
-                       showers: [MeteorCalendar.Shower], fmt: Formatter, ctx: Context) -> [String] {
+                       showers: [MeteorCalendar.Shower], fmt: Formatter, ctx: Context, width requested: Int? = nil) -> [String] {
         let s = ctx.styler
-        let width = min(max(ctx.terminal.columns - 2, 64), 96)
+        let width = requested ?? min(max(ctx.terminal.columns - 2, 64), 96)
         var lines = [""]
-        lines.append(TextWidth.spread("  " + s.paint("OUTLOOK", Theme.porcelain, bold: true) + s.paint("  ·  ", Theme.faint) + place.name,
+        lines.append(TextWidth.spread(ctx.title("OUTLOOK", place: place),
                                       s.paint(fmt.day(ctx.now), Theme.faint), width: width))
         lines.append("")
 

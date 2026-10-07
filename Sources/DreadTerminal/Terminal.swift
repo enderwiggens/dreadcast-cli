@@ -3,6 +3,8 @@ import Foundation
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif canImport(Musl)
+import Musl
 #endif
 
 public enum ColorMode: Int, Comparable, Sendable {
@@ -113,8 +115,10 @@ public struct TerminalInfo: Sendable {
 func systemWrite(_ fd: Int32, _ pointer: UnsafeRawPointer, _ count: Int) -> Int {
     #if canImport(Darwin)
     return Darwin.write(fd, pointer, count)
-    #else
+    #elseif canImport(Glibc)
     return Glibc.write(fd, pointer, count)
+    #else
+    return Musl.write(fd, pointer, count)
     #endif
 }
 
@@ -158,14 +162,20 @@ public enum Console {
 /// Keys read in raw mode.
 public enum Key: Equatable, Sendable {
     case character(Character)
-    case up, down, left, right, enter, escape, tab, backspace, interrupt
+    case up, down, left, right, enter, escape, tab, backTab, backspace, interrupt
+    case pageUp, pageDown, home, end
     case focusIn, focusOut
 }
 
 /// Raw-mode input and full-screen state with guaranteed restoration on exit and signals.
 public final class RawTerminal: @unchecked Sendable {
     nonisolated(unsafe) private static var original: termios?
+    nonisolated(unsafe) private static var raw: termios?
     nonisolated(unsafe) private static var restoreBytes: [UInt8] = []
+    nonisolated(unsafe) private static var enterBytes: [UInt8] = []
+    nonisolated(unsafe) private static var resumedFlag: Int32 = 0
+    /// Keys already read but not yet returned, when several arrive together.
+    private var pending: [Key] = []
 
     /// - Parameter cleanup: extra bytes written on exit or interruption, such as deleting an inline image.
     public init?(alternateScreen: Bool, cleanup: String = "") {
@@ -183,11 +193,21 @@ public final class RawTerminal: @unchecked Sendable {
             }
         }
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw)
+        RawTerminal.raw = raw
         var restore = cleanup + TerminalControl.showCursor + TerminalControl.focusReportingOff + "\u{1B}[0m"
         if alternateScreen { restore += TerminalControl.alternateScreenOff }
         RawTerminal.restoreBytes = Array(restore.utf8)
-        Console.write((alternateScreen ? TerminalControl.alternateScreenOn : "") + TerminalControl.hideCursor + TerminalControl.focusReportingOn)
+        let enter = (alternateScreen ? TerminalControl.alternateScreenOn : "") + TerminalControl.hideCursor + TerminalControl.focusReportingOn
+        RawTerminal.enterBytes = Array(enter.utf8)
+        Console.write(enter)
         RawTerminal.installSignalHandlers()
+    }
+
+    /// True once after the process was suspended (Ctrl-Z) and resumed: the screen needs
+    /// a full redraw.
+    public func takeResumed() -> Bool {
+        defer { RawTerminal.resumedFlag = 0 }
+        return RawTerminal.resumedFlag != 0
     }
 
     deinit { restore() }
@@ -215,16 +235,81 @@ public final class RawTerminal: @unchecked Sendable {
         signal(SIGINT, handler)
         signal(SIGTERM, handler)
         signal(SIGHUP, handler)
+        signal(SIGTSTP, suspendHandler)
+    }
+
+    /// Ctrl-Z: hand the terminal back as it was, stop, and take it again on `fg`.
+    private static let suspendHandler: @convention(c) (Int32) -> Void = { _ in
+        if var original = RawTerminal.original { tcsetattr(STDIN_FILENO, TCSAFLUSH, &original) }
+        RawTerminal.restoreBytes.withUnsafeBufferPointer { if let base = $0.baseAddress { _ = systemWrite(STDOUT_FILENO, base, $0.count) } }
+        signal(SIGTSTP, SIG_DFL)
+        // The signal is blocked while its handler runs; unblock it so raising it stops
+        // the process now, instead of queueing it to re-enter this handler forever.
+        var mask = sigset_t()
+        #if canImport(Darwin)
+        mask = sigset_t(1) << sigset_t(SIGTSTP - 1)
+        #else
+        sigemptyset(&mask)
+        sigaddset(&mask, SIGTSTP)
+        #endif
+        sigprocmask(SIG_UNBLOCK, &mask, nil)
+        raise(SIGTSTP)
+        // Execution continues here after SIGCONT.
+        signal(SIGTSTP, RawTerminal.suspendHandler)
+        if var raw = RawTerminal.raw { tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) }
+        RawTerminal.enterBytes.withUnsafeBufferPointer { if let base = $0.baseAddress { _ = systemWrite(STDOUT_FILENO, base, $0.count) } }
+        RawTerminal.resumedFlag = 1
     }
 
     /// Waits up to `timeout` seconds for a key.
     public func readKey(timeout: Double) -> Key? {
+        if !pending.isEmpty { return pending.removeFirst() }
         var descriptor = pollfd(fd: STDIN_FILENO, events: Int16(POLLIN), revents: 0)
         guard poll(&descriptor, 1, Int32(timeout * 1000)) > 0 else { return nil }
-        var buffer = [UInt8](repeating: 0, count: 16)
+        var bytes = readAvailable()
+        // A lone Esc may be the start of a sequence split by a slow connection.
+        if bytes == [27], poll(&descriptor, 1, 30) > 0 { bytes += readAvailable() }
+        pending = Self.keys(bytes)
+        return pending.isEmpty ? nil : pending.removeFirst()
+    }
+
+    private func readAvailable() -> [UInt8] {
+        var buffer = [UInt8](repeating: 0, count: 64)
         let count = read(STDIN_FILENO, &buffer, buffer.count)
-        guard count > 0 else { return nil }
-        return Self.parse(Array(buffer[0..<count]))
+        return count > 0 ? Array(buffer[0..<count]) : []
+    }
+
+    /// Splits input into keys: several can arrive in one read when keys repeat or text
+    /// is pasted.
+    static func keys(_ bytes: [UInt8]) -> [Key] {
+        var keys: [Key] = []
+        var i = 0
+        while i < bytes.count {
+            var end = i + 1
+            if bytes[i] == 27, i + 1 < bytes.count {
+                if bytes[i + 1] == 91 {
+                    // CSI: parameters, then a final byte from @ to ~.
+                    end = i + 2
+                    while end < bytes.count, !(0x40...0x7E).contains(bytes[end]) { end += 1 }
+                    end = min(end + 1, bytes.count)
+                } else if bytes[i + 1] == 79, i + 2 < bytes.count {
+                    // SS3, which some terminals send for arrows, Home and End.
+                    end = i + 3
+                } else {
+                    // Alt with a key arrives as Esc then the key: keep just the key, so
+                    // Alt never reads as Esc.
+                    i += 1
+                    continue
+                }
+            } else if bytes[i] >= 0xC0 {
+                // The rest of a UTF-8 character.
+                let length = bytes[i] >= 0xF0 ? 4 : bytes[i] >= 0xE0 ? 3 : 2
+                end = min(i + length, bytes.count)
+            }
+            if let key = parse(Array(bytes[i..<end])) { keys.append(key) }
+            i = end
+        }
+        return keys
     }
 
     static func parse(_ bytes: [UInt8]) -> Key? {
@@ -236,14 +321,32 @@ public final class RawTerminal: @unchecked Sendable {
         case 127, 8: return .backspace
         case 27:
             if bytes.count == 1 { return .escape }
+            if bytes.count == 3, bytes[1] == 79 {
+                switch bytes[2] {
+                case 65: return .up
+                case 66: return .down
+                case 67: return .right
+                case 68: return .left
+                case 70: return .end
+                case 72: return .home
+                default: return nil
+                }
+            }
             if bytes.count >= 3, bytes[1] == 91 {
                 switch bytes[2] {
                 case 65: return .up
                 case 66: return .down
                 case 67: return .right
                 case 68: return .left
+                case 70: return .end
+                case 72: return .home
                 case 73: return .focusIn
                 case 79: return .focusOut
+                case 90: return .backTab
+                case 49 where bytes.count >= 4 && bytes[3] == 126: return .home
+                case 52 where bytes.count >= 4 && bytes[3] == 126: return .end
+                case 53 where bytes.count >= 4 && bytes[3] == 126: return .pageUp
+                case 54 where bytes.count >= 4 && bytes[3] == 126: return .pageDown
                 default: return nil
                 }
             }
