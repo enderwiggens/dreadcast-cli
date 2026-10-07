@@ -126,53 +126,6 @@ struct AppTests {
         #expect(bigger.contains(TerminalControl.clearScreen))
     }
 
-    // MARK: Wordmark
-
-    @Test func theWordmarkGreetsThenFades() {
-        #expect(Wordmark.opacity(after: 0) == 1)
-        #expect(Wordmark.opacity(after: 5.9) == 1)
-        #expect(Wordmark.opacity(after: 6.5) == 0.6)
-        #expect(Wordmark.opacity(after: 7.5) == 0.3)
-        #expect(Wordmark.opacity(after: 8) == 0)
-        #expect(Wordmark.opacity(after: 3600) == 0)
-    }
-
-    @Test func theWordmarkStaysOnItsPlate() {
-        let blank = Raster(width: 94, height: 20, fill: 0x336699)
-        var drawn = blank
-        Wordmark.draw(on: &drawn)
-        var changed = 0
-        for y in 0..<20 { for x in 0..<94 where drawn[x, y] != blank[x, y] {
-            changed += 1
-            #expect(x >= 1 && x <= 3 + Wordmark.width + 1 && y >= 1 && y <= 3 + Wordmark.height + 1)
-        } }
-        #expect(changed > 0)
-        // Nothing when faded out, or when the art is too small to hold it.
-        var faded = blank
-        Wordmark.draw(on: &faded, opacity: 0)
-        #expect(faded.pixels == blank.pixels)
-        var small = Raster(width: 40, height: 20, fill: 0x336699)
-        Wordmark.draw(on: &small)
-        #expect(small.pixels == Raster(width: 40, height: 20, fill: 0x336699).pixels)
-    }
-
-    @Test func theNowTabGreetsOnce() throws {
-        let ctx = try SceneTests.context()
-        func banner(_ view: NowView, at elapsed: Double) -> [String] {
-            let f = AppFrame(ctx: ctx, place: SceneTests.tampa, snapshot: Self.snapshot(), width: 100, height: 40, elapsed: elapsed)
-            guard case .lines(let lines) = view.body(f) else { return [] }
-            return lines.filter { $0.contains("▀") }
-        }
-        // Same scene time, with and without the greeting.
-        let greeting = banner(NowView(), at: 0)
-        let settled = NowView()
-        _ = banner(settled, at: -12)
-        let after = banner(settled, at: 0)
-        #expect(!greeting.isEmpty && !after.isEmpty)
-        #expect(greeting != after)
-        #expect(banner(settled, at: 0) == after)
-    }
-
     // MARK: Small windows and no color
 
     @Test func smallWindowsGetANote() {

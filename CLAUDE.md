@@ -99,7 +99,7 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
 | `DreadcastKitTests/ProviderTests` | Decoding every provider, PNG and radar math, nowcasts, places |
 | `DreadTerminalTests` | Terminal detection, key parsing, text width, frame diffing |
 | `DreadCLITests/SceneTests` | Every scene in every layout, size and period; banner and copy rules |
-| `DreadCLITests/AppTests`, `PlacesTests` | App views, tabs, header, wordmark, saved places and light monitoring |
+| `DreadCLITests/AppTests`, `PlacesTests` | App views, tabs, header, saved places and light monitoring |
 | `DreadCLITests/CommandTests` | Commands end to end through `Dread.dispatch`, with `StubProvider` serving fixtures: output, JSON shapes, exit codes, offline behavior, caching and request privacy |
 
 New commands and flags get a `CommandTests` case: `CommandTests.run([...], environment:
