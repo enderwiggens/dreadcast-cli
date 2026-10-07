@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - RainViewer manifest
+// MARK: - RainViewer manifest (radar outside the Dreadcast API's coverage)
 
 public struct RadarFrame: Codable, Sendable, Equatable {
     public let time: Date
@@ -13,7 +13,6 @@ public struct RadarManifest: Codable, Sendable {
     public let fetchedAt: Date
 
     /// The most recent `count` frames, oldest first.
-    public func recent(_ count: Int) -> [RadarFrame] { Array(frames.suffix(max(1, count))) }
 }
 
 public struct RainViewerService: Sendable {

@@ -105,7 +105,7 @@ enum MapChoice: String, CaseIterable, Sendable {
     }
 }
 
-/// What sits beside the radar's timeline on the Now tab, like the app's header forecast.
+/// What sits beside the radar's timeline on the Radar tab, like the app's header forecast.
 enum ForecastRow: String, CaseIterable, Sendable {
     case days, hourly, off
 

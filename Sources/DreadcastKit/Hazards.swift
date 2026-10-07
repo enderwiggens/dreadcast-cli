@@ -90,7 +90,7 @@ public struct HazardSnapshot: Equatable, Sendable {
     public let note: String?
 }
 
-/// Everything `dread outlook` and `dread top` report about hazards near one place.
+/// Everything `dread outlook` and the app's Systems tab report about hazards near one place.
 public struct HazardSummary: Codable, Sendable {
     public struct Item: Codable, Sendable {
         public let title: String

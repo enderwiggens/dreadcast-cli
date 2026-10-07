@@ -2,44 +2,9 @@ import Foundation
 import DreadcastKit
 import DreadTerminal
 
-/// The app's shared data and its Systems view: weather systems listed like processes,
-/// sorted by threat. Each source refreshes on its own cadence and fails independently.
-/// `dread top` opens the app (see DreadApp).
+/// `dread top [view]`, which opens the app on a view, and the Systems tab: weather
+/// systems listed like processes, sorted by threat.
 enum TopCommand {
-    /// Everything the dashboard shows. Copied out under the lock for each render.
-    struct Snapshot: Sendable {
-        var weather: Fetched<WeatherReport>?
-        var alerts: Fetched<[WeatherAlert]>?
-        var lightning: Fetched<LightningSnapshot>?
-        var nowcast: Fetched<Nowcast>?
-        var severe: Fetched<Context.SevereRisk>?
-        var tropical: Fetched<[TropicalStorm]>?
-        var fires: Fetched<[Wildfire]>?
-        var air: Fetched<AirQualityReading>?
-        var hazards: Fetched<HazardSummary>?
-        var quakes: Fetched<EarthquakeSnapshot>?
-        var solar: Fetched<SolarOutlook>?
-        var aurora: Fetched<AuroraReading>?
-        var lightningConfigured = false
-        /// Solar and aurora data load only once the Outlook tab has been opened.
-        var wantsOutlook = false
-        var lastFetch: [String: Date] = [:]
-        var inFlight: Set<String> = []
-    }
-
-    final class State: @unchecked Sendable {
-        private let lock = NSLock()
-        private var data = Snapshot()
-
-        func with<T>(_ body: (inout Snapshot) -> T) -> T {
-            lock.lock()
-            defer { lock.unlock() }
-            return body(&data)
-        }
-
-        var snapshot: Snapshot { with { $0 } }
-    }
-
     struct Row {
         let pid: Int
         let system: String
@@ -55,11 +20,6 @@ enum TopCommand {
         let priority: Int
     }
 
-    static let cadences: [(String, TimeInterval)] = [
-        ("weather", 600), ("alerts", 120), ("lightning", 60), ("nowcast", 300), ("severe", 900),
-        ("tropical", 900), ("fires", 300), ("air", 1800), ("hazards", 900), ("quakes", 300), ("solar", 600), ("aurora", 900)
-    ]
-
     static func run(_ ctx: Context) async throws -> ExitCode {
         let requested = ctx.arguments.positionals.first
         guard let tab = requested.map(AppTab.named) ?? .radar else {
@@ -71,45 +31,10 @@ enum TopCommand {
         return try await DreadApp.run(ctx, tab: tab)
     }
 
-    /// Starts every source that's due. `only` limits a place to some sources, for places
-    /// watched in the background.
-    static func schedule(ctx: Context, place: Place, state: State, only: Set<String>? = nil) {
-        let now = Date()
-        for (name, cadence) in cadences where only?.contains(name) ?? true {
-            let due = state.with { s -> Bool in
-                guard !s.inFlight.contains(name) else { return false }
-                if name == "lightning" && !s.lightningConfigured { return false }
-                if (name == "solar" || name == "aurora") && !s.wantsOutlook { return false }
-                guard now.timeIntervalSince(s.lastFetch[name] ?? .distantPast) >= cadence else { return false }
-                s.inFlight.insert(name)
-                return true
-            }
-            guard due else { continue }
-            Task.detached {
-                switch name {
-                case "weather": let v = await ctx.weather(place); state.with { $0.weather = v }
-                case "alerts": let v = await ctx.alerts(place); state.with { $0.alerts = v }
-                case "lightning": let v = await ctx.lightning(place); state.with { $0.lightning = v }
-                case "nowcast": let v = await ctx.nowcast(place); state.with { $0.nowcast = v }
-                case "severe": let v = await ctx.severeRisk(place); state.with { $0.severe = v }
-                case "tropical": let v = await ctx.tropical(); state.with { $0.tropical = v }
-                case "fires": let v = await ctx.wildfires(place); state.with { $0.fires = v }
-                case "air": let v = await ctx.airQuality(place); state.with { $0.air = v }
-                case "hazards": let v = await ctx.hazards(place); state.with { $0.hazards = v }
-                case "quakes": let v = await ctx.earthquakes(); state.with { $0.quakes = v }
-                case "solar": let v = await ctx.solar(); state.with { $0.solar = v }
-                case "aurora": let v = await ctx.aurora(place); state.with { $0.aurora = v }
-                default: break
-                }
-                state.with { $0.inFlight.remove(name); $0.lastFetch[name] = Date() }
-            }
-        }
-    }
-
     // MARK: Systems view
 
     /// Meters, the threat-sorted table and the selected row's details, sized to fit.
-    static func systemsLines(ctx: Context, place: Place, snapshot: Snapshot, selected requested: Int,
+    static func systemsLines(ctx: Context, place: Place, snapshot: LiveData.Snapshot, selected requested: Int,
                              width: Int, height: Int) -> (lines: [String], selected: Int) {
         let s = ctx.styler
         let zone = snapshot.weather?.value?.timeZone ?? ctx.timeZone(for: place)
@@ -147,7 +72,7 @@ enum TopCommand {
         return (Array(lines.prefix(height)), selected)
     }
 
-    static func meters(snapshot: Snapshot, fmt: Formatter, ctx: Context, width: Int) -> [String] {
+    static func meters(snapshot: LiveData.Snapshot, fmt: Formatter, ctx: Context, width: Int) -> [String] {
         let s = ctx.styler
         let report = snapshot.weather?.value
         let barWidth = 22
@@ -181,7 +106,7 @@ enum TopCommand {
         return zip(left, right).map { $0 + "  " + $1 }
     }
 
-    static func buildRows(snapshot: Snapshot, place: Place, fmt: Formatter, ctx: Context) -> [Row] {
+    static func buildRows(snapshot: LiveData.Snapshot, place: Place, fmt: Formatter, ctx: Context) -> [Row] {
         var rows: [Row] = []
         let here = place.coordinate
         func unavailable(_ pid: Int, _ system: String, _ fetched: (any FetchedError)?, priority: Int) {

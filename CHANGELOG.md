@@ -21,6 +21,17 @@
 - The scene no longer sits above the radar, so the radar has no competition. Scenes
   keep their own tab and still head `dread now`; `scene-banner` now applies to
   `dread now` only.
+- Releases run the tests first and stop if the tag, version and changelog don't agree;
+  they sign and notarize the macOS binary once Developer ID secrets are configured, and
+  take their notes from the changelog. CI and releases run an offline smoke test
+  against the built binaries, and workflow actions are pinned to commits.
+
+### Fixed
+
+- `dread setup` and `dread places` no longer repeat the coordinates for a place given
+  as coordinates.
+- Rain timing from MRMS radar uses four frames spread over the last half hour, as it
+  does with RainViewer, instead of three.
 
 ## 0.2.0 — 2026-10-07
 

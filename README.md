@@ -447,7 +447,8 @@ when you’re at a terminal.
 
 Bug reports and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers
 setup and what to expect in review, and [CLAUDE.md](CLAUDE.md) describes the
-architecture.
+architecture. Please report security problems privately, as described in
+[SECURITY.md](SECURITY.md).
 
 ```sh
 scripts/test.sh                  # the full suite; never touches the network

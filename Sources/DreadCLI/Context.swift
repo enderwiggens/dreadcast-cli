@@ -351,8 +351,9 @@ public final class Context: @unchecked Sendable {
         }
         let viewport = RadarViewport(center: place.coordinate, rangeMiles: Self.nowcastRangeMiles,
                                      width: Self.nowcastViewportSize, height: Self.nowcastViewportSize)
-        // Four frames about ten minutes apart give motion over half an hour, whichever source.
-        let loop = try? await radarLoop(for: place, viewport: viewport, frames: 4, spacing: 480)
+        // Four frames spread over the last half hour give the motion, whichever source:
+        // RainViewer's are ten minutes apart, MRMS's about four, so every other one.
+        let loop = try? await radarLoop(for: place, viewport: viewport, frames: 4, spacing: 420)
         let fields = loop?.fields ?? []
         guard fields.count >= 2 else {
             if let cached = cache.read(Nowcast.self, key: key) {

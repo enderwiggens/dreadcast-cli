@@ -25,7 +25,8 @@ there instead of `scripts/test.sh`).
 ## Tests
 
 `scripts/test.sh` runs everything; `scripts/test.sh --filter CommandTests` runs one
-suite. Provider decoding lives in `Tests/DreadcastKitTests`, terminal rendering in
+suite. `scripts/smoke-test.sh .build/release/dread` checks a built binary end to end
+without the network, as CI does for the static Linux build. Provider decoding lives in `Tests/DreadcastKitTests`, terminal rendering in
 `Tests/DreadTerminalTests`, and the app, scenes, saved places and commands in
 `Tests/DreadCLITests`. A behavior change should come with a test that fails without it;
 for a command, add a case to `CommandTests`, which runs the real command with provider
@@ -40,5 +41,6 @@ responses stubbed and checks its output and exit code.
   them (it needs Google Chrome and a Python with `pyte`).
 - Run `scripts/test.sh` before opening the pull request.
 
-See [CLAUDE.md](CLAUDE.md) for the architecture and conventions, and
-[TRADEMARKS.md](TRADEMARKS.md) before publishing a fork.
+See [CLAUDE.md](CLAUDE.md) for the architecture and conventions,
+[TRADEMARKS.md](TRADEMARKS.md) before publishing a fork, and [SECURITY.md](SECURITY.md)
+to report a vulnerability privately.

@@ -65,7 +65,7 @@ private extension JSONEncoder {
     }
 }
 
-/// Raw RainViewer tiles on disk. Frame paths are immutable, so entries stay
+/// Raw radar tiles on disk, from RainViewer and the Dreadcast API. Frames are immutable, so entries stay
 /// valid until the frame ages out; anything older than three hours is pruned.
 public final class DiskTileStore: RadarTileStore, @unchecked Sendable {
     let directory: URL

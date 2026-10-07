@@ -54,6 +54,7 @@ decoded into provider-neutral models before any command sees them.
 ```sh
 scripts/test.sh                   # run the tests (swift test on Linux)
 scripts/test.sh --filter CommandTests   # one suite
+scripts/smoke-test.sh .build/release/dread   # a built binary, end to end, offline
 swift run dread --location 33602  # open the app (dread now prints the quick look)
 swift build -c release            # optimized build
 scripts/build-basemap.py          # regenerate BasemapData.swift

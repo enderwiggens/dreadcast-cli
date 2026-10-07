@@ -89,7 +89,7 @@ enum SetupCommand {
         } else {
             ctx.write([
                 "",
-                "  " + s.paint("Saved", Theme.mint, bold: true) + "  \(place.name) " + s.paint("(\(place.coordinate.formatted))", Theme.faint) + " · \(config.units.rawValue)",
+                "  " + s.paint("Saved", Theme.mint, bold: true) + "  \(place.name)" + s.paint(place.coordinateNote, Theme.faint) + " · \(config.units.rawValue)",
                 "  " + s.paint("Coordinates are rounded to two decimals (about 1 km) before they are stored or sent.", Theme.faint),
                 "  " + s.paint("Next: ", Theme.mist) + "dread" + s.paint(" · ", Theme.faint) + "dread radar" + s.paint(" · ", Theme.faint) + "dread help",
                 ""
