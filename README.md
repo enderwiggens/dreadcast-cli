@@ -352,7 +352,7 @@ dread now --all --json | jq -r '.places[] | "\(.name) \(.now.conditions.temperat
 | `map` | `theme` (the scene’s map colors) or `graphite` |
 | `forecast` | `days`, `hourly` or `off`, beside the radar’s timeline |
 | `api-url` | a Dreadcast API, such as `https://api.dreadcast.app`, or `off` |
-| `radar-source` | `auto` (NOAA MRMS from the API in the contiguous US, RainViewer elsewhere) or `rainviewer` |
+| `radar-source` | `auto` (the Dreadcast API where it covers a place, RainViewer elsewhere) or `rainviewer` |
 | `quips` | `on` or `off` (one dry line under the quick look, never during alerts) |
 | `icons` | `emoji` or `ascii` |
 
@@ -404,7 +404,7 @@ Details: [docs/PRIVACY.md](docs/PRIVACY.md) and
 | Data | Provider |
 | --- | --- |
 | Conditions, forecasts, air quality, place search | [Open-Meteo](https://open-meteo.com/) (CC BY 4.0) |
-| Radar | [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) through the Dreadcast API in the contiguous US, when an API is set; [RainViewer](https://www.rainviewer.com/) elsewhere |
+| Radar | Through the Dreadcast API, when an API is set: [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) for the US, Puerto Rico and Guam, and [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) for Europe ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), resampled). [RainViewer](https://www.rainviewer.com/) elsewhere |
 | Alerts | [National Weather Service](https://www.weather.gov/) |
 | Severe outlook, tropical storms | NOAA SPC and NHC |
 | Wildfires | NIFC |

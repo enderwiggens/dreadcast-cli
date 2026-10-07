@@ -25,7 +25,7 @@ public struct Config: Codable, Sendable {
     public var map: String = "theme"
     /// Beside the radar's timeline on the Radar tab: days, hourly or off.
     public var forecast: String = "days"
-    /// auto: NOAA MRMS from the Dreadcast API for the contiguous US when an API is set,
+    /// auto: the Dreadcast API's radar where it covers a place, when an API is set, and
     /// RainViewer elsewhere; rainviewer: always RainViewer.
     public var radarSource: String = "auto"
     /// A Dreadcast API base URL, overriding the built-in one; "off" turns it off.

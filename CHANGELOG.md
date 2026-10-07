@@ -5,11 +5,14 @@
 ### Added
 
 - Radar from the Dreadcast API: with an API set (`dread config set api-url` or
-  `DREADCAST_API_URL`), places in the contiguous US get NOAA MRMS base reflectivity, a
-  scan every two minutes at about 1 km, read as measured values rather than colors.
-  Places elsewhere keep RainViewer, which is also the fallback when the API can't
-  provide a loop; `radar-source rainviewer` opts out. Late loops are labeled "radar
-  delayed". The radar footer, `dread eta` and `dread credits` name the source.
+  `DREADCAST_API_URL`), places it covers get radar read as measured values rather than
+  colors, about 1 km across: NOAA MRMS for the contiguous US, Alaska, Hawaii, Puerto Rico
+  and the Caribbean, and Guam, and EUMETNET OPERA for Europe. Places elsewhere, and
+  places inside a region that its radars don't reach (such as Italy), keep RainViewer,
+  which is also the fallback when the API can't provide a loop; `radar-source
+  rainviewer` opts out. Each place's loop is timed and labeled "radar delayed" by its
+  own region. The radar footer, `dread eta` and `dread credits` name the source, and
+  Europe's radar carries its CC BY 4.0 license.
 
 ### Changed
 
@@ -30,8 +33,11 @@
 
 - `dread setup` and `dread places` no longer repeat the coordinates for a place given
   as coordinates.
-- Rain timing from MRMS radar uses four frames spread over the last half hour, as it
-  does with RainViewer, instead of three.
+- Rain timing uses four frames from every radar source, instead of three from MRMS.
+- `dread radar --json` reports where the radar came from (`dreadcast` or `rainviewer`)
+  and adds a `credit`; `source` was always `rainviewer`.
+- `dread eta` says "Radar: NOAA MRMS" rather than "Source: NOAA MRMS radar", so a
+  credit with a license reads cleanly.
 
 ## 0.2.0 — 2026-10-07
 
