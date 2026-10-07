@@ -8,6 +8,9 @@ public enum Dreadcast {
     public static let repositoryURL = "https://github.com/enderwiggens/dreadcast-cli"
     /// NWS asks every client to identify itself with a way to reach its maintainers.
     public static let userAgent = "dreadcast-cli/\(version) (+\(repositoryURL))"
+    /// The Dreadcast API used when none is configured. Nil until the API is live; then
+    /// `https://api.dreadcast.app`, and US radar comes from it by default.
+    public static let apiBaseURL: URL? = nil
 }
 
 public enum DreadcastError: LocalizedError, Equatable, Sendable {

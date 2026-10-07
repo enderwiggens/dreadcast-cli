@@ -10,7 +10,8 @@ shells, never polls a provider faster than this table allows.
 | Place search | [Open-Meteo geocoding](https://open-meteo.com/en/docs/geocoding-api) | On setup | Worldwide | CC BY 4.0 |
 | Air quality and dust | [Open-Meteo air quality](https://open-meteo.com/en/docs/air-quality-api) (CAMS) | 30 min (dust 15 min) | Worldwide | CC BY 4.0; CAMS attribution |
 | ZIP lookup | [Zippopotam.us](https://zippopotam.us/) | Cached 30 days | United States | Free API |
-| Radar | [RainViewer Weather Maps API](https://www.rainviewer.com/api/weather-maps-api.html) | Manifest 5 min; tiles cached until they age out | Worldwide where radar exists | Free API for personal and non-commercial use; maximum zoom 7 |
+| Radar (contiguous US, when a Dreadcast API is set) | [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) base reflectivity through the Dreadcast API (`/v1/radar/latest`) | Manifest 1 min; tiles are immutable and cached until they age out | Contiguous US | Public domain (U.S. Government data); numeric tiles, zoom 3–8 |
+| Radar (everywhere else, and when the API is unavailable) | [RainViewer Weather Maps API](https://www.rainviewer.com/api/weather-maps-api.html) | Manifest 5 min; tiles cached until they age out | Worldwide where radar exists | Free API for personal and non-commercial use; maximum zoom 7 |
 | Active alerts | [National Weather Service](https://www.weather.gov/documentation/services-web-api) | 2 min | US and territories | Public domain; identifying User-Agent required |
 | Day 1 convective outlook | [NOAA SPC](https://www.spc.noaa.gov/products/outlook/) | 15 min | Contiguous US | Public domain |
 | Tropical cyclones | [NOAA NHC](https://www.nhc.noaa.gov/) | 15 min | Atlantic and eastern Pacific | Public domain |
@@ -32,6 +33,18 @@ Each source fails independently. When a refresh fails, Dreadcast CLI shows the l
 reading for a limited time and labels it stale with its age. When nothing usable is
 cached, it says the source is unavailable. Missing alert data is never reported as an
 all-clear, and `dread alerts` exits 3 rather than 0.
+
+Radar from the Dreadcast API is labeled "radar delayed" with its age once the newest
+scan is more than 10 minutes old, and isn't used after 3 hours. If the API can't
+provide a loop, the radar comes from RainViewer instead, credited as such.
+
+## Choosing the radar source
+
+`dread config set api-url <url>` (or `DREADCAST_API_URL`) points the CLI at a Dreadcast
+API. With one set, places in the contiguous US get NOAA MRMS radar from it; places
+elsewhere keep RainViewer. `dread config set radar-source rainviewer` uses RainViewer
+everywhere. Until the public API is live, no API is set by default, so nothing changes
+unless you set one.
 
 ## Adding a provider
 

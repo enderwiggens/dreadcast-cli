@@ -30,6 +30,16 @@ enum Prompt {
     }
 }
 
+/// Where radar comes from, for `dread config`.
+func radarSummary(_ ctx: Context) -> String {
+    let s = ctx.styler
+    if ctx.config.radarSource == "rainviewer" { return "RainViewer" + s.paint("  (radar-source rainviewer)", Theme.faint) }
+    guard let api = ctx.dreadcastAPI else {
+        return "RainViewer" + s.paint("  (NOAA MRMS from the Dreadcast API once an api-url is set)", Theme.faint)
+    }
+    return "NOAA MRMS in the contiguous US, RainViewer elsewhere" + s.paint("  (\(api.host ?? api.absoluteString))", Theme.faint)
+}
+
 /// `dread setup`: choose a location and units.
 enum SetupCommand {
     /// The first match, or the one the person picks when several match.
@@ -167,6 +177,16 @@ enum ConfigCommand {
             case "forecast":
                 guard let row = ForecastRow.named(value) else { return ctx.fail("forecast: days, hourly or off.", code: .usage) }
                 config.forecast = row.rawValue
+            case "radar-source":
+                guard ["auto", "rainviewer"].contains(value) else {
+                    return ctx.fail("radar-source: auto (NOAA MRMS from the Dreadcast API in the contiguous US, RainViewer elsewhere) or rainviewer.", code: .usage)
+                }
+                config.radarSource = value
+            case "api-url":
+                guard value == "off" || Context.apiURL(value) != nil else {
+                    return ctx.fail("api-url: an https URL, http://localhost for a development server, or off.", code: .usage)
+                }
+                config.apiURL = value == "off" ? "off" : Context.apiURL(value)!.absoluteString
             case "scene":
                 if value == "off" {
                     // Hiding the art is its own setting; accept the obvious phrasing too.
@@ -216,7 +236,8 @@ enum ConfigCommand {
             "  " + s.paint("Highlight", Theme.mist) + "  " + s.paint("●", ctx.highlight) + " " + (Highlight.named(c.highlight) ?? .automatic).title
                 + (Highlight.named(c.highlight) == .automatic ? s.paint("  (follows the scene)", Theme.faint) : ""),
             "  " + s.paint("Map", Theme.mist) + "        " + ((MapChoice.named(c.map) ?? .theme) == .theme ? "theme" + s.paint("  (follows the scene)", Theme.faint) : "graphite"),
-            "  " + s.paint("Forecast", Theme.mist) + "   " + (ForecastRow.named(c.forecast) ?? .days).rawValue + s.paint("  (beside the radar on the Now tab)", Theme.faint),
+            "  " + s.paint("Forecast", Theme.mist) + "   " + (ForecastRow.named(c.forecast) ?? .days).rawValue + s.paint("  (beside the radar's timeline)", Theme.faint),
+            "  " + s.paint("Radar", Theme.mist) + "      " + radarSummary(ctx),
             "  " + s.paint("Lightning", Theme.mist) + "  " + (Credentials.source(environment: ctx.environment) ?? "not configured"),
             "",
             "  " + s.paint("Config  " + ctx.paths.configFile.path, Theme.faint),
@@ -233,6 +254,7 @@ enum CreditsCommand {
         let s = ctx.styler
         let sources: [(String, String, String)] = [
             ("Open-Meteo", "Weather and air quality forecasts, geocoding. CC BY 4.0.", "https://open-meteo.com/"),
+            ("NOAA MRMS", "Radar for the contiguous US, through the Dreadcast API when one is set. Public domain.", "https://www.nssl.noaa.gov/projects/mrms/"),
             ("RainViewer", "Radar imagery. Free API for personal and non-commercial use.", "https://www.rainviewer.com/api.html"),
             ("National Weather Service", "Active alerts. US government work, public domain.", "https://www.weather.gov/documentation/services-web-api"),
             ("NOAA SPC", "Day 1 convective outlook.", "https://www.spc.noaa.gov/"),

@@ -13,6 +13,8 @@ final class RadarPanel: @unchecked Sendable {
         let frames: [Raster]
         let times: [Date]
         let loadedAt: Date
+        var credit = "RainViewer"
+        var delayed = false
     }
 
     /// What to draw: a frame of the loop, or a note while it loads or when it can't.
@@ -21,8 +23,9 @@ final class RadarPanel: @unchecked Sendable {
         case note(String, failed: Bool)
     }
 
-    /// RainViewer publishes a frame every ten minutes; failures wait a minute to retry.
-    static let reload: TimeInterval = 300
+    /// Reload every few minutes for new frames (MRMS scans every two, RainViewer every
+    /// ten); failures wait a minute to retry.
+    static let reload: TimeInterval = 180
     static let retry: TimeInterval = 60
 
     private let lock = NSLock()
@@ -99,31 +102,31 @@ final class RadarPanel: @unchecked Sendable {
         return "dBZ " + ramp + s.paint(" 18 → 65+", Theme.faint)
     }
 
-    /// How old the newest frame is.
+    /// How old the newest frame is, called out when the source says it's late.
     func age(_ f: AppFrame) -> String {
-        guard let latest = lock.withLock({ loop?.times.last }) else { return "" }
-        return "latest frame " + Formatter.ago(latest, now: Date())
+        guard let loop = lock.withLock({ loop }), let latest = loop.times.last else { return "" }
+        return (loop.delayed ? "radar delayed · " : "latest frame ") + Formatter.ago(latest, now: Date())
     }
+
+    /// Whose radar is showing, such as NOAA MRMS or RainViewer.
+    var credit: String { lock.withLock { loop?.credit } ?? "RainViewer" }
 
     private func load(_ f: AppFrame, key: String, width: Int, rows: Int) {
         lock.withLock { loading = key }
         let ctx = f.ctx, place = f.place, placeKey = Context.placeKey(f.place), range = range, palette = palette
         Task.detached { [weak self] in
-            let manifest = await ctx.manifest()
             var result: Loop?
-            var problem = manifest.error ?? "unknown error"
-            if let radar = manifest.value {
-                let viewport = RadarViewport(center: place.coordinate, rangeMiles: range, width: width, height: rows * 2)
+            var problem = "unknown error"
+            let viewport = RadarViewport(center: place.coordinate, rangeMiles: range, width: width, height: rows * 2)
+            do {
+                let loop = try await ctx.radarLoop(for: place, viewport: viewport, frames: 8)
                 let scene = RadarScene(viewport: viewport, palette: palette, minimumDBZ: 15, units: ctx.units,
                                        style: ctx.mapStyle, highlight: ctx.highlight)
                 let base = scene.base()
-                let fields = await RadarLoader(http: ctx.http, store: ctx.tiles).fields(manifest: radar, frames: radar.recent(8), viewport: viewport)
-                if fields.isEmpty {
-                    problem = "no frames right now"
-                } else {
-                    result = Loop(place: placeKey, key: key, scene: scene, frames: fields.map { scene.compose(base: base, field: $0) },
-                                  times: fields.map(\.time), loadedAt: Date())
-                }
+                result = Loop(place: placeKey, key: key, scene: scene, frames: loop.fields.map { scene.compose(base: base, field: $0) },
+                              times: loop.fields.map(\.time), loadedAt: Date(), credit: loop.credit, delayed: loop.delayed)
+            } catch {
+                problem = error.localizedDescription.trimmingCharacters(in: CharacterSet(charactersIn: "."))
             }
             guard let self else { return }
             self.lock.withLock {

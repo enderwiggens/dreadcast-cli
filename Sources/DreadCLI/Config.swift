@@ -25,6 +25,11 @@ public struct Config: Codable, Sendable {
     public var map: String = "theme"
     /// Beside the radar's timeline on the Now tab: days, hourly or off.
     public var forecast: String = "days"
+    /// auto: NOAA MRMS from the Dreadcast API for the contiguous US when an API is set,
+    /// RainViewer elsewhere; rainviewer: always RainViewer.
+    public var radarSource: String = "auto"
+    /// A Dreadcast API base URL, overriding the built-in one; "off" turns it off.
+    public var apiURL: String?
 
     /// The default place. Setting it to a saved place moves that place first; any other
     /// place replaces the default and keeps its name.
@@ -46,7 +51,7 @@ public struct Config: Codable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case version, location, places, units, palette, radarRange, renderer, quips, icons, scene, sceneBanner, highlight, map, forecast
+        case version, location, places, units, palette, radarRange, renderer, quips, icons, scene, sceneBanner, highlight, map, forecast, radarSource, apiURL
     }
 
     public init() {}
@@ -71,6 +76,8 @@ public struct Config: Codable, Sendable {
         highlight = (try? c.decode(String.self, forKey: .highlight)) ?? "auto"
         map = (try? c.decode(String.self, forKey: .map)) ?? "theme"
         forecast = (try? c.decode(String.self, forKey: .forecast)) ?? "days"
+        radarSource = (try? c.decode(String.self, forKey: .radarSource)) ?? "auto"
+        apiURL = try? c.decode(String.self, forKey: .apiURL)
         // Early builds saved `scene: off` to hide the banner.
         if scene == "off" {
             scene = "asteroid"
@@ -94,6 +101,8 @@ public struct Config: Codable, Sendable {
         try c.encode(highlight, forKey: .highlight)
         try c.encode(map, forKey: .map)
         try c.encode(forecast, forKey: .forecast)
+        try c.encode(radarSource, forKey: .radarSource)
+        try c.encodeIfPresent(apiURL, forKey: .apiURL)
     }
 
     public static let ranges = [15, 35, 75, 150, 300]
