@@ -17,7 +17,7 @@ public struct Config: Codable, Sendable {
     public var icons: String = "emoji"
     /// The scene for `dread scene` and the banners: a scene name, or daily to rotate.
     public var scene: String = "asteroid"
-    /// Show the scene as a banner on the Now tab and above `dread now`.
+    /// Show the scene as a banner above `dread now`.
     public var sceneBanner: Bool = true
     /// The accent color: auto follows the scene, as in the app, or a fixed highlight.
     public var highlight: String = "auto"

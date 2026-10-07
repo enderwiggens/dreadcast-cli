@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The Now tab no longer shows the scene above the radar, so the radar has no
+  competition: it's conditions, alerts and the next two hours, then radar. Scenes keep
+  their own tab and still head `dread now`; `scene-banner` now applies to `dread now`
+  only.
+
 ## 0.2.0 — 2026-10-07
 
 ### Added

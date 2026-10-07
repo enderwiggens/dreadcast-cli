@@ -150,8 +150,8 @@ enum Help {
             return """
             \(title) — the app
 
-              dread                        opens on Now: live radar under your scene,
-                                           conditions, alerts and the next two hours
+              dread                        opens on Now: live radar under the conditions,
+                                           alerts and the next two hours
               dread top [view]             opens on a view: now, radar, systems, forecast,
                                            alerts, outlook, lightning, scene or places (or 1–9)
               dread -l <name>              opens on a saved place
@@ -208,7 +208,7 @@ enum Help {
             the readings below them are real. Reduce Motion shows a still frame.
 
             `dread config set scene <name|daily>` picks your scene (Asteroid Watch by default);
-            `dread config set scene-banner off` hides it on the Now tab and in `dread now`.
+            `dread config set scene-banner off` hides it above `dread now`.
             """
         default:
             return """

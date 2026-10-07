@@ -71,9 +71,9 @@ struct AppTests {
         }
     }
 
-    /// Now is laid out like the Dreadcast window: scene, readings, radar, then the timeline
-    /// and coming days. The scene steps aside for alerts and short windows; without room
-    /// for radar, or without color, it falls back to the quick look's text.
+    /// Now is the readings, then radar filling the rest, then the timeline and coming
+    /// days. The scene stays on its own tab; without room for radar, or without color,
+    /// Now falls back to the quick look's text, still without the scene.
     @Test func nowIsTheRadarPanel() throws {
         let ctx = try SceneTests.context()
         func layout(_ snapshot: TopCommand.Snapshot, _ context: Context? = nil, height: Int)
@@ -85,34 +85,28 @@ struct AppTests {
             }
         }
         let full = layout(Self.snapshot(), height: 40)
-        #expect(full.above.filter { $0.contains("▀") }.count == NowView.sceneRows)
+        #expect(!full.above.contains { $0.contains("▀") })
         let readings = full.above.map(TextWidth.strippingANSI).joined(separator: "\n")
         #expect(readings.contains("75°F") && readings.contains("No active alerts") && readings.contains("Next 2 h"))
         let art = try #require(full.art)
-        #expect(art.rows >= NowView.minimumRadarRows)
         #expect(full.above.count + art.rows + full.below.count == 40)
+        #expect(art.rows >= 30)
         #expect(TextWidth.strippingANSI(full.below[0]).contains("◀"))
         #expect(TextWidth.strippingANSI(full.below[1]).contains("dBZ"))
 
-        // An alert takes the scene's place; the radar stays.
+        // Alerts sit above the radar, and unknown alerts never read as clear.
         let warned = layout(Self.snapshot(alerts: [SceneTests.warning()]), height: 40)
-        #expect(!warned.above.contains { $0.contains("▀") })
         #expect(warned.above.map(TextWidth.strippingANSI).joined().contains("TORNADO WARNING"))
         #expect(warned.art != nil)
-        // Unknown alerts never read as clear, and hide the scene too.
         let unknown = layout(Self.snapshot(alerts: nil), height: 40)
-        #expect(!unknown.above.contains { $0.contains("▀") })
         #expect(unknown.above.map(TextWidth.strippingANSI).joined().contains("not an all-clear"))
 
-        // Shorter windows drop the scene first, then the radar.
-        let short = layout(Self.snapshot(), height: 22)
-        #expect(short.art != nil && !short.above.contains { $0.contains("▀") })
-        #expect((short.art?.rows ?? 0) >= NowView.radarRowsWithScene)
+        // Short windows keep the radar until there's no room, then show text.
+        let short = layout(Self.snapshot(), height: 16)
+        #expect(short.art != nil)
         let tiny = layout(Self.snapshot(), height: 12)
         #expect(tiny.art == nil && tiny.lines.count <= 12 && tiny.lines.map(TextWidth.strippingANSI).joined().contains("75°F"))
-
-        let off = layout(Self.snapshot(), try SceneTests.context(banner: false), height: 40)
-        #expect(off.art != nil && !off.above.contains { $0.contains("▀") })
+        #expect(!tiny.lines.contains { $0.contains("▀") })
         let plain = layout(Self.snapshot(), try SceneTests.context(arguments: Arguments.parse(["--no-color"])), height: 40)
         #expect(plain.art == nil && plain.lines.map(TextWidth.strippingANSI).joined().contains("75°F"))
     }

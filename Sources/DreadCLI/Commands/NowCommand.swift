@@ -73,13 +73,13 @@ enum NowCommand {
     /// animates the banner in slow steps instead of a still frame.
     static func pretty(place: Place, weather: Fetched<WeatherReport>, alerts: Fetched<[WeatherAlert]>,
                        lightning: Fetched<LightningSnapshot>?, nowcast: Nowcast?, ctx: Context,
-                       width requested: Int? = nil, rows: Int? = nil, sceneTime: Double? = nil) -> [String] {
+                       width requested: Int? = nil, rows: Int? = nil, sceneTime: Double? = nil, scene: Bool = true) -> [String] {
         let s = ctx.styler
         let width = requested ?? min(max(ctx.terminal.columns - 2, 60), 86)
         let report = weather.value
         let fmt = Formatter(units: ctx.units, timeZone: report?.timeZone ?? ctx.timeZone(for: place))
         var lines: [String] = [""]
-        let art = banner(place: place, alerts: alerts, report: report, ctx: ctx, width: width, rows: rows, sceneTime: sceneTime)
+        let art = scene ? banner(place: place, alerts: alerts, report: report, ctx: ctx, width: width, rows: rows, sceneTime: sceneTime) : []
         if !art.isEmpty { lines.append(contentsOf: art + [""]) }
 
         let brand = "  " + s.paint("DREADCAST", Theme.porcelain, bold: true) + s.paint("  ·  ", Theme.faint) + place.name

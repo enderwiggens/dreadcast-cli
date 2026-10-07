@@ -212,7 +212,7 @@ enum ConfigCommand {
             "  " + s.paint("Icons", Theme.mist) + "      " + c.icons,
             "  " + s.paint("Scene", Theme.mist) + "      " + (c.scene == "daily" ? "daily (a different scene each day)"
                 : SceneID(rawValue: c.scene).map { "\($0.title) (\($0.rawValue))" } ?? c.scene),
-            "  " + s.paint("Banner", Theme.mist) + "     " + (c.sceneBanner ? "on" : "off") + s.paint("  (the scene on the Now tab and in dread now)", Theme.faint),
+            "  " + s.paint("Banner", Theme.mist) + "     " + (c.sceneBanner ? "on" : "off") + s.paint("  (the scene above dread now)", Theme.faint),
             "  " + s.paint("Highlight", Theme.mist) + "  " + s.paint("●", ctx.highlight) + " " + (Highlight.named(c.highlight) ?? .automatic).title
                 + (Highlight.named(c.highlight) == .automatic ? s.paint("  (follows the scene)", Theme.faint) : ""),
             "  " + s.paint("Map", Theme.mist) + "        " + ((MapChoice.named(c.map) ?? .theme) == .theme ? "theme" + s.paint("  (follows the scene)", Theme.faint) : "graphite"),
