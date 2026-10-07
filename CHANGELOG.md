@@ -12,6 +12,10 @@
   source, and a new alert shows in the header whichever tab is open. `dread top <view>`
   opens on a view by name or number. Ctrl-Z suspends the app and `fg` brings it back
   redrawn.
+- The app's home, Now, is laid out like the Mac app's window: the scene as a short
+  header, then conditions, alerts and the next two hours, then live radar filling the
+  rest, with its timeline and the coming days beneath. It falls back to text in small
+  windows and without 256 colors.
 - Saved places: `dread places add|remove|default|rename`, up to eight, each usable as
   `--location <name>`. The app watches all of them, alerts every 2 minutes and
   conditions every 10, and gives the place you're viewing every source. A Places tab
@@ -43,8 +47,8 @@
 - `dread` in an interactive terminal opens the app instead of printing and exiting. Shell
   profiles that ran `dread` at startup should use `dread now`.
 - `dread top`'s dashboard is now the app's Systems tab.
-- The README and docs describe dreadcast as a standalone companion to Dreadcast: Weather
-  & Radar.
+- The README and docs describe Dreadcast CLI as a standalone companion to DREADCAST
+  Weather & Radar, and use the app's naming.
 - PNG compression and decompression are now portable Swift, replacing Apple's
   Compression framework.
 - On Linux, `dread auth xweather` saves credentials to a file only you can read.

@@ -64,10 +64,10 @@ $BIN places add "${DREAD_DOCS_ABROAD:-London}" --name abroad --plain < /dev/null
 $T2P pty $OUT/places.png --cols 112 --rows 20 --wait 14 -- $BIN top places
 print "  $OUT/places.png"
 
-# The tour at the top of the README: Now, then Radar zoomed out, Systems, Places and
-# Scene. The first wait lets every source load.
+# The tour at the top of the README: Now with the radar zoomed out to 75 miles, then
+# Systems, Places and Scene. The first wait lets every source load.
 $T2P demo $OUT/demo.gif --cols 100 --rows 40 \
-  --script "w11,c7x0.6,k2,k-,w3,c14x0.4,k3,w0.3,c5x0.5,k9,w0.6,c5x0.5,k8,w0.5,c12x0.3" -- $BIN top now
+  --script "w8,k-,w4,c16x0.45,k3,w0.3,c5x0.5,k9,w0.6,c5x0.5,k8,w0.5,c10x0.3" -- $BIN top now
 print "  $OUT/demo.gif"
 
 # Every free scene at dusk.

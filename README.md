@@ -10,42 +10,45 @@
 [![macOS and Linux](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-5B7FA6)](#install)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-5B7FA6)](LICENSE)
 
-<img src="docs/images/demo.gif" alt="The dread app: the Now tab with the Asteroid Watch scene, animated radar, the Systems table, saved places and a full-screen scene" width="880">
+<img src="docs/images/demo.gif" alt="The dread app: live radar animating under the Asteroid Watch scene and current conditions, then the Systems table, saved places and a full-screen scene" width="880">
 
 </div>
 
 ```sh
 brew install enderwiggens/dreadcast/dreadcast
 dread setup     # a ZIP code, place name or lat,lon
-dread           # open the app
+dread           # live radar and conditions
 ```
 
-`dread` is a full-screen weather app for the terminal. Animated radar, every active
-warning in full, rain timing from radar motion and the places you care about, in one
-window that keeps itself up to date. It’s the open-source companion to
-**Dreadcast: Weather & Radar** for Mac, but it doesn’t need the app or an account, and
+`dread` puts live radar in your terminal, with the weather around it: animated radar
+centered on you, current conditions and the next two hours above it, every active
+warning in full, and a window that keeps itself up to date. It’s the open-source
+companion to **DREADCAST Weather & Radar** for Mac and is laid out the same way, a
+calm instrument panel with the radar first. It doesn’t need the app or an account, and
 it runs on macOS and Linux.
 
 ## Highlights
 
-- **One app, every view.** Now, Radar, Systems, Forecast, Alerts, Outlook, Lightning and
-  Scene, one keypress apart. Like `htop`, but for the sky.
-- **Real radar in your terminal.** The last eight frames, animated and redrawn in
-  Dreadcast’s palettes over a built-in map, as crisp pixel art. `dread radar` draws
-  full-resolution images in Kitty, Ghostty, iTerm2 and WezTerm.
+- **Radar first.** Open `dread` and the last eight radar frames fill the window,
+  animated, centered on you and redrawn in Dreadcast’s palettes over a built-in map.
+  Conditions and the next two hours sit above it and the coming days below, as in the
+  Mac app. `dread radar` draws full-resolution images in Kitty, Ghostty, iTerm2 and
+  WezTerm.
 - **Every warning, in full.** NWS watches, warnings and advisories with their official
   instructions. A new alert shows up in the header whichever tab you’re on.
 - **When will it rain?** `dread eta` measures how storms moved over the last four radar
   frames and tells you when rain reaches you, how heavy it gets and when it eases.
+- **Everything else, one keypress away.** Systems, Forecast, Alerts, Outlook, Lightning
+  and Scene tabs share the same live data. Like `htop`, but for the sky.
 - **All your places.** Save home, the cabin and your parents’ town. The app watches them
   all, and `--all` covers them in scripts.
 - **Honest by default.** Every reading shows its source and age. Stale data says so, and
   missing data is never reported as all clear.
 - **Made for scripts and prompts.** `--json` on every command, exit codes for alerts, and
   a prompt segment that returns in about 15 ms.
-- **Dreadcast’s scenes.** Asteroid Watch, Deep Trouble and six more, as animated pixel
-  art that follows your local time of day. They don’t describe the weather. The numbers
-  underneath do.
+- **Dreadcast’s scenes.** Asteroid Watch, Deep Trouble and six more sit above the radar
+  as animated pixel art that follows your local time of day. They don’t describe the
+  weather. The numbers underneath do.
 
 <table>
   <tr>
@@ -148,7 +151,7 @@ sudo cp .build/release/dread /usr/local/bin/
 
 ```sh
 dread setup              # where are you? ZIP code, place name or lat,lon
-dread                    # the app
+dread                    # live radar and conditions, in the app
 dread now                # a quick look, then back to your prompt
 dread radar              # animated radar
 dread alerts             # active warnings, in full
@@ -161,13 +164,17 @@ folders listed in [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## The app
 
-`dread` opens a full-screen app. Every tab reads the same live data, and each source
-refreshes on its own schedule, so switching tabs never waits on the network.
+`dread` opens on **Now**, laid out like the Mac app’s window: your scene as a short
+header, then conditions, alerts and the next two hours, then live radar filling the
+rest, with the radar’s timeline and the coming days beneath it. The scene steps aside
+during an alert, and in a short window the radar keeps its room first. Every tab reads
+the same live data, and each source refreshes on its own schedule, so switching tabs
+never waits on the network.
 
 | Key | Tab | What’s there |
 | :-: | --- | --- |
-| `1` | **Now** | Your scene, conditions, alerts, the next two hours and five days |
-| `2` | **Radar** | The animated loop. `space` pauses, `←` `→` step, `+` `−` change range |
+| `1` | **Now** | Live radar, with your scene, conditions, alerts and the next two hours above it |
+| `2` | **Radar** | The radar on its own, full screen, with its scale. `space` pauses, `←` `→` step |
 | `3` | **Systems** | Storm cells, alerts, fires, tropical storms and more, sorted by threat |
 | `4` | **Forecast** | Hourly charts and seven days |
 | `5` | **Alerts** | Every active alert in full, with what to do |
@@ -176,8 +183,9 @@ refreshes on its own schedule, so switching tabs never waits on the network.
 | `8` | **Scene** | The full scene, with live readings beneath it |
 | `9` | **Places** | Every saved place at a glance, once you’ve saved two |
 
-`Tab` and `Shift-Tab` move between tabs, `↑` `↓` scroll or select, `[` `]` switch
-places, `a` jumps to the most serious alert anywhere, `r` refreshes and `q` quits.
+`Tab` and `Shift-Tab` move between tabs, `+` `−` change the radar’s range, `↑` `↓`
+scroll or select, `[` `]` switch places, `a` jumps to the most serious alert anywhere,
+`r` refreshes and `q` quits.
 `Ctrl-Z` suspends it like any other program.
 
 `dread top radar` opens straight to a tab. When output is piped, or with `--plain` or
@@ -399,6 +407,9 @@ Details: [docs/PRIVACY.md](docs/PRIVACY.md) and
 </details>
 
 ## FAQ
+
+**Why “Dreadcast”?**
+Doppler Radar for Extreme Atmospheric Disturbances.
 
 **Does it work outside the US?**
 Conditions, forecasts, radar, rain timing and the outlook work worldwide. Official

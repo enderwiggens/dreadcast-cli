@@ -17,7 +17,7 @@ enum SceneCommand {
             switch SceneID.lookup(name) {
             case .scene(let scene): chosen = scene
             case .pro(let title):
-                return ctx.fail("\(title) is a Pro scene in Dreadcast: Weather & Radar. Free scenes: \(SceneID.names).", code: .usage)
+                return ctx.fail("\(title) is a Pro scene in the Dreadcast app. Free scenes: \(SceneID.names).", code: .usage)
             case .unknown:
                 return ctx.fail("Unknown scene \(name). Choose \(SceneID.names).", code: .usage)
             }

@@ -57,21 +57,114 @@ class ScrollingView: AppView {
 
 // MARK: Now
 
-/// The quick look: your scene, conditions, alerts, the next two hours and five days.
-final class NowView: ScrollingView {
-    override var interval: Double { 1 }
+/// Home, laid out like the Dreadcast window: the scene as a short header, the readings,
+/// then live radar filling the rest, with the timeline and the next few days beneath it.
+/// Without room for the radar, or without 256 colors, it shows the quick look's text.
+final class NowView: AppView {
+    let radar: RadarPanel
+    private var showingRadar = true
+    private var sceneCache: (key: String, lines: [String])?
 
-    override func content(_ f: AppFrame) -> [String] {
+    init(ctx: Context) { radar = RadarPanel(ctx: ctx) }
+
+    var interval: Double { 0.1 }
+    var hints: [(String, String)] { showingRadar ? [("+/−", "range"), ("space", radar.paused ? "play" : "pause")] : [] }
+
+    static let sceneRows = 6
+    static let minimumRadarRows = 8
+    /// Radar comes first: the scene shows only while the radar keeps at least this many rows.
+    static let radarRowsWithScene = 14
+    static let footerRows = 2
+
+    func body(_ f: AppFrame) -> AppBody {
         let snapshot = f.snapshot
         guard let weather = snapshot.weather, let alerts = snapshot.alerts ?? (f.place.isUnitedStates ? nil : .failure("")) else {
-            return Self.loading("conditions", f)
+            return .lines(ScrollingView.loading("conditions", f))
         }
-        // The banner appears once the body has room for it and everything below it.
-        return NowCommand.pretty(place: f.place, weather: weather, alerts: alerts,
-                                 lightning: snapshot.lightningConfigured ? snapshot.lightning : nil,
-                                 nowcast: snapshot.nowcast?.value, ctx: f.ctx, width: Self.textWidth(f, maximum: 96),
-                                 rows: f.height + 5, sceneTime: (f.elapsed / 4).rounded(.down) * 4)
+        guard f.ctx.styler.mode >= .ansi256 else { return text(f, weather: weather, alerts: alerts) }
+        let s = f.ctx.styler
+        let ctx = f.ctx, report = weather.value, fmt = f.fmt, width = f.width - 1
+        let lightning = snapshot.lightningConfigured ? snapshot.lightning : nil
+
+        var readings = [""] + NowCommand.conditionsLines(report: report, weather: weather, fmt: fmt, ctx: ctx, width: width)
+        readings += NowCommand.alertSummary(place: f.place, alerts: alerts, fmt: fmt, ctx: ctx, width: width)
+        if let report { readings.append(NowCommand.nextTwoHours(report: report, nowcast: snapshot.nowcast?.value, fmt: fmt, ctx: ctx)) }
+        if let lightning { readings.append(NowCommand.lightningLine(lightning, fmt: fmt, ctx: ctx)) }
+        readings.append("")
+
+        // The scene goes first when space is short; then the radar, for the text layout.
+        var scene = sceneLines(f, alerts: alerts, report: report)
+        var rows = f.height - scene.count - readings.count - Self.footerRows
+        if rows < Self.radarRowsWithScene, !scene.isEmpty {
+            scene = []
+            rows = f.height - readings.count - Self.footerRows
+        }
+        guard rows >= Self.minimumRadarRows else { return text(f, weather: weather, alerts: alerts) }
+        showingRadar = true
+        let picture = radar.picture(f, width: f.width, rows: rows)
+        let below = [
+            TextWidth.spread("  " + radar.timeline(f), days(report, f, room: width - 44), width: width),
+            TextWidth.spread("  " + radar.legend(f), s.paint(sources(f, lightning: lightning != nil) + "  " + radar.age(f), Theme.faint), width: width),
+        ]
+        switch picture {
+        case .art(let art):
+            return .pixels(art, above: scene + readings, below: below)
+        case .note(let note, let failed):
+            var waiting = [String](repeating: "", count: rows)
+            waiting[rows / 2] = TextWidth.pad("", to: max(0, (f.width - TextWidth.of(note)) / 2)) + s.paint(note, failed ? Theme.advisory : Theme.faint)
+            return .lines(scene + readings + waiting + below)
+        }
     }
+
+    /// The quick look as text, for small windows and terminals without 256 colors.
+    private func text(_ f: AppFrame, weather: Fetched<WeatherReport>, alerts: Fetched<[WeatherAlert]>) -> AppBody {
+        showingRadar = false
+        let snapshot = f.snapshot
+        let lines = NowCommand.pretty(place: f.place, weather: weather, alerts: alerts,
+                                      lightning: snapshot.lightningConfigured ? snapshot.lightning : nil,
+                                      nowcast: snapshot.nowcast?.value, ctx: f.ctx, width: ScrollingView.textWidth(f, maximum: 96),
+                                      rows: f.height + 5, sceneTime: (f.elapsed / 4).rounded(.down) * 4)
+        return .lines(Array(lines.prefix(f.height)))
+    }
+
+    /// The scene header, repainted only when it changes (every few seconds).
+    private func sceneLines(_ f: AppFrame, alerts: Fetched<[WeatherAlert]>, report: WeatherReport?) -> [String] {
+        let time = (f.elapsed / 4).rounded(.down) * 4
+        let key = "\(Context.placeKey(f.place)) \(f.width) \(time) \(alerts.value?.count ?? -1) \(ScenePeriod.at(f.ctx.now, timeZone: f.zone))"
+        if let cached = sceneCache, cached.key == key { return cached.lines }
+        let lines = NowCommand.sceneStrip(place: f.place, alerts: alerts, report: report, ctx: f.ctx,
+                                          width: f.width, rows: Self.sceneRows, sceneTime: time)
+        sceneCache = (key, lines)
+        return lines
+    }
+
+    /// As many of the coming days as fit in `room` cells: low–high and chance of rain.
+    private func days(_ report: WeatherReport?, _ f: AppFrame, room: Int) -> String {
+        guard let report else { return "" }
+        let s = f.ctx.styler, fmt = f.fmt
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = fmt.timeZone
+        var parts: [String] = []
+        for day in DayRows.upcoming(report, from: f.ctx.now, count: 5) {
+            let name = calendar.isDate(day.date, inSameDayAs: f.ctx.now) ? "Today" : fmt.weekday(day.date)
+            let rain = Int(day.precipitationProbability ?? 0)
+            let part = s.paint(name, Theme.mist) + " " + s.paint(fmt.temperature(day.low), Theme.information) + s.paint("–", Theme.faint)
+                + s.paint(fmt.temperature(day.high), Theme.warning) + " " + s.paint("\(rain)%", ForecastCommand.rainColor(Double(rain)))
+            guard TextWidth.of((parts + [part]).joined(separator: "   ")) <= room else { break }
+            parts.append(part)
+        }
+        return parts.joined(separator: "   ")
+    }
+
+    private func sources(_ f: AppFrame, lightning: Bool) -> String {
+        var names = ["OPEN-METEO"]
+        if f.place.isUnitedStates { names.append("NWS") }
+        names.append("RAINVIEWER")
+        if lightning { names.append("XWEATHER") }
+        return names.joined(separator: " · ")
+    }
+
+    func handle(_ key: Key, frame f: AppFrame) -> Bool { showingRadar && radar.handle(key) }
 }
 
 // MARK: Systems
@@ -220,133 +313,33 @@ final class LightningView: ScrollingView {
 
 // MARK: Radar
 
-/// The animated loop, loaded in the background the first time the tab opens.
-final class RadarView: AppView, @unchecked Sendable {
-    struct Loop {
-        let place: String
-        let key: String
-        let scene: RadarScene
-        let frames: [Raster]
-        let times: [Date]
-        let loadedAt: Date
-    }
+/// The radar on its own, as large as the window allows, with the scale and controls.
+final class RadarView: AppView {
+    let panel: RadarPanel
 
-    /// RainViewer publishes a frame every ten minutes; failures wait a minute to retry.
-    static let reload: TimeInterval = 300
-    static let retry: TimeInterval = 60
-
-    private let lock = NSLock()
-    private var loop: Loop?
-    private var loading: String?
-    private var failure: (key: String, message: String, at: Date)?
-    private var shown: String?
-    private let palette: RadarPalette
-    var range: Double
-    var index = 0
-    var paused = false
-    var lastStep = Date()
-    let reduceMotion: Bool
-
-    init(ctx: Context) {
-        palette = ctx.config.palette
-        range = Double(ctx.config.radarRange)
-        reduceMotion = ctx.terminal.reduceMotion
-        paused = reduceMotion
-    }
+    init(ctx: Context) { panel = RadarPanel(ctx: ctx) }
 
     var interval: Double { 0.1 }
-    var hints: [(String, String)] { [("space", paused ? "play" : "pause"), ("←/→", "step"), ("+/−", "range")] }
+    var hints: [(String, String)] { panel.hints }
 
     static let hudRows = 3
 
     func body(_ f: AppFrame) -> AppBody {
         if let note = ScrollingView.needsColor(f) { return .lines(note) }
-        let rows = max(4, f.height - Self.hudRows)
-        let place = Context.placeKey(f.place)
-        let key = "\(place) \(f.width)x\(rows)x\(range)"
-        let (current, pending, problem) = lock.withLock { (loop, loading, failure) }
-        // Load on first view and when the size or range changes, then keep the loop fresh.
-        // The previous loop stays on screen until the next one is ready.
-        let due = current?.key != key || Date().timeIntervalSince(current?.loadedAt ?? .distantPast) > Self.reload
-        let waiting = problem.map { $0.key == key && Date().timeIntervalSince($0.at) < Self.retry } ?? false
-        if due, pending == nil, !waiting { load(f, key: key, rows: rows) }
-        // Another place's loop is never shown, even while this one loads.
-        guard let current, current.place == place, !current.frames.isEmpty else {
-            let s = f.ctx.styler
-            let failed = problem.flatMap { $0.key == key ? $0.message : nil }
-            return .lines(["", "  " + (failed.map { s.paint("Radar is unavailable: \($0).", Theme.advisory) } ?? s.paint("Loading radar…", Theme.faint))])
-        }
-        // A new loop starts on its newest frame.
-        if shown != current.key + "\(current.loadedAt.timeIntervalSince1970)" {
-            shown = current.key + "\(current.loadedAt.timeIntervalSince1970)"
-            index = current.frames.count - 1
-            lastStep = Date()
-        }
-        if index >= current.frames.count { index = current.frames.count - 1 }
-        if !paused, Date().timeIntervalSince(lastStep) >= (index == current.frames.count - 1 ? 1.7 : 0.65) {
-            index = (index + 1) % current.frames.count
-            lastStep = Date()
-        }
-        let strikes = f.snapshot.lightning?.value?.current(at: f.ctx.now) ?? []
-        let art = HalfBlockFrame(raster: current.frames[index], overlays: current.scene.overlays(placeName: f.place.name, strikes: strikes, now: f.ctx.now))
-        return .pixels(art, below: hud(current, f))
-    }
-
-    private func hud(_ loop: Loop, _ f: AppFrame) -> [String] {
         let s = f.ctx.styler
-        let time = index < loop.times.count ? f.fmt.time(loop.times[index]) : "--"
-        let dots = (0..<loop.frames.count).map { s.paint("●", $0 == index ? Theme.lamp : Theme.faint) }.joined()
-        let ramp = [18.0, 24, 30, 36, 42, 48, 54, 60, 66].map { s.paint("█", RGB(hex: palette.rgb(dbz: $0))) }.joined()
-        let rangeText = "\(Int(f.ctx.units.distance(miles: range).rounded())) \(f.ctx.units.distanceUnit)"
-        return [
-            "  " + s.paint("◀ ", Theme.lamp) + time + " " + dots + s.paint(" ▶", Theme.lamp) + s.paint("   \(rangeText) · \(palette.title)\(paused ? " · paused" : "")", Theme.mist),
-            "  dBZ " + ramp + s.paint(" 18 → 65+", Theme.faint),
-            "  " + s.paint("RainViewer · Natural Earth · latest frame \(Formatter.ago(loop.times.last ?? f.ctx.now, now: Date()))", Theme.faint),
-        ]
-    }
-
-    private func load(_ f: AppFrame, key: String, rows: Int) {
-        lock.withLock { loading = key }
-        let ctx = f.ctx, place = f.place, placeKey = Context.placeKey(f.place), width = f.width, range = range, palette = palette
-        Task.detached { [weak self] in
-            let manifest = await ctx.manifest()
-            var result: Loop?
-            var problem = manifest.error ?? "unknown error"
-            if let radar = manifest.value {
-                let viewport = RadarViewport(center: place.coordinate, rangeMiles: range, width: width, height: rows * 2)
-                let scene = RadarScene(viewport: viewport, palette: palette, minimumDBZ: 15, units: ctx.units)
-                let base = scene.base()
-                let fields = await RadarLoader(http: ctx.http, store: ctx.tiles).fields(manifest: radar, frames: radar.recent(8), viewport: viewport)
-                if fields.isEmpty {
-                    problem = "no frames right now"
-                } else {
-                    result = Loop(place: placeKey, key: key, scene: scene, frames: fields.map { scene.compose(base: base, field: $0) },
-                                  times: fields.map(\.time), loadedAt: Date())
-                }
-            }
-            guard let self else { return }
-            self.lock.withLock {
-                if let result { self.loop = result; self.failure = nil } else { self.failure = (key, problem, Date()) }
-                self.loading = nil
-            }
+        switch panel.picture(f, width: f.width, rows: max(4, f.height - Self.hudRows)) {
+        case .note(let text, let failed):
+            return .lines(["", "  " + s.paint(text, failed ? Theme.advisory : Theme.faint)])
+        case .art(let art):
+            return .pixels(art, below: [
+                "  " + panel.timeline(f) + s.paint(" · \(panel.palette.title)", Theme.mist),
+                "  " + panel.legend(f),
+                "  " + s.paint("RainViewer · Natural Earth · " + panel.age(f), Theme.faint),
+            ])
         }
     }
 
-    func handle(_ key: Key, frame f: AppFrame) -> Bool {
-        let count = lock.withLock { loop?.frames.count ?? 0 }
-        switch key {
-        case .character(" "): paused.toggle()
-        case .right where count > 0: paused = true; index = (index + 1) % count
-        case .left where count > 0: paused = true; index = (index - 1 + count) % count
-        case .character("+"), .character("="), .character("-"), .character("_"):
-            let ranges = Config.ranges.map(Double.init)
-            let current = ranges.indices.min { abs(ranges[$0] - range) < abs(ranges[$1] - range) } ?? 1
-            let zoomIn = key == .character("+") || key == .character("=")
-            range = ranges[zoomIn ? max(0, current - 1) : min(ranges.count - 1, current + 1)]
-        default: return false
-        }
-        return true
-    }
+    func handle(_ key: Key, frame f: AppFrame) -> Bool { panel.handle(key) }
 }
 
 // MARK: Scene

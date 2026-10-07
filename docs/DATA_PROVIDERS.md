@@ -1,6 +1,6 @@
 # Data providers
 
-dreadcast requests public data directly from each provider. Each source has its own
+Dreadcast CLI requests public data directly from each provider. Each source has its own
 refresh interval in the shared cache, so running many commands, or a prompt in many
 shells, never polls a provider faster than this table allows.
 
@@ -28,7 +28,7 @@ shells, never polls a provider faster than this table allows.
 
 ## Failure behavior
 
-Each source fails independently. When a refresh fails, dreadcast shows the last good
+Each source fails independently. When a refresh fails, Dreadcast CLI shows the last good
 reading for a limited time and labels it stale with its age. When nothing usable is
 cached, it says the source is unavailable. Missing alert data is never reported as an
 all-clear, and `dread alerts` exits 3 rather than 0.

@@ -1,6 +1,6 @@
 # Third-party notices
 
-dreadcast includes or adapts the following material.
+Dreadcast CLI includes or adapts the following material.
 
 ## Natural Earth
 

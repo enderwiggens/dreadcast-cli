@@ -1,11 +1,11 @@
-# dreadcast contributor guide
+# Dreadcast CLI contributor guide
 
 This guide is for Claude, Codex and other AI-assisted tools, and for people.
 
 ## What this is
 
 `dread` is an open-source Swift command-line tool that shows weather and radar in the
-terminal. It is a standalone companion to Dreadcast: Weather & Radar, the Mac app: a
+terminal. It is a standalone companion to DREADCAST Weather & Radar, the Mac app: a
 separate project that shares no code with the app at build time and never requires it.
 
 ## Principles
@@ -77,6 +77,9 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
   rather than the terminal, and `ctx.inApp` drops titles the app header already shows.
   New views go in `App/AppViews.swift`, keep the one-shot command, and get a tab only
   when they're worth living in.
+- Radar comes first, as in the Mac app. Now is laid out like the app's window (scene
+  header, readings, live radar, timeline and days) and gives the radar its room before
+  the scene. Both radar tabs draw through `RadarPanel`.
 - Saved places (`Config.places`, first is the default) each get their own `State` in
   the app. Only the place being viewed loads every source; the rest are watched
   lightly (`DreadApp.sources`). Views reset per-place state in `placeChanged()`, and

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping. A few things keep dreadcast trustworthy:
+Thanks for helping. A few things keep Dreadcast trustworthy:
 
 - **Tests never touch the network.** Decoders are tested with inline fixtures, and
   commands run end to end against stubbed providers.

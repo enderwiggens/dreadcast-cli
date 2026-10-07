@@ -113,7 +113,7 @@ enum RefreshCommand {
         return result ?? .ok
     }
 
-    /// Skips the refresh when another dreadcast process is already running one.
+    /// Skips the refresh when another dread process is already running one.
     static func withLock(_ ctx: Context, _ body: () async -> ExitCode) async -> ExitCode? {
         let path = ctx.paths.cacheDirectory.appendingPathComponent("refresh.lock").path
         let fd = open(path, O_CREAT | O_RDWR, 0o600)

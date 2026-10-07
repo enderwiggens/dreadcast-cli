@@ -124,7 +124,7 @@ enum OutlookCommand {
         // Meteor showers with the moon and forecast cloud cover on the peak night.
         lines.append(section("METEOR SHOWERS", "", source: "American Meteor Society · Open-Meteo clouds", ctx: ctx, width: width))
         if showers.isEmpty {
-            lines.append("  " + s.paint("This edition of the AMS calendar has ended. Update dreadcast for new dates.", Theme.advisory))
+            lines.append("  " + s.paint("This edition of the AMS calendar has ended. Update dread for new dates.", Theme.advisory))
         }
         for shower in showers {
             let peak = shower.peakDate(in: fmt.timeZone)

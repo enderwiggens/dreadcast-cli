@@ -144,7 +144,8 @@ enum Help {
             return """
             \(title) — the app
 
-              dread                        opens on Now
+              dread                        opens on Now: live radar under your scene,
+                                           conditions, alerts and the next two hours
               dread top [view]             opens on a view: now, radar, systems, forecast,
                                            alerts, outlook, lightning, scene or places (or 1–9)
               dread -l <name>              opens on a saved place
@@ -209,8 +210,8 @@ enum Help {
             \(title) — weather and radar for the command line. \(styler.paint("There’s a lot in the forecast.", Theme.lamp, italic: true))
 
             \(styler.bold("Every day"))
-              dread                        the app: now, radar, systems, forecast, alerts,
-                                           outlook, lightning and your scene, one tab each
+              dread                        the app: live radar with conditions, plus systems,
+                                           forecast, alerts, outlook, lightning and scenes
               dread now                    a quick look: your scene, conditions, alerts, the
                                            next two hours and five days (also: dread weather)
               dread radar                  animated radar with lightning

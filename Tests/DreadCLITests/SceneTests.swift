@@ -100,7 +100,7 @@ struct SceneTests {
         try ConfigStore.save(config, to: Paths.resolve(environment: environment))
         let terminal = TerminalInfo(isOutputTTY: true, isInputTTY: true, columns: 100, rows: rows, colorMode: .truecolor,
                                     graphics: .none, program: nil, insideMultiplexer: false, reduceMotion: false)
-        return Context(arguments: arguments, environment: environment, terminal: terminal,
+        return Context(arguments: arguments, environment: environment, terminal: terminal, http: OfflineProtocol.http,
                        now: ISODate.parse("2026-10-06T23:30:00Z")!)
     }
 
