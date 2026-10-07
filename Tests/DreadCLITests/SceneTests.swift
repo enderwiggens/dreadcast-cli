@@ -19,7 +19,8 @@ struct SceneTests {
         #expect(SceneID.allCases.count == 8)
     }
 
-    @Test func followsTheAppsSchedule() throws {
+    /// Dark terminals get each scene's sunset by day and its night after dark.
+    @Test func scenesStayAfterDark() throws {
         let zone = try #require(TimeZone(identifier: "America/New_York"))
         func period(_ hour: Int) -> ScenePeriod {
             var calendar = Calendar(identifier: .gregorian)
@@ -28,12 +29,14 @@ struct SceneTests {
             return ScenePeriod.at(date, timeZone: zone)
         }
         #expect(period(4) == .night)
-        #expect(period(5) == .dawn)
-        #expect(period(8) == .day)
-        #expect(period(16) == .day)
-        #expect(period(17) == .dusk)
+        #expect(period(5) == .dusk)
+        #expect(period(12) == .dusk)
+        #expect(period(19) == .dusk)
         #expect(period(20) == .night)
-        #expect(ScenePeriod.night.next == .dawn)
+        #expect((0..<24).allSatisfy { ScenePeriod.shown.contains(period($0)) })
+        #expect(ScenePeriod.dusk.next == .night && ScenePeriod.night.next == .dusk)
+        #expect(ScenePeriod.named("sunset") == .dusk && ScenePeriod.named("Night") == .night)
+        #expect(ScenePeriod.named("day") == nil && ScenePeriod.named("dawn") == nil)
     }
 
     @Test func dailySceneHoldsAllDayAndChangesTomorrow() throws {

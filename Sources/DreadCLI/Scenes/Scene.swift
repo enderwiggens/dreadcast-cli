@@ -116,26 +116,34 @@ public enum SceneID: String, CaseIterable, Sendable {
     public static var names: String { allCases.map(\.rawValue).joined(separator: ", ") }
 }
 
-/// The four story stages. Each scene escalates from dawn to night, as in the app.
+/// The four stages the scenes are drawn in, escalating from dawn to night as in the app.
+/// Terminals here are dark, so the CLI shows only the last two: each scene's sunset
+/// through the day and its night after dark. Dawn and day stay drawable.
 public enum ScenePeriod: String, CaseIterable, Sendable {
     case dawn, day, dusk, night
 
+    /// The stages the CLI shows.
+    public static let shown: [ScenePeriod] = [.dusk, .night]
+
     public var title: String { rawValue.capitalized }
 
-    /// The app's automatic schedule, by local hour at the location.
+    /// Dusk from 5 AM until 8 PM, by local hour at the location, and night otherwise.
     public static func at(_ date: Date, timeZone: TimeZone) -> ScenePeriod {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
-        switch calendar.component(.hour, from: date) {
-        case 5..<8: return .dawn
-        case 8..<17: return .day
-        case 17..<20: return .dusk
-        default: return .night
-        }
+        return (5..<20).contains(calendar.component(.hour, from: date)) ? .dusk : .night
     }
 
+    /// A stage the CLI shows, by name; sunset is another name for dusk.
+    public static func named(_ name: String) -> ScenePeriod? {
+        let key = name.lowercased()
+        let period = key == "sunset" ? .dusk : ScenePeriod(rawValue: key)
+        return period.flatMap { shown.contains($0) ? $0 : nil }
+    }
+
+    /// The next stage the CLI shows.
     public var next: ScenePeriod {
-        let all = Self.allCases
-        return all[(all.firstIndex(of: self)! + 1) % all.count]
+        let index = Self.shown.firstIndex(of: self) ?? -1
+        return Self.shown[(index + 1) % Self.shown.count]
     }
 }

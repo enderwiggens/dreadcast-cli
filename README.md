@@ -47,7 +47,7 @@ it runs on macOS and Linux.
 - **Made for scripts and prompts.** `--json` on every command, exit codes for alerts, and
   a prompt segment that returns in about 15 ms.
 - **Dreadcast’s scenes.** Asteroid Watch, Deep Trouble and six more sit above the radar
-  as animated pixel art that follows your local time of day. They don’t describe the
+  as animated pixel art, at sunset by day and at night after dark. They don’t describe the
   weather. The numbers underneath do.
 
 <table>
@@ -262,9 +262,10 @@ else too, from radar to wildfires, so switching shows it in full within moments.
 
 ![The eight scenes at dusk](docs/images/scenes.png)
 
-Dreadcast’s free scenes, redrawn for the terminal. Each follows your local time of day,
-from a hint of trouble at dawn to the full situation at night. Your scene sits at the
-top of the Now tab whenever no alert is active; when one is, it steps aside.
+Dreadcast’s free scenes, redrawn for the terminal. They’re made for a dark screen, so
+each shows its sunset through the day and its night version from 8 PM, when the full
+situation arrives. Your scene sits at the top of the Now tab whenever no alert is
+active; when one is, it steps aside.
 
 As in the Mac app, a scene is a whole theme: it brings its own highlight color and its
 own map colors under the radar. Asteroid Watch glows amber over a dusky purple map; UAP

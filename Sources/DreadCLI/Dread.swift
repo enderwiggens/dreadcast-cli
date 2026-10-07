@@ -198,8 +198,7 @@ enum Help {
 
               dread scene                  your scene, animated, filling the terminal
               dread scene <name>           \(SceneID.allCases.map(\.rawValue).joined(separator: ", "))
-              --time <auto|dawn|day|dusk|night>
-                                           auto follows the local hour, as in the app
+              --time <auto|dusk|night>     auto shows sunset until 8 PM, then night
               --still                      one composed frame, inline
               --png <file>                 save the artwork as a PNG (--size 120x40,
                                            --layout window|panorama|strip, --at <seconds>)

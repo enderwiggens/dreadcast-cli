@@ -403,7 +403,12 @@ final class SceneView: AppView {
         case .right, .character("n"): scene = current.adjacent(1)
         case .left, .character("p"): scene = current.adjacent(-1)
         case .character("t"), .up, .down:
-            if let period = fixedPeriod { fixedPeriod = period == .night ? nil : period.next } else { fixedPeriod = .dawn }
+            // auto → dusk → night → auto
+            if let period = fixedPeriod {
+                fixedPeriod = period == ScenePeriod.shown.last ? nil : period.next
+            } else {
+                fixedPeriod = ScenePeriod.shown.first
+            }
         case .character(" "):
             if paused { offset = f.elapsed - frozen } else { frozen = f.elapsed - offset }
             paused.toggle()
