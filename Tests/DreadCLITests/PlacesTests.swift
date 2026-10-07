@@ -148,8 +148,8 @@ struct PlacesTests {
     // MARK: The app
 
     @Test func otherPlacesAreWatchedLightly() {
-        #expect(DreadApp.sources(for: 0, selected: 0, tab: .now, highlighted: 1) == nil)
-        #expect(DreadApp.sources(for: 1, selected: 0, tab: .now, highlighted: 1) == ["weather", "alerts"])
+        #expect(DreadApp.sources(for: 0, selected: 0, tab: .radar, highlighted: 1) == nil)
+        #expect(DreadApp.sources(for: 1, selected: 0, tab: .radar, highlighted: 1) == ["weather", "alerts"])
         #expect(DreadApp.sources(for: 1, selected: 0, tab: .places, highlighted: 1) == ["weather", "alerts", "nowcast"])
         #expect(DreadApp.sources(for: 2, selected: 0, tab: .places, highlighted: 1) == ["weather", "alerts"])
     }
@@ -158,7 +158,7 @@ struct PlacesTests {
         #expect(!AppTab.visible(places: 1).contains(.places))
         #expect(AppTab.visible(places: 3).last == .places)
         #expect(AppTab.named("places") == .places)
-        #expect(AppTab.named("9") == .places)
+        #expect(AppTab.named("8") == .places)
     }
 
     static func frame(_ ctx: Context, alertsAt index: Int?, selected: Int = 0, height: Int = 30) -> AppFrame {
@@ -174,15 +174,15 @@ struct PlacesTests {
 
     @Test func theHeaderNamesAlertsAtOtherPlaces() throws {
         let ctx = try Self.context(places: Self.saved)
-        let elsewhere = DreadApp.header(tab: .now, frame: Self.frame(ctx, alertsAt: 1), styler: ctx.styler).map(TextWidth.strippingANSI)
+        let elsewhere = DreadApp.header(tab: .radar, frame: Self.frame(ctx, alertsAt: 1), styler: ctx.styler).map(TextWidth.strippingANSI)
         #expect(elsewhere[0].contains("TORNADO WARNING · mom"))
         #expect(elsewhere[0].contains("home · 1 of 3"))
-        #expect(elsewhere[1].contains("9 Places 1") && !elsewhere[1].contains("Alerts 1"))
-        let here = DreadApp.header(tab: .now, frame: Self.frame(ctx, alertsAt: 0), styler: ctx.styler).map(TextWidth.strippingANSI)
+        #expect(elsewhere[1].contains("8 Places 1") && !elsewhere[1].contains("Alerts 1"))
+        let here = DreadApp.header(tab: .radar, frame: Self.frame(ctx, alertsAt: 0), styler: ctx.styler).map(TextWidth.strippingANSI)
         #expect(here[0].contains("TORNADO WARNING") && !here[0].contains("· mom"))
         #expect(here[1].contains("Alerts 1"))
-        let footer = DreadApp.footer(view: NowView(ctx: ctx), frame: Self.frame(ctx, alertsAt: 1), styler: ctx.styler).map(TextWidth.strippingANSI)
-        #expect(footer[1].contains("1–9 views") && footer[1].contains("[ ] place") && footer[1].contains("a go to alert"))
+        let footer = DreadApp.footer(view: RadarView(ctx: ctx), frame: Self.frame(ctx, alertsAt: 1), styler: ctx.styler).map(TextWidth.strippingANSI)
+        #expect(footer[1].contains("1–8 views") && footer[1].contains("[ ] place") && footer[1].contains("a go to alert"))
     }
 
     @Test func thePlacesTabListsAndChooses() throws {

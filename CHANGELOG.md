@@ -4,10 +4,14 @@
 
 ### Changed
 
-- The Now tab no longer shows the scene above the radar, so the radar has no
-  competition: it's conditions, alerts and the next two hours, then radar. Scenes keep
-  their own tab and still head `dread now`; `scene-banner` now applies to `dread now`
-  only.
+- Now and Radar are one tab, Radar, which the app opens on: conditions, alerts and the
+  next two hours, then live radar filling the window, with the timeline and coming days
+  beneath. It has the radar's controls (`space`, `←` `→`, `+` `−`). The tabs are
+  renumbered: 1 Radar, 2 Systems, 3 Forecast, 4 Alerts, 5 Outlook, 6 Lightning,
+  7 Scene and 8 Places. `dread top now` still opens Radar.
+- The scene no longer sits above the radar, so the radar has no competition. Scenes
+  keep their own tab and still head `dread now`; `scene-banner` now applies to
+  `dread now` only.
 
 ## 0.2.0 — 2026-10-07
 

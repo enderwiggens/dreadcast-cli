@@ -154,7 +154,7 @@ enum NowCommand {
             lines.append(contentsOf: alertLines(alert, fmt: fmt, ctx: ctx, width: width))
         }
         if list.count > limit {
-            lines.append("  " + s.paint("+\(list.count - limit) more · \(ctx.inApp ? "5 Alerts" : "dread alerts")", Theme.faint))
+            lines.append("  " + s.paint("+\(list.count - limit) more · \(ctx.inApp ? "\(AppTab.alerts.rawValue + 1) Alerts" : "dread alerts")", Theme.faint))
         }
         return lines
     }

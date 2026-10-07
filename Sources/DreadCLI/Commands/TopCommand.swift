@@ -62,7 +62,7 @@ enum TopCommand {
 
     static func run(_ ctx: Context) async throws -> ExitCode {
         let requested = ctx.arguments.positionals.first
-        guard let tab = requested.map(AppTab.named) ?? .now else {
+        guard let tab = requested.map(AppTab.named) ?? .radar else {
             return ctx.fail("Unknown view \(requested ?? ""). Choose \(AppTab.allCases.map { $0.title.lowercased() }.joined(separator: ", ")).", code: .usage)
         }
         guard ctx.mode == .pretty, ctx.terminal.isInputTTY, ctx.terminal.isOutputTTY else {

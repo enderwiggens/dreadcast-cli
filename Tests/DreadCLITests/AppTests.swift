@@ -18,18 +18,19 @@ struct AppTests {
         #expect(try SceneTests.context(arguments: Arguments.parse(["--pretty"])).opensApp == false)
     }
 
-    @Test func radarIsTheSecondTab() {
-        #expect(AppTab.allCases.prefix(3) == [.now, .radar, .systems])
+    @Test func radarIsHome() {
+        #expect(AppTab.allCases.prefix(3) == [.radar, .systems, .forecast])
+        #expect(AppTab.named("now") == .radar)
     }
 
     @Test func tabsHaveNamesAndNumbers() {
         #expect(AppTab.named("radar") == .radar)
         #expect(AppTab.named("Forecast") == .forecast)
-        #expect(AppTab.named("2") == .radar)
-        #expect(AppTab.named("3") == .systems)
-        #expect(AppTab.named("8") == .scene)
+        #expect(AppTab.named("1") == .radar)
+        #expect(AppTab.named("2") == .systems)
+        #expect(AppTab.named("7") == .scene)
         #expect(AppTab.named("top") == .systems)
-        #expect(AppTab.named("10") == nil)
+        #expect(AppTab.named("9") == nil)
         #expect(AppTab.named("tornado") == nil)
     }
 
@@ -44,8 +45,8 @@ struct AppTests {
         AppFrame(ctx: ctx, place: SceneTests.tampa, snapshot: snapshot, width: width, height: height, elapsed: 7)
     }
 
-    static func now(_ ctx: Context) -> NowView {
-        let view = NowView(ctx: ctx)
+    static func radar(_ ctx: Context) -> RadarView {
+        let view = RadarView(ctx: ctx)
         view.radar.fixture = { RadarPanel.basemapLoop($0, width: $1, rows: $2) }
         return view
     }
@@ -53,9 +54,7 @@ struct AppTests {
     /// Every view fits any body size with or without data; radar draws the basemap.
     @Test func viewsFitTheirBody() throws {
         let ctx = try SceneTests.context()
-        let radar = RadarView(ctx: ctx)
-        radar.panel.fixture = { RadarPanel.basemapLoop($0, width: $1, rows: $2) }
-        let views: [AppView] = [Self.now(ctx), radar, SystemsView(), ForecastView(), AlertsView(), OutlookView(), LightningView(), SceneView(ctx: ctx)]
+        let views: [AppView] = [Self.radar(ctx), SystemsView(), ForecastView(), AlertsView(), OutlookView(), LightningView(), SceneView(ctx: ctx)]
         for view in views {
             for snapshot in [TopCommand.Snapshot(), Self.snapshot(), Self.snapshot(alerts: [SceneTests.warning()])] {
                 for (width, height) in [(60, 7), (80, 19), (120, 40), (200, 60)] {
@@ -79,7 +78,7 @@ struct AppTests {
         func layout(_ snapshot: TopCommand.Snapshot, _ context: Context? = nil, height: Int)
             -> (above: [String], below: [String], art: HalfBlockFrame?, lines: [String]) {
             let c = context ?? ctx
-            switch Self.now(c).body(Self.frame(c, snapshot, width: 100, height: height)) {
+            switch Self.radar(c).body(Self.frame(c, snapshot, width: 100, height: height)) {
             case .pixels(let art, let above, let below): return (above, below, art, [])
             case .lines(let lines): return ([], [], nil, lines)
             }
@@ -113,7 +112,7 @@ struct AppTests {
 
     @Test func nowWaitsForRadarWithoutLosingItsPlace() throws {
         let ctx = try SceneTests.context()
-        guard case .lines(let lines) = NowView(ctx: ctx).body(Self.frame(ctx, Self.snapshot(), width: 100, height: 40)) else {
+        guard case .lines(let lines) = RadarView(ctx: ctx).body(Self.frame(ctx, Self.snapshot(), width: 100, height: 40)) else {
             Issue.record("expected text while radar loads"); return
         }
         #expect(lines.count == 40)
@@ -137,19 +136,19 @@ struct AppTests {
 
     @Test func theHeaderCountsAlerts() throws {
         let ctx = try SceneTests.context()
-        let calm = DreadApp.header(tab: .now, frame: Self.frame(ctx, Self.snapshot(), width: 120, height: 30), styler: ctx.styler)
+        let calm = DreadApp.header(tab: .radar, frame: Self.frame(ctx, Self.snapshot(), width: 120, height: 30), styler: ctx.styler)
             .map(TextWidth.strippingANSI)
         #expect(calm.count == DreadApp.headerRows)
-        #expect(calm[1].contains("1 Now") && calm[1].contains("8 Scene") && !calm[1].contains("Alerts 1"))
-        let warned = DreadApp.header(tab: .now, frame: Self.frame(ctx, Self.snapshot(alerts: [SceneTests.warning()]), width: 120, height: 30),
+        #expect(calm[1].contains("1 Radar") && calm[1].contains("7 Scene") && !calm[1].contains("Now") && !calm[1].contains("Alerts 1"))
+        let warned = DreadApp.header(tab: .radar, frame: Self.frame(ctx, Self.snapshot(alerts: [SceneTests.warning()]), width: 120, height: 30),
                                      styler: ctx.styler).map(TextWidth.strippingANSI)
         #expect(warned[0].contains("▲"))
         #expect(warned[1].contains("Alerts 1"))
         // Narrow terminals keep every tab's number and the active tab's name.
         let narrow = TextWidth.strippingANSI(DreadApp.tabs(active: .radar, alerts: [SceneTests.warning()], width: 60, styler: ctx.styler))
         #expect(TextWidth.of(narrow) <= 60)
-        #expect(narrow.contains("2 Radar") && narrow.contains("8") && narrow.contains(" 1") && !narrow.contains("Scene"))
-        #expect(narrow.contains("5 1"))
+        #expect(narrow.contains("1 Radar") && narrow.contains("7") && narrow.contains(" 2") && !narrow.contains("Scene"))
+        #expect(narrow.contains("4 1"))
     }
 
     /// The screen rewrites only the rows that changed between frames.
@@ -179,12 +178,13 @@ struct AppTests {
         #expect(!screen.tooSmall(columns: 50, rows: 10, styler: styler).isEmpty)
     }
 
+    /// Without color, the scene explains itself and radar falls back to the readings.
     @Test func pixelViewsExplainWithoutColor() throws {
         let ctx = try SceneTests.context(arguments: Arguments.parse(["--no-color"]))
         let f = Self.frame(ctx, Self.snapshot(), width: 100, height: 30)
-        for view in [RadarView(ctx: ctx), SceneView(ctx: ctx)] as [AppView] {
-            guard case .lines(let lines) = view.body(f) else { Issue.record("expected a note"); continue }
-            #expect(lines.joined().contains("256 colors"))
-        }
+        guard case .lines(let scene) = SceneView(ctx: ctx).body(f) else { Issue.record("expected a note"); return }
+        #expect(scene.joined().contains("256 colors"))
+        guard case .lines(let radar) = RadarView(ctx: ctx).body(f) else { Issue.record("expected text"); return }
+        #expect(radar.map(TextWidth.strippingANSI).joined().contains("75°F"))
     }
 }

@@ -4,11 +4,10 @@ import DreadTerminal
 
 /// The app's views, one tab each.
 enum AppTab: Int, CaseIterable, Sendable {
-    case now, radar, systems, forecast, alerts, outlook, lightning, scene, places
+    case radar, systems, forecast, alerts, outlook, lightning, scene, places
 
     var title: String {
         switch self {
-        case .now: "Now"
         case .radar: "Radar"
         case .systems: "Systems"
         case .forecast: "Forecast"
@@ -28,7 +27,9 @@ enum AppTab: Int, CaseIterable, Sendable {
     static func named(_ name: String) -> AppTab? {
         let key = name.lowercased()
         if let number = Int(key), let tab = AppTab(rawValue: number - 1) { return tab }
-        return allCases.first { $0.title.lowercased() == key } ?? (key == "top" ? .systems : nil)
+        // Radar was called Now before it took the radar in.
+        let aliases: [String: AppTab] = ["now": .radar, "home": .radar, "top": .systems]
+        return allCases.first { $0.title.lowercased() == key } ?? aliases[key]
     }
 }
 
@@ -124,12 +125,12 @@ enum DreadApp {
         for state in states { state.with { $0.lightningConfigured = configured } }
         let placesView = PlacesView()
         let views: [AppTab: AppView] = [
-            .now: NowView(ctx: ctx), .systems: SystemsView(), .radar: RadarView(ctx: ctx), .forecast: ForecastView(),
+            .radar: RadarView(ctx: ctx), .systems: SystemsView(), .forecast: ForecastView(),
             .alerts: AlertsView(), .outlook: OutlookView(), .lightning: LightningView(), .scene: SceneView(ctx: ctx),
             .places: placesView,
         ]
         let tabs = AppTab.visible(places: places.count)
-        var tab = tabs.contains(start) ? start : .now
+        var tab = tabs.contains(start) ? start : .radar
         var screen = AppScreen()
         let started = Date()
         var lastDraw = Date.distantPast
@@ -208,7 +209,7 @@ enum DreadApp {
                 redraw = view.handle(key, frame: frame())
                 if let chosen = placesView.takeChoice() {
                     switchPlace(to: chosen)
-                    show(.now)
+                    show(.radar)
                 }
             }
             if redraw { lastDraw = .distantPast }
