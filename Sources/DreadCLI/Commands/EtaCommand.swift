@@ -16,7 +16,7 @@ enum EtaCommand {
             ctx.writeJSON(EtaJSON(place: place, nowcast: nowcast, stale: fetched.isStale))
         case .plain:
             ctx.write([headline(nowcast, fmt: fmt, ctx: ctx, styled: false), motionLine(nowcast, fmt: fmt),
-                       "Confidence: \(nowcast.confidence.rawValue). Source: RainViewer radar, \(nowcast.frameTimes.count) frames."])
+                       "Confidence: \(nowcast.confidence.rawValue). Source: \(nowcast.source ?? "RainViewer") radar, \(nowcast.frameTimes.count) frames."])
         case .pretty:
             ctx.write(pretty(place: place, nowcast: nowcast, fetched: fetched, fmt: fmt, ctx: ctx))
         }
@@ -89,7 +89,7 @@ enum EtaCommand {
         let label = { (text: String) in "  " + s.paint(TextWidth.pad(text, to: 12), Theme.mist) }
         lines.append(label("Motion") + motionLine(n, fmt: fmt))
         if let first = n.frameTimes.first, let last = n.frameTimes.last {
-            lines.append(label("Frames") + "RainViewer \(fmt.time(first))–\(fmt.time(last))" + s.paint("  (\(n.frameTimes.count) frames, 10 min apart)", Theme.faint))
+            lines.append(label("Frames") + "\(n.source ?? "RainViewer") \(fmt.time(first))–\(fmt.time(last))" + s.paint("  (\(n.frameTimes.count) frames, about \(max(1, Int((last.timeIntervalSince(first) / Double(max(1, n.frameTimes.count - 1)) / 60).rounded()))) min apart)", Theme.faint))
         }
         let confidenceColor: RGB = n.confidence == .high ? Theme.mint : n.confidence == .medium ? Theme.advisory : Theme.warning
         var reasons: [String] = []

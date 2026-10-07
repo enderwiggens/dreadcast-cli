@@ -142,6 +142,7 @@ enum Help {
                 highlight auto|signal-blue|solar-mint|superstorm-lime|fallout-gold|
                           lamp-glow|ember-red|afterglow-pink|ai-violet
                 map theme|graphite · forecast days|hourly|off
+                radar-source auto|rainviewer · api-url <url>|off
 
             Each scene brings its own highlight and map colors, as in the Dreadcast app;
             highlight and map can be fixed instead.

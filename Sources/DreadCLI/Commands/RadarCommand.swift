@@ -36,29 +36,34 @@ enum RadarCommand {
             : Layout(columns: columns, rows: rows, pixelWidth: columns * 8, pixelHeight: rows * 16)
 
         Console.write(s.paint("  Loading radar…", Theme.faint) + "\r")
-        let manifestResult = await ctx.manifest()
-        guard let manifest = manifestResult.value else {
-            Console.write(TerminalControl.clearLine + "\r")
-            return ctx.fail("Radar is unavailable: \(manifestResult.error ?? "unknown error").", code: .unavailable)
-        }
         let showLightning = !ctx.arguments.has("no-lightning")
         let lightningFetch = showLightning ? await ctx.lightning(place) : nil
 
         var state = LoopState(range: range, frames: [], frameIndex: 0, paused: still)
+        // Whose radar this is, whether it's late, and the newest frame, from the last load.
+        var credit = "RainViewer", delayed = false, newest: String?
+        var problem = "unknown error"
         func load(range: Double) async -> (RadarScene, Raster, [Raster], [Date]) {
             let viewport = RadarViewport(center: place.coordinate, rangeMiles: range, width: layout.pixelWidth, height: layout.pixelHeight)
             let scene = RadarScene(viewport: viewport, palette: palette, minimumDBZ: minimumDBZ, units: ctx.units,
                                    style: ctx.mapStyle, highlight: ctx.highlight)
             let base = scene.base()
-            let fields = await RadarLoader(http: ctx.http, store: ctx.tiles)
-                .fields(manifest: manifest, frames: manifest.recent(frameCount), viewport: viewport)
-            return (scene, base, fields.map { scene.compose(base: base, field: $0) }, fields.map(\.time))
+            do {
+                let loop = try await ctx.radarLoop(for: place, viewport: viewport, frames: frameCount)
+                credit = loop.credit
+                delayed = loop.delayed
+                newest = loop.newestFrame
+                return (scene, base, loop.fields.map { scene.compose(base: base, field: $0) }, loop.fields.map(\.time))
+            } catch {
+                problem = error.localizedDescription.trimmingCharacters(in: CharacterSet(charactersIn: "."))
+                return (scene, base, [], [])
+            }
         }
 
         var (scene, _, frames, loadedTimes) = await load(range: range)
         Console.write(TerminalControl.clearLine + "\r")
         guard !frames.isEmpty else {
-            return ctx.fail("Radar frames are unavailable right now. Try again in a minute.", code: .unavailable)
+            return ctx.fail("Radar is unavailable: \(problem). Try again in a minute.", code: .unavailable)
         }
         var frameTimes = loadedTimes
         state.frames = frames
@@ -88,11 +93,11 @@ enum RadarCommand {
             if !strikes.isEmpty || lightningFetch?.value != nil {
                 legend += "    Lightning " + LightningAgeBand.allCases.map { s.paint($0.label.replacingOccurrences(of: " min", with: ""), Theme.lightning[$0.rawValue]) }.joined(separator: " ") + s.paint(" min", Theme.faint)
             }
-            let age = Formatter.ago(times.last ?? ctx.now, now: Date())
+            let age = (delayed ? "radar delayed · " : "latest frame ") + Formatter.ago(times.last ?? ctx.now, now: Date())
             return [
                 "  " + s.paint("◀ ", ctx.highlight) + time + " " + dots + s.paint(" ▶", ctx.highlight) + keys,
                 legend,
-                "  " + s.paint("RainViewer · Natural Earth · latest frame \(age)", Theme.faint)
+                "  " + s.paint("\(credit) · Natural Earth · \(age)", Theme.faint)
             ]
         }
 
@@ -209,11 +214,11 @@ enum RadarCommand {
                 if once, advances >= state.frames.count - 1 { return .ok }
             }
 
-            // New frames arrive about every ten minutes.
-            if Date().timeIntervalSince(lastManifestCheck) > 300 {
+            // New frames arrive every two minutes (MRMS) to ten (RainViewer).
+            if Date().timeIntervalSince(lastManifestCheck) > 120 {
                 lastManifestCheck = Date()
                 ctx.refreshClock()
-                if let fresh = await ctx.manifest().value, fresh.frames.last?.path != manifest.frames.last?.path {
+                if let fresh = await ctx.newestRadarFrame(for: place), fresh != newest {
                     let reloaded = await load(range: state.range)
                     if !reloaded.2.isEmpty {
                         scene = reloaded.0
@@ -280,7 +285,7 @@ enum RadarCommand {
         if let mph = n.motionMPH, let bearing = n.motionBearing {
             lines.append("Echoes are moving \(Compass.word(bearing)) at \(fmt.speed(mph: mph)).")
         }
-        lines.append("Source: RainViewer.")
+        lines.append("Source: \(n.source ?? "RainViewer").")
         ctx.write(lines)
         return .ok
     }

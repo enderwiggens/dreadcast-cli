@@ -12,6 +12,8 @@ import DreadTerminal
 final class StubProvider: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var routes: [String: (status: Int, body: String)] = [:]
     nonisolated(unsafe) static var requests: [URLRequest] = []
+    /// Served for routes whose body is empty, such as PNG tiles.
+    nonisolated(unsafe) static var tileBody: Data?
     static let lock = NSLock()
 
     static func reset(_ routes: [String: (Int, String)]) {
@@ -28,9 +30,9 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
 
     override func startLoading() {
         let url = request.url!
-        let route = Self.lock.withLock { () -> (status: Int, body: String)? in
+        let (route, binary) = Self.lock.withLock { () -> ((status: Int, body: String)?, Data?) in
             Self.requests.append(request)
-            return Self.routes[url.host ?? ""]
+            return (Self.routes[url.host ?? ""], Self.tileBody)
         }
         guard let route else {
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
@@ -39,7 +41,7 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
         let response = HTTPURLResponse(url: url, statusCode: route.status, httpVersion: "HTTP/1.1",
                                        headerFields: ["Content-Type": "application/json"])!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data(route.body.utf8))
+        client?.urlProtocol(self, didLoad: route.body.isEmpty ? (binary ?? Data()) : Data(route.body.utf8))
         client?.urlProtocolDidFinishLoading(self)
     }
 

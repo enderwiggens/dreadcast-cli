@@ -243,6 +243,101 @@ public final class Context: @unchecked Sendable {
         }
     }
 
+    // MARK: Radar sources
+
+    /// The Dreadcast API: DREADCAST_API_URL, then `dread config set api-url`, then the
+    /// built-in default (none until the API is live). "off" turns it off.
+    public var dreadcastAPI: URL? {
+        if let raw = environment["DREADCAST_API_URL"] ?? config.apiURL {
+            return Self.apiURL(raw)
+        }
+        return Dreadcast.apiBaseURL
+    }
+
+    /// An API base URL: HTTPS, or HTTP to a local development server.
+    static func apiURL(_ raw: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, trimmed != "off", var components = URLComponents(string: trimmed),
+              let host = components.host?.lowercased(), !host.isEmpty, components.user == nil, components.password == nil,
+              components.query == nil, components.fragment == nil else { return nil }
+        let loopback = host == "localhost" || host == "127.0.0.1"
+        guard components.scheme == "https" || (components.scheme == "http" && loopback) else { return nil }
+        while components.path.hasSuffix("/") { components.path.removeLast() }
+        return components.url
+    }
+
+    public enum RadarSource: Equatable, Sendable {
+        case dreadcast(URL)
+        case rainviewer
+    }
+
+    /// NOAA MRMS from the Dreadcast API for the contiguous US when an API is set and not
+    /// turned off; RainViewer everywhere else.
+    public func radarSource(for place: Place) -> RadarSource {
+        guard config.radarSource != "rainviewer", let api = dreadcastAPI,
+              DreadcastRadarManifest.covers(place.coordinate, bounds: DreadcastRadarManifest.contiguousUS) else { return .rainviewer }
+        return .dreadcast(api)
+    }
+
+    public func dreadcastRadar(_ api: URL) async -> Fetched<DreadcastRadarManifest> {
+        let http = self.http, now = self.now
+        return await load(key: "dreadcast-radar-\(api.host ?? "api")", maxAge: 60, staleLimit: 7200) {
+            try await DreadcastRadarService(http: http, baseURL: api).latest(now: now)
+        }
+    }
+
+    /// A radar loop and where it came from.
+    public struct RadarLoop: Sendable {
+        public let fields: [ReflectivityField]
+        /// The radar credit to show, such as "NOAA MRMS" or "RainViewer".
+        public let credit: String
+        /// The newest scan is late; show the loop with its age.
+        public let delayed: Bool
+        /// The newest frame's identity, to notice when another arrives.
+        public let newestFrame: String?
+    }
+
+    /// The last `count` frames for a place, at least `spacing` seconds apart, from the
+    /// place's radar source. If the Dreadcast API can't provide them, RainViewer does.
+    public func radarLoop(for place: Place, viewport: RadarViewport, frames count: Int, spacing: TimeInterval = 0) async throws -> RadarLoop {
+        let loader = RadarLoader(http: http, store: tiles)
+        if case .dreadcast(let api) = radarSource(for: place) {
+            let fetched = await dreadcastRadar(api)
+            if let manifest = fetched.value, manifest.isUsable(at: now) {
+                let frames = Self.pick(manifest.frames, time: \.observedAt, count: count, spacing: spacing)
+                let fields = await loader.fields(dreadcast: manifest, frames: frames, viewport: viewport)
+                if !fields.isEmpty {
+                    return RadarLoop(fields: fields, credit: "NOAA MRMS", delayed: manifest.isDelayed(at: now), newestFrame: manifest.frames.last?.id)
+                }
+            }
+        }
+        let manifest = await self.manifest()
+        guard let radar = manifest.value else { throw DreadcastError.unavailable(manifest.error ?? "Radar is unavailable.") }
+        let frames = Self.pick(radar.frames, time: \.time, count: count, spacing: spacing)
+        let fields = await loader.fields(manifest: radar, frames: frames, viewport: viewport)
+        guard !fields.isEmpty else { throw DreadcastError.unavailable("Radar frames are unavailable right now.") }
+        return RadarLoop(fields: fields, credit: "RainViewer", delayed: false, newestFrame: radar.frames.last?.path)
+    }
+
+    /// The newest frame's identity from a place's radar source, without loading tiles.
+    public func newestRadarFrame(for place: Place) async -> String? {
+        if case .dreadcast(let api) = radarSource(for: place), let manifest = await dreadcastRadar(api).value, manifest.isUsable(at: now) {
+            return manifest.frames.last?.id
+        }
+        return await manifest().value?.frames.last?.path
+    }
+
+    /// Up to `count` items, newest first going back, each at least `spacing` apart;
+    /// returned oldest first.
+    static func pick<T>(_ items: [T], time: (T) -> Date, count: Int, spacing: TimeInterval) -> [T] {
+        var chosen: [T] = []
+        for item in items.reversed() where chosen.count < max(1, count) {
+            if let last = chosen.last, time(last).timeIntervalSince(time(item)) < spacing { continue }
+            chosen.append(item)
+        }
+        return chosen.reversed()
+    }
+
     public static let nowcastViewportSize = 160
     public static let nowcastRangeMiles = 100.0
 
@@ -254,18 +349,19 @@ public final class Context: @unchecked Sendable {
            now.timeIntervalSince(latest) < 900 {
             return Fetched(value: cached.value, storedAt: cached.storedAt, error: nil, isStale: false)
         }
-        let manifest = await self.manifest()
-        guard let radar = manifest.value else { return .failure(manifest.error ?? "Radar is unavailable.") }
         let viewport = RadarViewport(center: place.coordinate, rangeMiles: Self.nowcastRangeMiles,
                                      width: Self.nowcastViewportSize, height: Self.nowcastViewportSize)
-        let fields = await RadarLoader(http: http, store: tiles).fields(manifest: radar, frames: radar.recent(4), viewport: viewport)
+        // Four frames about ten minutes apart give motion over half an hour, whichever source.
+        let loop = try? await radarLoop(for: place, viewport: viewport, frames: 4, spacing: 480)
+        let fields = loop?.fields ?? []
         guard fields.count >= 2 else {
             if let cached = cache.read(Nowcast.self, key: key) {
                 return Fetched(value: cached.value, storedAt: cached.storedAt, error: "Radar frames are unavailable.", isStale: true)
             }
             return .failure("Radar frames are unavailable.")
         }
-        let result = Nowcaster.forecast(fields: fields, viewport: viewport, now: now)
+        var result = Nowcaster.forecast(fields: fields, viewport: viewport, now: now)
+        result.source = loop?.credit
         cache.write(result, key: key, at: now)
         return Fetched(value: result, storedAt: now, error: nil, isStale: false)
     }

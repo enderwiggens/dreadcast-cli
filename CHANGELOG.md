@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- Radar from the Dreadcast API: with an API set (`dread config set api-url` or
+  `DREADCAST_API_URL`), places in the contiguous US get NOAA MRMS base reflectivity, a
+  scan every two minutes at about 1 km, read as measured values rather than colors.
+  Places elsewhere keep RainViewer, which is also the fallback when the API can't
+  provide a loop; `radar-source rainviewer` opts out. Late loops are labeled "radar
+  delayed". The radar footer, `dread eta` and `dread credits` name the source.
+
 ### Changed
 
 - Now and Radar are one tab, Radar, which the app opens on: conditions, alerts and the

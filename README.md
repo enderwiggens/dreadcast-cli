@@ -351,6 +351,8 @@ dread now --all --json | jq -r '.places[] | "\(.name) \(.now.conditions.temperat
 | `highlight` | `auto` (follows the scene), `signal-blue`, `solar-mint`, `superstorm-lime`, `fallout-gold`, `lamp-glow`, `ember-red`, `afterglow-pink` or `ai-violet` |
 | `map` | `theme` (the scene’s map colors) or `graphite` |
 | `forecast` | `days`, `hourly` or `off`, beside the radar’s timeline |
+| `api-url` | a Dreadcast API, such as `https://api.dreadcast.app`, or `off` |
+| `radar-source` | `auto` (NOAA MRMS from the API in the contiguous US, RainViewer elsewhere) or `rainviewer` |
 | `quips` | `on` or `off` (one dry line under the quick look, never during alerts) |
 | `icons` | `emoji` or `ascii` |
 
@@ -360,6 +362,7 @@ dread now --all --json | jq -r '.places[] | "\(.name) \(.now.conditions.temperat
 | Variable | Effect |
 | --- | --- |
 | `DREADCAST_LOCATION` | A location for this run: a saved name, ZIP code, place name or `lat,lon` |
+| `DREADCAST_API_URL` | A Dreadcast API base URL for this run, overriding `api-url` |
 | `DREADCAST_CONFIG_DIR`, `DREADCAST_CACHE_DIR` | Where settings and the cache live. Otherwise `XDG_CONFIG_HOME` and `XDG_CACHE_HOME`, then the platform defaults |
 | `DREADCAST_XWEATHER_CLIENT_ID`, `DREADCAST_XWEATHER_CLIENT_SECRET` | Lightning credentials instead of saved ones |
 | `DREADCAST_CREDENTIAL_STORE=none` | Ignore saved credentials, for CI |
@@ -386,8 +389,10 @@ Reduce Motion, and `--still` stops animation anywhere.
 
 ## Data and privacy
 
-There’s no account and no analytics. This version asks each provider directly, and
-your coordinates are rounded to about 1 km before they’re stored or sent. Lightning
+There’s no account and no analytics. By default this version asks each provider
+directly; with a Dreadcast API set, US radar comes through it instead, and the API never
+receives your location. Coordinates are rounded to about 1 km before they’re stored or
+sent. Lightning
 credentials stay in the macOS Keychain, or in a file only you can read on Linux.
 
 Details: [docs/PRIVACY.md](docs/PRIVACY.md) and
@@ -399,7 +404,7 @@ Details: [docs/PRIVACY.md](docs/PRIVACY.md) and
 | Data | Provider |
 | --- | --- |
 | Conditions, forecasts, air quality, place search | [Open-Meteo](https://open-meteo.com/) (CC BY 4.0) |
-| Radar | [RainViewer](https://www.rainviewer.com/) |
+| Radar | [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) through the Dreadcast API in the contiguous US, when an API is set; [RainViewer](https://www.rainviewer.com/) elsewhere |
 | Alerts | [National Weather Service](https://www.weather.gov/) |
 | Severe outlook, tropical storms | NOAA SPC and NHC |
 | Wildfires | NIFC |
