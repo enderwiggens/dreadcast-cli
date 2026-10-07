@@ -83,8 +83,13 @@ enum ClearForNow {
         // The sea, the light on it, then the beach.
         s.water(top: horizon + 1, bottom: shore + 3, colors: tones.sea, highlight: tones.highlight, seed: 55, density: 0.05)
         s.reflection(x: light.x, top: horizon + 1, bottom: shore, color: tones.glint, width: 1)
+        // Steps kept separate so older compilers type-check them quickly.
+        let width = Double(s.w)
         let line = (0..<s.w).map { x -> Int in
-            shore + Int((1.6 * sin(Double(x) / Double(s.w) * .pi * 0.9 + 0.2) - Double(x) / Double(s.w) * 2).rounded())
+            let along: Double = Double(x) / width
+            let curve: Double = 1.6 * sin(along * Double.pi * 0.9 + 0.2)
+            let offset: Double = curve - along * 2
+            return shore + Int(offset.rounded())
         }
         let reach = s.tick(1.4, frames: 3)
         for x in 0..<s.w {
