@@ -5,38 +5,112 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   STATIC_SDK_URL: https://download.swift.org/swift-6.4.0-release/static-sdk/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE_static-linux-0.1.0.artifactbundle.tar.gz
   STATIC_SDK_CHECKSUM: 47d2fd89eebfdf9eb4d536b6710414297f755c17926cdebc4742c08982b40a9e
 
 jobs:
-  macos:
+  # Nothing is built or published from a tag whose version or tests are wrong.
+  test:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: The tag matches the version in the code
+        run: grep -q "version = \"${GITHUB_REF_NAME#v}\"" Sources/DreadcastKit/HTTP.swift
+      - name: The changelog has a section for this version
+        run: grep -q "^## ${GITHUB_REF_NAME#v} " CHANGELOG.md
+      - name: Test
+        run: scripts/test.sh
+
+  macos:
+    needs: test
+    runs-on: macos-15
+    permissions:
+      contents: write
+    env:
+      # Optional. Without them the binary is ad-hoc signed; see docs/RELEASING.md.
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+      NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+      NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Import the Developer ID certificate
+        if: env.MACOS_CERTIFICATE != ''
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          PASSWORD="$(uuidgen)"
+          security create-keychain -p "$PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$PASSWORD" "$KEYCHAIN"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/certificate.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
       - name: Build universal binary
-        run: scripts/build-release.sh "${GITHUB_REF_NAME#v}"
+        run: |
+          if [ -n "$MACOS_CERTIFICATE" ]; then export DREADCAST_SIGNING_IDENTITY="$MACOS_SIGNING_IDENTITY"; fi
+          scripts/build-release.sh "${GITHUB_REF_NAME#v}"
+      - name: Notarize
+        if: env.MACOS_CERTIFICATE != '' && env.NOTARY_KEY != ''
+        run: |
+          echo "$NOTARY_KEY" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          xcrun notarytool submit dist/dread-macos-universal.zip \
+            --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER" --wait
+          rm "$RUNNER_TEMP/notary.p8"
       - name: Upload
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
             dist/*.zip
             dist/*.sha256
 
   linux:
+    needs: test
     runs-on: ubuntu-latest
     container: swift:6.4.0-noble
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install the static Linux SDK
         run: swift sdk install "$STATIC_SDK_URL" --checksum "$STATIC_SDK_CHECKSUM"
       - name: Build static binaries
         run: scripts/build-linux.sh "${GITHUB_REF_NAME#v}"
+      - name: Smoke test
+        run: scripts/smoke-test.sh "$(swift build -c release --swift-sdk x86_64-swift-linux-musl --show-bin-path)/dread"
       - name: Upload
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
             dist/*.tar.gz
             dist/*.sha256
+
+  # The release's title and notes come from the changelog, after both uploads.
+  notes:
+    needs: [macos, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Title and notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          {
+            printf '## Install\n\n```sh\nbrew install enderwiggens/dreadcast/dreadcast   # macOS and Linux\ndread setup\ndread\n```\n\n'
+            printf 'Or download a binary below: `dread-macos-universal.zip` (Apple silicon and Intel), or the static `dread-linux-x86_64.tar.gz` and `dread-linux-arm64.tar.gz`. Each has a `.sha256` file beside it.\n\n'
+            awk -v heading="## $VERSION " 'index($0, heading) == 1 { found = 1; next } /^## / && found { exit } found' CHANGELOG.md
+          } > notes.md
+          gh release edit "$GITHUB_REF_NAME" --title "dreadcast $VERSION" --notes-file notes.md

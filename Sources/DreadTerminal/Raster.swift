@@ -135,16 +135,4 @@ public struct Raster: Sendable {
             previous = point
         }
     }
-
-    /// RGBA bytes with opaque alpha.
-    public func rgbaBytes() -> [UInt8] {
-        var out = [UInt8](repeating: 255, count: width * height * 4)
-        for i in 0..<(width * height) {
-            let p = pixels[i]
-            out[i * 4] = UInt8((p >> 16) & 0xFF)
-            out[i * 4 + 1] = UInt8((p >> 8) & 0xFF)
-            out[i * 4 + 2] = UInt8(p & 0xFF)
-        }
-        return out
-    }
 }

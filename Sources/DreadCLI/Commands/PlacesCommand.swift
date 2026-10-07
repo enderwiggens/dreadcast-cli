@@ -61,7 +61,7 @@ enum PlacesCommand {
         case .plain:
             if places.isEmpty { ctx.write("No saved places. Run `dread setup` or `dread places add <place>`.") }
             for (i, saved) in places.enumerated() {
-                ctx.write("\(saved.name): \(saved.place.name) (\(saved.place.coordinate.formatted))" + (i == 0 ? ", default" : ""))
+                ctx.write("\(saved.name): \(saved.place.name)\(saved.place.coordinateNote)" + (i == 0 ? ", default" : ""))
             }
         case .pretty:
             let s = ctx.styler
@@ -71,7 +71,7 @@ enum PlacesCommand {
             }
             for (i, saved) in places.enumerated() {
                 lines.append("  " + s.paint(i == 0 ? "●" : " ", ctx.highlight) + " " + s.paint(saved.name.padding(14), Theme.porcelain, bold: true)
-                             + saved.place.name.padding(28) + s.paint(saved.place.coordinate.formatted, Theme.faint))
+                             + saved.place.name.padding(28) + s.paint(saved.place.source == .coordinates ? "" : saved.place.coordinate.formatted, Theme.faint))
             }
             lines.append("")
             lines.append("  " + s.paint("dread places add <place> --name <name>", ctx.highlight) + s.paint("  ·  remove · default · rename", Theme.mist))

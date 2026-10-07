@@ -163,7 +163,7 @@ struct PlacesTests {
 
     static func frame(_ ctx: Context, alertsAt index: Int?, selected: Int = 0, height: Int = 30) -> AppFrame {
         let watched = saved.enumerated().map { i, s in
-            var snapshot = TopCommand.Snapshot()
+            var snapshot = LiveData.Snapshot()
             snapshot.weather = SceneTests.fetched(VoiceTests.report(code: 1))
             snapshot.alerts = s.place.isUnitedStates ? SceneTests.fetched(i == index ? [SceneTests.warning()] : []) : .failure("not covered")
             return Watched(saved: s, snapshot: snapshot)

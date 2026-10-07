@@ -42,7 +42,7 @@ enum AppBody {
 /// A place the app watches, with its latest data.
 struct Watched {
     let saved: SavedPlace
-    let snapshot: TopCommand.Snapshot
+    let snapshot: LiveData.Snapshot
 
     var reading: PlaceRows.Reading {
         PlaceRows.Reading(saved: saved, weather: snapshot.weather, alerts: snapshot.alerts, nowcast: snapshot.nowcast?.value)
@@ -53,7 +53,7 @@ struct Watched {
 struct AppFrame {
     let ctx: Context
     let place: Place
-    let snapshot: TopCommand.Snapshot
+    let snapshot: LiveData.Snapshot
     let width: Int
     let height: Int
     let elapsed: Double
@@ -121,7 +121,7 @@ enum DreadApp {
         _ = ctx.tiles   // created up front; views load radar tiles in the background
 
         let configured = Credentials.xweather(environment: ctx.environment) != nil
-        let states = places.map { _ in TopCommand.State() }
+        let states = places.map { _ in LiveData.State() }
         for state in states { state.with { $0.lightningConfigured = configured } }
         let placesView = PlacesView()
         let views: [AppTab: AppView] = [
@@ -161,7 +161,7 @@ enum DreadApp {
             ctx.refreshClock()
             if tab == .outlook { states[selected].with { $0.wantsOutlook = true } }
             for (i, state) in states.enumerated() {
-                TopCommand.schedule(ctx: ctx, place: places[i].place, state: state,
+                LiveData.schedule(ctx: ctx, place: places[i].place, state: state,
                                     only: sources(for: i, selected: selected, tab: tab, highlighted: placesView.highlighted))
             }
             let view = views[tab]!

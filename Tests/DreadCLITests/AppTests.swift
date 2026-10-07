@@ -34,14 +34,14 @@ struct AppTests {
         #expect(AppTab.named("tornado") == nil)
     }
 
-    static func snapshot(alerts: [WeatherAlert]? = []) -> TopCommand.Snapshot {
-        var snapshot = TopCommand.Snapshot()
+    static func snapshot(alerts: [WeatherAlert]? = []) -> LiveData.Snapshot {
+        var snapshot = LiveData.Snapshot()
         snapshot.weather = SceneTests.fetched(VoiceTests.report(code: 1))
         snapshot.alerts = SceneTests.fetched(alerts)
         return snapshot
     }
 
-    static func frame(_ ctx: Context, _ snapshot: TopCommand.Snapshot, width: Int, height: Int) -> AppFrame {
+    static func frame(_ ctx: Context, _ snapshot: LiveData.Snapshot, width: Int, height: Int) -> AppFrame {
         AppFrame(ctx: ctx, place: SceneTests.tampa, snapshot: snapshot, width: width, height: height, elapsed: 7)
     }
 
@@ -56,7 +56,7 @@ struct AppTests {
         let ctx = try SceneTests.context()
         let views: [AppView] = [Self.radar(ctx), SystemsView(), ForecastView(), AlertsView(), OutlookView(), LightningView(), SceneView(ctx: ctx)]
         for view in views {
-            for snapshot in [TopCommand.Snapshot(), Self.snapshot(), Self.snapshot(alerts: [SceneTests.warning()])] {
+            for snapshot in [LiveData.Snapshot(), Self.snapshot(), Self.snapshot(alerts: [SceneTests.warning()])] {
                 for (width, height) in [(60, 7), (80, 19), (120, 40), (200, 60)] {
                     switch view.body(Self.frame(ctx, snapshot, width: width, height: height)) {
                     case .lines(let lines):
@@ -75,7 +75,7 @@ struct AppTests {
     /// Now falls back to the quick look's text, still without the scene.
     @Test func nowIsTheRadarPanel() throws {
         let ctx = try SceneTests.context()
-        func layout(_ snapshot: TopCommand.Snapshot, _ context: Context? = nil, height: Int)
+        func layout(_ snapshot: LiveData.Snapshot, _ context: Context? = nil, height: Int)
             -> (above: [String], below: [String], art: HalfBlockFrame?, lines: [String]) {
             let c = context ?? ctx
             switch Self.radar(c).body(Self.frame(c, snapshot, width: 100, height: height)) {

@@ -23,7 +23,7 @@ public struct Config: Codable, Sendable {
     public var highlight: String = "auto"
     /// The radar's basemap: theme follows the scene's map palette; graphite is neutral.
     public var map: String = "theme"
-    /// Beside the radar's timeline on the Now tab: days, hourly or off.
+    /// Beside the radar's timeline on the Radar tab: days, hourly or off.
     public var forecast: String = "days"
     /// auto: NOAA MRMS from the Dreadcast API for the contiguous US when an API is set,
     /// RainViewer elsewhere; rainviewer: always RainViewer.

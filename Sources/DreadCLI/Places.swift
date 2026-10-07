@@ -14,6 +14,11 @@ public struct SavedPlace: Codable, Equatable, Sendable {
     }
 }
 
+extension Place {
+    /// The coordinates in parentheses after the name, unless the name is the coordinates.
+    var coordinateNote: String { source == .coordinates ? "" : " (\(coordinate.formatted))" }
+}
+
 /// The rules for saved places. The first place is the default.
 enum PlaceBook {
     static let limit = 8

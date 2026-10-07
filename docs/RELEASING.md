@@ -1,61 +1,82 @@
 # Releasing
 
-Pushing a version tag builds and publishes everything. Binaries are ad-hoc signed and
-not yet notarized; Homebrew installs them without a Gatekeeper prompt.
+Pushing a version tag tests, builds, signs (when configured) and publishes everything.
+Versions follow semantic versioning; the tag is the version with a `v`.
 
 ## Steps
 
-1. Update `Dreadcast.version` in `Sources/DreadcastKit/HTTP.swift` and date the entry in
-   `CHANGELOG.md`.
-2. Merge to `main` and confirm CI passed on macOS, Linux and the static Linux build.
-3. Tag and push:
+1. On a branch, set `Dreadcast.version` in `Sources/DreadcastKit/HTTP.swift`, and turn
+   the changelog’s `## Unreleased` heading into `## X.Y.Z — YYYY-MM-DD`. Open a pull
+   request, wait for CI on macOS, Linux and the static Linux build, and merge it.
+2. Tag the merge commit and push the tag:
 
    ```sh
-   git tag -a v0.2.0 -m "dreadcast 0.2.0"
-   git push origin v0.2.0
+   git tag -a v0.3.0 -m "dreadcast 0.3.0"
+   git push origin v0.3.0
    ```
 
-   `.github/workflows/release.yml` builds these and attaches each, with a `.sha256`
-   checksum, to the GitHub release:
+   `.github/workflows/release.yml` then:
 
-   - `dread-macos-universal.zip` (Apple silicon and Intel)
-   - `dread-linux-x86_64.tar.gz` and `dread-linux-arm64.tar.gz` (fully static, built with
-     the Swift Static Linux SDK)
+   - checks that the tag matches `Dreadcast.version` and that the changelog has a
+     section for it, and runs the tests, before building anything
+   - builds `dread-macos-universal.zip` (Apple silicon and Intel), signed with Developer
+     ID and notarized when the secrets below are set, and ad-hoc signed otherwise
+   - builds the fully static `dread-linux-x86_64.tar.gz` and `dread-linux-arm64.tar.gz`
+     with the Swift Static Linux SDK, and runs `scripts/smoke-test.sh` against the
+     x86_64 binary
+   - attaches each archive with a `.sha256` checksum, then sets the release’s title and
+     notes from its changelog section
 
-   File names carry no version, so `releases/latest/download/<file>` links stay valid;
-   the tag in each URL identifies the release.
-4. Once all six files are on the release, generate the formula from their checksums
-   and commit it to [homebrew-dreadcast](https://github.com/enderwiggens/homebrew-dreadcast):
+   File names carry no version, so `releases/latest/download/<file>` links stay valid.
+3. Once the release has all six files, generate the formula from their checksums and
+   open a pull request in
+   [homebrew-dreadcast](https://github.com/enderwiggens/homebrew-dreadcast):
 
    ```sh
-   scripts/homebrew-formula.sh 0.2.0 > ../homebrew-dreadcast/Formula/dreadcast.rb
-   brew install --build-from-source ../homebrew-dreadcast/Formula/dreadcast.rb && brew test dreadcast
+   scripts/homebrew-formula.sh 0.3.0 > ../homebrew-dreadcast/Formula/dreadcast.rb
    ```
 
-   The formula installs the universal binary on macOS and the matching static binary on
-   Linux (x86_64 or arm64).
+   After it merges, check `brew upgrade dreadcast && dread version && brew test dreadcast`.
+
+## Signing and notarization
+
+Without these repository secrets, the macOS binary is ad-hoc signed: Homebrew and
+`curl` installs run as is, but a zip downloaded in a browser needs its quarantine flag
+cleared. With them, the release is signed with Developer ID and notarized.
+
+| Secret | Value |
+| --- | --- |
+| `MACOS_CERTIFICATE` | A Developer ID Application certificate and key, exported as `.p12` and base64-encoded |
+| `MACOS_CERTIFICATE_PASSWORD` | The `.p12` export password |
+| `MACOS_SIGNING_IDENTITY` | The identity name, such as `Developer ID Application: Dreadcast Weather (TEAMID)` |
+| `NOTARY_KEY` | An App Store Connect API key (`.p8`), base64-encoded |
+| `NOTARY_KEY_ID` | That key’s ID |
+| `NOTARY_ISSUER` | The key’s issuer ID |
+
+A bare binary can’t be stapled, so Gatekeeper checks the notarization online the first
+time the binary runs.
 
 ## Building locally
 
 ```sh
-scripts/build-release.sh 0.2.0   # macOS universal binary in dist/
-scripts/build-linux.sh 0.2.0     # Linux; needs a swift.org toolchain and the matching static SDK
+scripts/build-release.sh 0.3.0   # macOS universal binary in dist/
+scripts/build-linux.sh 0.3.0     # Linux; needs a swift.org toolchain and the matching static SDK
+scripts/smoke-test.sh .build/release/dread
 ```
 
-To sign the macOS binary with a Developer ID, set `DREADCAST_SIGNING_IDENTITY` before
-running `scripts/build-release.sh`, then notarize the zip:
-
-```sh
-xcrun notarytool submit dist/dread-macos-universal.zip --keychain-profile dreadcast --wait
-```
+To sign locally, set `DREADCAST_SIGNING_IDENTITY` before `scripts/build-release.sh`,
+then notarize with `xcrun notarytool submit dist/dread-macos-universal.zip
+--keychain-profile dreadcast --wait`.
 
 ## Checklist
 
-- [ ] Version updated in `Sources/DreadcastKit/HTTP.swift` and `CHANGELOG.md`
-- [ ] `scripts/test.sh` passes, and CI is green on macOS, Linux and static Linux
+- [ ] Version and changelog updated in a merged pull request, and CI green on macOS,
+      Linux and static Linux
 - [ ] Manual check in Terminal, iTerm2, Ghostty and Kitty: `dread` (every tab, and the
       Places tab with two or more saved places), `dread now`, `dread radar`
 - [ ] Manual check on a Linux machine: `dread`, `dread now`, `dread radar --still`
+- [ ] Radar from the Dreadcast API: `curl -fsS https://api.dreadcast.app/v1/radar/latest`
+      answers, and `dread radar` at a US location credits NOAA MRMS
 - [ ] The repository URL in the User-Agent resolves
-- [ ] Formula updated and `brew install enderwiggens/dreadcast/dreadcast` works
-- [ ] Provider terms re-checked for any new source
+- [ ] Release has six files and notes; the formula is updated and `brew test` passes
+- [ ] Provider terms re-checked for any new source; privacy docs match what’s sent

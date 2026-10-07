@@ -122,11 +122,6 @@ public struct WeatherReport: Codable, Sendable {
     public func cape(at now: Date) -> Double? {
         hourly.last(where: { $0.time <= now.addingTimeInterval(1800) && $0.cape != nil })?.cape
     }
-
-    public func isFresh(at now: Date, maximumAge: TimeInterval = 1800) -> Bool {
-        let age = now.timeIntervalSince(fetchedAt)
-        return age >= -300 && age <= maximumAge
-    }
 }
 
 public struct WeatherService: Sendable {
