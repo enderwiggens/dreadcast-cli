@@ -10,8 +10,8 @@ shells, never polls a provider faster than this table allows.
 | Place search | [Open-Meteo geocoding](https://open-meteo.com/en/docs/geocoding-api) | On setup | Worldwide | CC BY 4.0 |
 | Air quality and dust | [Open-Meteo air quality](https://open-meteo.com/en/docs/air-quality-api) (CAMS) | 30 min (dust 15 min) | Worldwide | CC BY 4.0; CAMS attribution |
 | ZIP lookup | [Zippopotam.us](https://zippopotam.us/) | Cached 30 days | United States | Free API |
-| Radar (US, when a Dreadcast API is set) | [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) base reflectivity through the Dreadcast API (`/v2/radar/latest`) | Manifest 1 min; tiles are immutable and cached until they age out | Contiguous US, Alaska, Hawaii, Puerto Rico and the Caribbean, Guam | Public domain (U.S. Government data); numeric tiles, zoom 0–8 |
-| Radar (Europe, when a Dreadcast API is set) | [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) maximum reflectivity composite through the Dreadcast API | As above; OPERA publishes every 5 min | The OPERA radars from Iceland to Romania. Italy, Austria and Greece aren't in the composite, so places there keep RainViewer unless a neighbor's radar reaches them | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): credited with its license wherever it's shown, and noted as resampled. No precipitation type, so no snow colors |
+| Radar (US) | [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) base reflectivity through the Dreadcast API (`/v2/radar/latest`) | Manifest 1 min; tiles are immutable and cached until they age out | Contiguous US, Alaska, Hawaii, Puerto Rico and the Caribbean, Guam | Public domain (U.S. Government data); numeric tiles, zoom 0–8 |
+| Radar (Europe) | [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) maximum reflectivity composite through the Dreadcast API | As above; OPERA publishes every 5 min | The OPERA radars from Iceland to Romania. Italy, Austria and Greece aren't in the composite, so places there keep RainViewer unless a neighbor's radar reaches them | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): credited with its license wherever it's shown, and noted as resampled. No precipitation type, so no snow colors |
 | Radar (everywhere else, and when the API is unavailable) | [RainViewer Weather Maps API](https://www.rainviewer.com/api/weather-maps-api.html) | Manifest 5 min; tiles cached until they age out | Worldwide where radar exists | Free API for personal and non-commercial use; maximum zoom 7 |
 | Active alerts | [National Weather Service](https://www.weather.gov/documentation/services-web-api) | 2 min | US and territories | Public domain; identifying User-Agent required |
 | Day 1 convective outlook | [NOAA SPC](https://www.spc.noaa.gov/products/outlook/) | 15 min | Contiguous US | Public domain |
@@ -42,13 +42,13 @@ provide a loop, the radar comes from RainViewer instead, credited as such.
 
 ## Choosing the radar source
 
-`dread config set api-url <url>` (or `DREADCAST_API_URL`) points the CLI at a Dreadcast
-API. With one set, places inside one of its regions get radar from it, as long as the
-region's radars reach the place: Italy is inside Europe's bounds but not in OPERA's
-composite, so it keeps RainViewer, as do places outside every region. Views that cross
-a region's edge show no radar beyond it. `dread config set radar-source rainviewer`
-uses RainViewer everywhere. Until the public API is live, no API is set by default, so nothing changes
-unless you set one.
+Radar comes from the Dreadcast API at `https://api.dreadcast.app` for places inside one
+of its regions, as long as the region's radars reach the place: Italy is inside
+Europe's bounds but not in OPERA's composite, so it keeps RainViewer, as do places
+outside every region. Views that cross a region's edge show no radar beyond it.
+`dread config set radar-source rainviewer` (or `api-url off`) uses RainViewer
+everywhere, and `api-url <url>` or `DREADCAST_API_URL` points at another API, such as
+a local development server.
 
 ## Adding a provider
 

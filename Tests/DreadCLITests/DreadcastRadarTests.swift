@@ -308,10 +308,11 @@ struct DreadcastRadarTests {
         #expect(!drawn.isFullyCovered)
     }
 
-    @Test func theAPIIsUsedOnlyWhenSetAndNotOptedOut() throws {
+    @Test func theAPIIsUsedByDefaultUnlessOptedOut() throws {
         let unset = try SceneTests.context()
-        #expect(unset.dreadcastAPI == Dreadcast.apiBaseURL)
-        #expect(unset.radarAPI == Dreadcast.apiBaseURL)
+        let publicAPI = try #require(URL(string: "https://api.dreadcast.app"))
+        #expect(unset.dreadcastAPI == publicAPI)
+        #expect(unset.radarAPI == publicAPI)
         let set = try SceneTests.context()
         set.config.apiURL = "https://api.dreadcast.app/"
         #expect(set.radarAPI == URL(string: "https://api.dreadcast.app"))

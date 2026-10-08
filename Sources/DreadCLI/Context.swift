@@ -246,7 +246,7 @@ public final class Context: @unchecked Sendable {
     // MARK: Radar sources
 
     /// The Dreadcast API: DREADCAST_API_URL, then `dread config set api-url`, then the
-    /// built-in default (none until the API is live). "off" turns it off.
+    /// built-in default. "off" turns it off.
     public var dreadcastAPI: URL? {
         if let raw = environment["DREADCAST_API_URL"] ?? config.apiURL {
             return Self.apiURL(raw)

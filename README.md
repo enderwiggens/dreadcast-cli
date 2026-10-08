@@ -351,7 +351,7 @@ dread now --all --json | jq -r '.places[] | "\(.name) \(.now.conditions.temperat
 | `highlight` | `auto` (follows the scene), `signal-blue`, `solar-mint`, `superstorm-lime`, `fallout-gold`, `lamp-glow`, `ember-red`, `afterglow-pink` or `ai-violet` |
 | `map` | `theme` (the scene’s map colors) or `graphite` |
 | `forecast` | `days`, `hourly` or `off`, beside the radar’s timeline |
-| `api-url` | a Dreadcast API, such as `https://api.dreadcast.app`, or `off` |
+| `api-url` | the Dreadcast API (`https://api.dreadcast.app` unless set), or `off` for RainViewer everywhere |
 | `radar-source` | `auto` (the Dreadcast API where it covers a place, RainViewer elsewhere) or `rainviewer` |
 | `quips` | `on` or `off` (one dry line under the quick look, never during alerts) |
 | `icons` | `emoji` or `ascii` |
@@ -389,11 +389,11 @@ Reduce Motion, and `--still` stops animation anywhere.
 
 ## Data and privacy
 
-There’s no account and no analytics. By default this version asks each provider
-directly; with a Dreadcast API set, US radar comes through it instead, and the API never
-receives your location. Coordinates are rounded to about 1 km before they’re stored or
-sent. Lightning
-credentials stay in the macOS Keychain, or in a file only you can read on Linux.
+There’s no account and no analytics. Radar comes from the Dreadcast API wherever it
+covers your place, and the API never receives your location; everything else is asked
+of each provider directly. Coordinates are rounded to about 1 km before they’re stored
+or sent. Lightning credentials stay in the macOS Keychain, or in a file only you can
+read on Linux.
 
 Details: [docs/PRIVACY.md](docs/PRIVACY.md) and
 [docs/DATA_PROVIDERS.md](docs/DATA_PROVIDERS.md).
@@ -404,7 +404,7 @@ Details: [docs/PRIVACY.md](docs/PRIVACY.md) and
 | Data | Provider |
 | --- | --- |
 | Conditions, forecasts, air quality, place search | [Open-Meteo](https://open-meteo.com/) (CC BY 4.0) |
-| Radar | Through the Dreadcast API, when an API is set: [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) for the US, Puerto Rico and Guam, and [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) for Europe ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), resampled). [RainViewer](https://www.rainviewer.com/) elsewhere |
+| Radar | Through the Dreadcast API: [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) for the US, Puerto Rico and Guam, and [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) for Europe ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), resampled). [RainViewer](https://www.rainviewer.com/) elsewhere |
 | Alerts | [National Weather Service](https://www.weather.gov/) |
 | Severe outlook, tropical storms | NOAA SPC and NHC |
 | Wildfires | NIFC |

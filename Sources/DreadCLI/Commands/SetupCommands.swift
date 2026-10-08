@@ -35,7 +35,7 @@ func radarSummary(_ ctx: Context) -> String {
     let s = ctx.styler
     if ctx.config.radarSource == "rainviewer" { return "RainViewer" + s.paint("  (radar-source rainviewer)", Theme.faint) }
     guard let api = ctx.dreadcastAPI else {
-        return "RainViewer" + s.paint("  (the Dreadcast API's radar once an api-url is set)", Theme.faint)
+        return "RainViewer" + s.paint("  (api-url off)", Theme.faint)
     }
     return "The Dreadcast API where it covers a place (the US and Europe), RainViewer elsewhere"
         + s.paint("  (\(api.host ?? api.absoluteString))", Theme.faint)
