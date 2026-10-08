@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/enderwiggens/dreadcast-cli/security/advisories/new
+    about: Report security problems privately, not in a public issue.
+  - name: Weather data looks wrong
+    url: https://github.com/enderwiggens/dreadcast-cli/blob/main/docs/DATA_PROVIDERS.md
+    about: Check which provider a reading comes from before filing; provider outages are temporary.

@@ -30,9 +30,10 @@ it runs on macOS and Linux.
 ## Highlights
 
 - **Radar first.** Open `dread` and the last eight radar frames fill the window,
-  animated, centered on you and redrawn in Dreadcast’s palettes over a built-in map.
-  Conditions and the next two hours sit above it and the coming days below, as in the
-  Mac app. `dread radar` draws full-resolution images in Kitty, Ghostty, iTerm2 and
+  animated, centered on you and redrawn in Dreadcast’s palettes over a built-in map:
+  NOAA’s 1 km MRMS radar across the US and EUMETNET OPERA across Europe, from
+  Dreadcast’s radar API, and RainViewer everywhere else. Conditions and the next two
+  hours sit above it and the coming days below, as in the Mac app. `dread radar` draws full-resolution images in Kitty, Ghostty, iTerm2 and
   WezTerm.
 - **Every warning, in full.** NWS watches, warnings and advisories with their official
   instructions. A new alert shows up in the header whichever tab you’re on.
@@ -60,7 +61,7 @@ it runs on macOS and Linux.
     <td align="center"><b>Systems</b> · tab 2</td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/images/alerts.png" alt="An active NWS Flood Warning shown in full"></td>
+    <td width="50%"><img src="docs/images/alerts.png" alt="An active NWS Storm Surge Watch shown in full"></td>
     <td width="50%"><img src="docs/images/outlook.png" alt="Solar activity, aurora, earthquakes and hazards"></td>
   </tr>
   <tr>
@@ -222,10 +223,12 @@ dread radar --palette viridis  # dreadcast, classic, viridis or rainviewer
 dread radar --still            # just the latest frame
 ```
 
-Dreadcast CLI reads RainViewer’s free radar tiles and converts each pixel back to
-reflectivity using RainViewer’s published color table. That’s what lets it redraw the
-radar in other palettes and measure storm motion for `dread eta`. The basemap is
-Natural Earth data built into the binary.
+In the US and Europe, radar comes from the Dreadcast API as measurements: NOAA MRMS and
+EUMETNET OPERA scans at about 1 km, stored as reflectivity values rather than colors.
+Elsewhere, Dreadcast CLI reads RainViewer’s free radar tiles and converts each pixel
+back to reflectivity using RainViewer’s published color table. Either way it works with
+measured values, which is what lets it redraw the radar in other palettes and measure
+storm motion for `dread eta`. The basemap is Natural Earth data built into the binary.
 
 </details>
 
@@ -448,7 +451,7 @@ when you’re at a terminal.
 Bug reports and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers
 setup and what to expect in review, and [CLAUDE.md](CLAUDE.md) describes the
 architecture. Please report security problems privately, as described in
-[SECURITY.md](SECURITY.md).
+[SECURITY.md](SECURITY.md), and follow the [code of conduct](CODE_OF_CONDUCT.md).
 
 ```sh
 scripts/test.sh                  # the full suite; never touches the network
