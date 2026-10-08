@@ -1,0 +1,41 @@
+name: Signing check
+
+# Signs and notarizes a build with the release secrets and publishes nothing, so a broken
+# certificate or key shows up here rather than halfway through a release. Runs on pull
+# requests that change signing, and from the Actions tab.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/signing-check.yml
+      - .github/workflows/release.yml
+      - scripts/build-release.sh
+      - scripts/import-certificate.sh
+      - scripts/notarize.sh
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    # Pull requests from forks don't receive secrets.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-15
+    env:
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+      NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+      NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Import the Developer ID certificate
+        run: scripts/import-certificate.sh
+      - name: Build and sign
+        run: |
+          VERSION="$(sed -n 's/.*static let version = "\(.*\)"/\1/p' Sources/DreadcastKit/HTTP.swift)"
+          DREADCAST_SIGNING_IDENTITY="$MACOS_SIGNING_IDENTITY" scripts/build-release.sh "$VERSION"
+          codesign -dv --verbose=2 dist/dread 2>&1 | grep -E "Authority|Timestamp|flags"
+      - name: Notarize and check Gatekeeper
+        run: scripts/notarize.sh dist/dread-macos-universal.zip dist/dread

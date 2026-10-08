@@ -113,9 +113,8 @@ curl -sSL https://github.com/enderwiggens/dreadcast-cli/releases/latest/download
 unzip dread.zip && sudo mv dread /usr/local/bin/
 ```
 
-The binary isn’t notarized yet. Installs with Homebrew or `curl` run as they are; if
-you download the zip in a browser, clear the quarantine flag first with
-`xattr -d com.apple.quarantine dread`.
+The binary is signed with Developer ID and notarized by Apple, so it runs however you
+download it; `codesign -dv $(which dread)` shows who signed it.
 
 ### Linux
 

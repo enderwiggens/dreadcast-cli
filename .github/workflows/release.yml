@@ -45,28 +45,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Import the Developer ID certificate
         if: env.MACOS_CERTIFICATE != ''
-        run: |
-          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
-          PASSWORD="$(uuidgen)"
-          security create-keychain -p "$PASSWORD" "$KEYCHAIN"
-          security set-keychain-settings -lut 3600 "$KEYCHAIN"
-          security unlock-keychain -p "$PASSWORD" "$KEYCHAIN"
-          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
-          security import "$RUNNER_TEMP/certificate.p12" -k "$KEYCHAIN" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          rm "$RUNNER_TEMP/certificate.p12"
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$PASSWORD" "$KEYCHAIN" > /dev/null
-          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+        run: scripts/import-certificate.sh
       - name: Build universal binary
         run: |
           if [ -n "$MACOS_CERTIFICATE" ]; then export DREADCAST_SIGNING_IDENTITY="$MACOS_SIGNING_IDENTITY"; fi
           scripts/build-release.sh "${GITHUB_REF_NAME#v}"
-      - name: Notarize
+      - name: Notarize and check Gatekeeper
         if: env.MACOS_CERTIFICATE != '' && env.NOTARY_KEY != ''
-        run: |
-          echo "$NOTARY_KEY" | base64 --decode > "$RUNNER_TEMP/notary.p8"
-          xcrun notarytool submit dist/dread-macos-universal.zip \
-            --key "$RUNNER_TEMP/notary.p8" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER" --wait
-          rm "$RUNNER_TEMP/notary.p8"
+        run: scripts/notarize.sh dist/dread-macos-universal.zip dist/dread
       - name: Upload
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
