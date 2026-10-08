@@ -60,8 +60,10 @@ jobs:
             dist/*.zip
             dist/*.sha256
 
+  # Publishes only after the macOS binary is signed and notarized, so a release never
+  # appears without its macOS download. If notarization times out, rerun the failed jobs.
   linux:
-    needs: test
+    needs: [test, macos]
     runs-on: ubuntu-latest
     container: swift:6.4.0-noble
     permissions:

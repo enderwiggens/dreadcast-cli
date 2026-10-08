@@ -26,7 +26,10 @@ Versions follow semantic versioning; the tag is the version with a `v`.
      with the Swift Static Linux SDK, and runs `scripts/smoke-test.sh` against the
      x86_64 binary
    - attaches each archive with a `.sha256` checksum, then sets the release’s title and
-     notes from its changelog section
+     notes from its changelog section. The Linux files are published only after the
+     macOS binary is notarized, so a release is never missing its macOS download; if
+     notarization fails or times out, nothing is published, and `gh run rerun <run>
+     --failed` tries again.
 
    File names carry no version, so `releases/latest/download/<file>` links stay valid.
 3. Once the release has all six files, generate the formula from their checksums and
