@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-10-07
 
 ### Added
 
@@ -25,6 +25,9 @@
 - The scene no longer sits above the radar, so the radar has no competition. Scenes
   keep their own tab and still head `dread now`; `scene-banner` now applies to
   `dread now` only.
+- With a second radar source, `dread radar --json` reports `source` as `dreadcast` or
+  `rainviewer` and adds a `credit`, and `dread eta` ends with the credit, such as
+  "Radar: NOAA MRMS, 4 frames." instead of "Source: RainViewer radar, 4 frames."
 - Releases run the tests first and stop if the tag, version and changelog don't agree;
   they sign and notarize the macOS binary once Developer ID secrets are configured, and
   take their notes from the changelog. CI and releases run an offline smoke test
@@ -34,11 +37,6 @@
 
 - `dread setup` and `dread places` no longer repeat the coordinates for a place given
   as coordinates.
-- Rain timing uses four frames from every radar source, instead of three from MRMS.
-- `dread radar --json` reports where the radar came from (`dreadcast` or `rainviewer`)
-  and adds a `credit`; `source` was always `rainviewer`.
-- `dread eta` says "Radar: NOAA MRMS" rather than "Source: NOAA MRMS radar", so a
-  credit with a license reads cleanly.
 
 ## 0.2.0 — 2026-10-07
 

@@ -4,7 +4,7 @@ import FoundationNetworking
 #endif
 
 public enum Dreadcast {
-    public static let version = "0.2.0"
+    public static let version = "0.3.0"
     public static let repositoryURL = "https://github.com/enderwiggens/dreadcast-cli"
     /// NWS asks every client to identify itself with a way to reach its maintainers.
     public static let userAgent = "dreadcast-cli/\(version) (+\(repositoryURL))"
