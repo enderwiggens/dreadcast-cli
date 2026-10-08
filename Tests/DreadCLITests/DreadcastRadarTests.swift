@@ -431,6 +431,38 @@ extension CommandTests {
         #expect(!StubProvider.seen.contains { $0.url?.host == F.tileHost })
     }
 
+    /// Rain timing names the radar it came from everywhere it's shown: the eta header and
+    /// frames line, the quick look's sources line, and both commands' JSON.
+    @Test func rainTimingCreditsTheAPIsRadar() async throws {
+        typealias F = RadarAPIFixture
+        let env = try await Self.home()
+        let now = ISODate.parse("2026-10-05T18:30:00Z")!
+        let place = Place(name: "Tampa", coordinate: GeoCoordinate(latitude: 27.95, longitude: -82.46), countryCode: "US", source: .coordinates)
+        let viewport = RadarViewport(center: place.coordinate, rangeMiles: Context.nowcastRangeMiles,
+                                     width: Context.nowcastViewportSize, height: Context.nowcastViewportSize)
+        var routes = Self.online
+        routes["api.dreadcast.app"] = (200, String(decoding: F.json(newest: now, stored: [F.tileKey(place, viewport: viewport)]), as: UTF8.self))
+        routes[F.tileHost] = (200, "")
+        StubProvider.lock.withLock { StubProvider.tileBody = F.tile(red: F.red(dbz: 45), green: 6) }
+        defer { StubProvider.lock.withLock { StubProvider.tileBody = nil } }
+
+        let pretty = try await Self.run(["eta", "--pretty"], environment: env, routes: routes)
+        #expect(pretty.code == .ok)
+        #expect(pretty.out.contains("NOAA MRMS"))
+        #expect(!pretty.out.uppercased().contains("RAINVIEWER"))
+        let eta = try Self.json(try await Self.run(["eta", "--json"], environment: env, routes: routes).out)
+        #expect(eta["source"] as? String == "dreadcast")
+        #expect(eta["credit"] as? String == "NOAA MRMS")
+
+        let quick = try await Self.run(["now", "--pretty"], environment: env, routes: routes)
+        #expect(quick.out.contains("NOAA MRMS"))
+        #expect(!quick.out.uppercased().contains("RAINVIEWER"))
+        let now_ = try Self.json(try await Self.run(["now", "--json"], environment: env, routes: routes).out)
+        let nowcast = try #require(now_["nowcast"] as? [String: Any])
+        #expect(nowcast["source"] as? String == "dreadcast")
+        #expect(nowcast["credit"] as? String == "NOAA MRMS")
+    }
+
     @Test func radarFallsBackToRainViewerWhenTheAPIIsDown() async throws {
         let ctx = Self.radarContext(try await Self.home(location: "27.95,-82.46"))
         StubProvider.reset(["api.dreadcast.app": (503, #"{"error":{"code":"radar_unavailable"}}"#)])

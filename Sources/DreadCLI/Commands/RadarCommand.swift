@@ -286,7 +286,7 @@ enum RadarCommand {
         if let mph = n.motionMPH, let bearing = n.motionBearing {
             lines.append("Echoes are moving \(Compass.word(bearing)) at \(fmt.speed(mph: mph)).")
         }
-        lines.append("Radar: \(n.source ?? "RainViewer").")
+        lines.append("Radar: \(n.radarCredit).")
         ctx.write(lines)
         return .ok
     }
@@ -311,8 +311,8 @@ struct RadarJSON: Encodable {
 
     init(place: Place, nowcast: Nowcast, stale: Bool) {
         location = LocationJSON(place)
-        credit = nowcast.source ?? "RainViewer"
-        source = credit == "RainViewer" ? "rainviewer" : "dreadcast"
+        credit = nowcast.radarCredit
+        source = nowcast.radarSourceID
         frames = nowcast.frameTimes
         raining = nowcast.isRainingNow
         currentDBZ = nowcast.currentDBZ
@@ -347,4 +347,18 @@ struct StormCellJSON: Encodable {
         closestApproachMinutes = cell.closestApproachMinutes
         arrivalMinutes = cell.arrivalMinutes
     }
+}
+
+extension Nowcast {
+    /// Whom to credit for the radar behind it, such as "NOAA MRMS", "EUMETNET OPERA
+    /// (CC BY 4.0, resampled)" or "RainViewer". Every place that names the source
+    /// uses this, so none can fall back to naming RainViewer by mistake.
+    var radarCredit: String { source ?? Context.rainViewerCredit }
+
+    /// The credit without its license note, for headers short on room: "EUMETNET OPERA".
+    /// The full credit still appears with the output.
+    var radarName: String { radarCredit.components(separatedBy: " (")[0] }
+
+    /// `dreadcast` (the Dreadcast API) or `rainviewer`, for JSON.
+    var radarSourceID: String { radarCredit == Context.rainViewerCredit ? "rainviewer" : "dreadcast" }
 }

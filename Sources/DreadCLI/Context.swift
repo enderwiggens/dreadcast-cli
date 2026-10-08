@@ -303,7 +303,7 @@ public final class Context: @unchecked Sendable {
         let frames = Self.pick(radar.frames, time: \.time, count: count, spacing: spacing)
         let fields = await loader.fields(manifest: radar, frames: frames, viewport: viewport)
         guard !fields.isEmpty else { throw DreadcastError.unavailable("Radar frames are unavailable right now.") }
-        return RadarLoop(fields: fields, credit: "RainViewer", delayed: false, newestFrame: radar.frames.last?.path, fromAPI: false)
+        return RadarLoop(fields: fields, credit: Self.rainViewerCredit, delayed: false, newestFrame: radar.frames.last?.path, fromAPI: false)
     }
 
     /// The Dreadcast API's loop for a place, or nil when there's no API, no region
@@ -350,6 +350,8 @@ public final class Context: @unchecked Sendable {
     }
 
     public static let nowcastViewportSize = 160
+    /// The credit `radarLoop` gives RainViewer, which `Nowcast.radarSourceID` keys on.
+    public static let rainViewerCredit = "RainViewer"
     public static let nowcastRangeMiles = 100.0
 
     public func nowcast(_ place: Place) async -> Fetched<Nowcast> {

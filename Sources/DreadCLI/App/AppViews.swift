@@ -163,7 +163,7 @@ final class RadarView: AppView {
     private func sources(_ f: AppFrame, lightning: Bool) -> String {
         var names = ["OPEN-METEO"]
         if f.place.isUnitedStates { names.append("NWS") }
-        names.append(radar.credit.uppercased())
+        if let credit = radar.credit { names.append(credit.uppercased()) }
         if lightning { names.append("XWEATHER") }
         return names.joined(separator: " · ")
     }

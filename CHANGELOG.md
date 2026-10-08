@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.1 — 2026-10-07
+
+### Fixed
+
+- Rain timing named RainViewer as its radar even when the radar came from the
+  Dreadcast API: in `dread eta`'s header, in `dread now`'s sources line, and as
+  `"source": "rainviewer"` in `dread eta --json` and `dread now --json`. Each now names
+  the radar used, such as NOAA MRMS or EUMETNET OPERA with its license, and the JSON
+  adds a `credit`. `dread eta` shows the credit on its own Radar row, so Europe's fits
+  in 80 columns.
+- The app's Radar tab no longer credits RainViewer while its radar is still loading.
+
 ## 0.3.0 — 2026-10-07
 
 ### Added
