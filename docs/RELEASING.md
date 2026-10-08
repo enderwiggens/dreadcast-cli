@@ -97,6 +97,7 @@ more than one certificate has that name. Then, with the notarization key’s val
       EUMETNET OPERA with its license
 - [ ] The repository URL in the User-Agent resolves
 - [ ] Release has six files and notes; the formula is updated and `brew test` passes
-- [ ] The macOS binary is notarized: `spctl -a -t exec -vv $(which dread)` reports
+- [ ] The macOS binary is notarized:
+      `spctl -a -t open --context context:primary-signature -vv $(which dread)` reports
       “Notarized Developer ID”
 - [ ] Provider terms re-checked for any new source; privacy docs match what’s sent

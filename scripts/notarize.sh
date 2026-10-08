@@ -46,9 +46,11 @@ while :; do
 done
 echo "Notarization $ID: Accepted"
 
-# Gatekeeper looks the ticket up online, so a failed check is retried a few times.
+# Gatekeeper looks the ticket up online, so a failed check is retried a few times. A
+# command-line tool is assessed as a file to open: `--type execute` only accepts apps
+# and calls a bare binary "not an app" even when it's notarized.
 for attempt in 1 2 3 4 5; do
-  spctl --assess --type execute -vv "$BINARY" > "$WORK/gatekeeper.txt" 2>&1 || true
+  spctl --assess --type open --context context:primary-signature -vv "$BINARY" > "$WORK/gatekeeper.txt" 2>&1 || true
   if grep -q "source=Notarized Developer ID" "$WORK/gatekeeper.txt"; then
     cat "$WORK/gatekeeper.txt"
     exit 0
