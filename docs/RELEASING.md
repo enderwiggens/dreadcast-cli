@@ -19,13 +19,17 @@ Versions follow semantic versioning; the tag is the version with a `v`.
 
    - checks that the tag matches `Dreadcast.version` and that the changelog has a
      section for it, and runs the tests, before building anything
-   - builds `dread-macos-universal.zip` (Apple silicon and Intel), signed with Developer
-     ID and notarized when the secrets below are set, and ad-hoc signed otherwise
+   - builds `dread-macos-universal.zip` (Apple silicon and Intel), signs it with
+     Developer ID, notarizes it, and checks that Gatekeeper accepts it (ad-hoc signed
+     instead if the secrets below are missing)
    - builds the fully static `dread-linux-x86_64.tar.gz` and `dread-linux-arm64.tar.gz`
      with the Swift Static Linux SDK, and runs `scripts/smoke-test.sh` against the
      x86_64 binary
    - attaches each archive with a `.sha256` checksum, then sets the release’s title and
-     notes from its changelog section
+     notes from its changelog section. The Linux files are published only after the
+     macOS binary is notarized, so a release is never missing its macOS download; if
+     notarization fails or times out, nothing is published, and `gh run rerun <run>
+     --failed` tries again.
 
    File names carry no version, so `releases/latest/download/<file>` links stay valid.
 3. Once the release has all six files, generate the formula from their checksums and
@@ -40,9 +44,12 @@ Versions follow semantic versioning; the tag is the version with a `v`.
 
 ## Signing and notarization
 
-Without these repository secrets, the macOS binary is ad-hoc signed: Homebrew and
-`curl` installs run as is, but a zip downloaded in a browser needs its quarantine flag
-cleared. With them, the release is signed with Developer ID and notarized.
+Releases are signed with the Developer ID Application certificate for Kevin Fleming
+(team `MY488U92K9`), issued from Apple’s G2 intermediate and valid until
+**2031-09-16**, and notarized with the App Store Connect API key “Dreadcast CLI
+notarization” (Developer role). The certificate and key live in these repository
+secrets; without them the macOS binary is only ad-hoc signed, and a zip downloaded in a
+browser needs its quarantine flag cleared.
 
 | Secret | Value |
 | --- | --- |
@@ -56,6 +63,17 @@ cleared. With them, the release is signed with Developer ID and notarized.
 A bare binary can’t be stapled, so Gatekeeper checks the notarization online the first
 time the binary runs.
 
+**Checking without a release.** The Signing check workflow signs and notarizes a build
+with these secrets and publishes nothing. It runs on pull requests that change signing,
+and from the Actions tab; run it after replacing a secret.
+
+**Replacing the certificate**, before it expires or if it’s compromised: on
+developer.apple.com, create a Developer ID Application certificate with the G2 Sub-CA
+from a new certificate signing request, export it with its key as `.p12`, update
+`MACOS_CERTIFICATE` and `MACOS_CERTIFICATE_PASSWORD`, and run the Signing check.
+Releases already signed keep working after a certificate expires, because their
+signatures are timestamped; only revoking a certificate invalidates them.
+
 ## Building locally
 
 ```sh
@@ -64,9 +82,11 @@ scripts/build-linux.sh 0.3.0     # Linux; needs a swift.org toolchain and the ma
 scripts/smoke-test.sh .build/release/dread
 ```
 
-To sign locally, set `DREADCAST_SIGNING_IDENTITY` before `scripts/build-release.sh`,
-then notarize with `xcrun notarytool submit dist/dread-macos-universal.zip
---keychain-profile dreadcast --wait`.
+To sign locally, set `DREADCAST_SIGNING_IDENTITY` before `scripts/build-release.sh`: the
+identity’s name, or its SHA-1 hash from `security find-identity -v -p codesigning` if
+more than one certificate has that name. Then, with the notarization key’s values in
+`NOTARY_KEY` (the `.p8`, base64-encoded), `NOTARY_KEY_ID` and `NOTARY_ISSUER`, run
+`scripts/notarize.sh dist/dread-macos-universal.zip dist/dread`.
 
 ## Checklist
 
@@ -80,4 +100,7 @@ then notarize with `xcrun notarytool submit dist/dread-macos-universal.zip
       EUMETNET OPERA with its license
 - [ ] The repository URL in the User-Agent resolves
 - [ ] Release has six files and notes; the formula is updated and `brew test` passes
+- [ ] The macOS binary is notarized:
+      `spctl -a -t open --context context:primary-signature -vv $(which dread)` reports
+      “Notarized Developer ID”
 - [ ] Provider terms re-checked for any new source; privacy docs match what’s sent

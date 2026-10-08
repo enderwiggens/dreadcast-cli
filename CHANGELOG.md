@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.2 — 2026-10-08
+
+### Changed
+
+- The macOS binary is signed with Developer ID and notarized by Apple, so it runs
+  however it's downloaded, including a zip from the browser, without clearing the
+  quarantine flag. Releases check that Gatekeeper accepts it before publishing, and a
+  Signing check workflow tests the signing setup without making a release.
+
 ## 0.3.1 — 2026-10-07
 
 ### Fixed
