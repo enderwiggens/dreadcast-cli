@@ -4,15 +4,16 @@
 
 ### Added
 
-- Radar from the Dreadcast API: with an API set (`dread config set api-url` or
-  `DREADCAST_API_URL`), places it covers get radar read as measured values rather than
-  colors, about 1 km across: NOAA MRMS for the contiguous US, Alaska, Hawaii, Puerto Rico
-  and the Caribbean, and Guam, and EUMETNET OPERA for Europe. Places elsewhere, and
-  places inside a region that its radars don't reach (such as Italy), keep RainViewer,
-  which is also the fallback when the API can't provide a loop; `radar-source
-  rainviewer` opts out. Each place's loop is timed and labeled "radar delayed" by its
-  own region. The radar footer, `dread eta` and `dread credits` name the source, and
-  Europe's radar carries its CC BY 4.0 license.
+- Radar from the Dreadcast API at `https://api.dreadcast.app`, by default: places it
+  covers get radar read as measured values rather than colors, about 1 km across: NOAA
+  MRMS for the contiguous US, Alaska, Hawaii, Puerto Rico and the Caribbean, and Guam,
+  and EUMETNET OPERA for Europe. Places elsewhere, and places inside a region that its
+  radars don't reach (such as Italy), keep RainViewer, which is also the fallback when
+  the API can't provide a loop. `radar-source rainviewer` or `api-url off` opts out,
+  and `api-url` or `DREADCAST_API_URL` points at another API. Each place's loop is
+  timed and labeled "radar delayed" by its own region. The radar footer, `dread eta`
+  and `dread credits` name the source, and Europe's radar carries its CC BY 4.0
+  license.
 
 ### Changed
 

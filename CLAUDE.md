@@ -75,7 +75,8 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
   `docs/API.md`) where one of its regions covers the place, and RainViewer elsewhere
   and as the fallback. A place uses the API only when its own pixel has coverage; its
   region times the loop and decides "delayed"; regions are drawn together in the
-  manifest's order. `Dreadcast.apiBaseURL` is nil until the public API is live.
+  manifest's order. `Dreadcast.apiBaseURL` (`https://api.dreadcast.app`) is the
+  default; `api-url off` and `radar-source rainviewer` opt out.
   Validate manifests the way the Mac app does, only request tiles from the allowed
   hosts, and never show manifest text that could hold control characters.
 - New data sources get a cached loader in `Context` with an honest refresh interval,
