@@ -1,7 +1,7 @@
 #!/bin/sh
 # Prints the Homebrew formula for a published release, with each archive's checksum
 # read from the release's .sha256 files:
-#   scripts/homebrew-formula.sh 0.2.0 > ../homebrew-dreadcast/Formula/dreadcast.rb
+#   scripts/homebrew-formula.sh 0.3.0 > ../homebrew-dreadcast/Formula/dreadcast.rb
 set -eu
 
 VERSION="${1:?Usage: scripts/homebrew-formula.sh <version>}"
