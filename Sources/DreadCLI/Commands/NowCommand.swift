@@ -110,7 +110,7 @@ enum NowCommand {
             }
         }
         lines.append("")
-        lines.append(sourcesLine(place: place, weather: weather, lightning: lightning != nil, radar: nowcast != nil, ctx: ctx, width: width))
+        lines.append(sourcesLine(place: place, weather: weather, lightning: lightning != nil, radar: nowcast?.radarCredit, ctx: ctx, width: width))
         if let report, ctx.quipsEnabled, let quip = Quip.line(report: report, alertsActive: alertsActive, now: ctx.now) {
             lines.append("  " + s.paint(quip, Theme.lime, italic: true))
         }
@@ -160,12 +160,13 @@ enum NowCommand {
     }
 
     /// Where the readings came from and how old they are.
-    static func sourcesLine(place: Place, weather: Fetched<WeatherReport>, lightning: Bool, radar: Bool, ctx: Context, width: Int) -> String {
+    /// `radar` is the radar's credit, when rain timing came from radar.
+    static func sourcesLine(place: Place, weather: Fetched<WeatherReport>, lightning: Bool, radar: String?, ctx: Context, width: Int) -> String {
         let s = ctx.styler
         var sources = ["OPEN-METEO"]
         if place.isUnitedStates { sources.append("NWS") }
         if lightning { sources.append("XWEATHER") }
-        if radar { sources.append("RAINVIEWER") }
+        if let radar { sources.append(radar.uppercased()) }
         let updated: String
         if let stored = weather.storedAt {
             updated = (weather.isStale ? "stale · " : "") + "updated " + Formatter.ago(stored, now: ctx.now)
@@ -518,7 +519,9 @@ struct AlertJSON: Encodable {
 }
 
 struct NowcastSummaryJSON: Encodable {
-    let source = "rainviewer"
+    /// `dreadcast` (the Dreadcast API) or `rainviewer`.
+    let source: String
+    let credit: String
     let latestFrame: Date?
     let raining: Bool
     let arrivalMinutes: Int?
@@ -530,6 +533,8 @@ struct NowcastSummaryJSON: Encodable {
     let confidence: String
 
     init(_ n: Nowcast) {
+        source = n.radarSourceID
+        credit = n.radarCredit
         latestFrame = n.latestFrame
         raining = n.isRainingNow
         arrivalMinutes = n.arrivalMinutes

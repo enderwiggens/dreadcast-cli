@@ -383,3 +383,26 @@ struct OutlookTests {
         #expect(snapshot.grid?.value(at: GeoCoordinate(latitude: 10, longitude: -10)) == 0)
     }
 }
+
+@Suite("Tropical storms")
+struct TropicalTests {
+    /// The NHC summary layer as GeoJSON: one storm at its current position and 12 hours on.
+    static func payload(name: String, development: String) -> Data {
+        func feature(tau: Int, longitude: Double) -> String {
+            #"{"type":"Feature","geometry":{"type":"Point","coordinates":[\#(longitude),25.0]},"properties":{"stormname":"\#(name)","stormtype":"TS","advdate":"1000 PM CDT Wed Oct 07 2026","tau":\#(tau),"tcdvlp":"\#(development)","maxwind":55,"binnumber":"AT4"}}"#
+        }
+        return Data(#"{"type":"FeatureCollection","features":[\#(feature(tau: 12, longitude: -86.0)),\#(feature(tau: 0, longitude: -85.0))]}"#.utf8)
+    }
+
+    @Test func keepsTheCurrentPositionAndNamesTheStormOnce() throws {
+        let storms = try TropicalService.decode(Self.payload(name: "Tropical Storm Isaias", development: "Tropical Storm"))
+        let storm = try #require(storms.first)
+        #expect(storms.count == 1)
+        #expect(storm.longitude == -85.0)
+        #expect(storm.title == "Tropical Storm Isaias")
+        let bare = try #require(try TropicalService.decode(Self.payload(name: "Isaias", development: "Tropical Storm")).first)
+        #expect(bare.title == "Tropical Storm Isaias")
+        let hurricane = try #require(try TropicalService.decode(Self.payload(name: "Hurricane Rachel", development: "Hurricane")).first)
+        #expect(hurricane.title == "Hurricane Rachel")
+    }
+}

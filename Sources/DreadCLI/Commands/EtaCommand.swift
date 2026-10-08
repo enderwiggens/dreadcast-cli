@@ -16,7 +16,7 @@ enum EtaCommand {
             ctx.writeJSON(EtaJSON(place: place, nowcast: nowcast, stale: fetched.isStale))
         case .plain:
             ctx.write([headline(nowcast, fmt: fmt, ctx: ctx, styled: false), motionLine(nowcast, fmt: fmt),
-                       "Confidence: \(nowcast.confidence.rawValue). Radar: \(nowcast.source ?? "RainViewer"), \(nowcast.frameTimes.count) frames."])
+                       "Confidence: \(nowcast.confidence.rawValue). Radar: \(nowcast.radarCredit), \(nowcast.frameTimes.count) frames."])
         case .pretty:
             ctx.write(pretty(place: place, nowcast: nowcast, fetched: fetched, fmt: fmt, ctx: ctx))
         }
@@ -60,7 +60,7 @@ enum EtaCommand {
         let width = min(max(ctx.terminal.columns - 2, 60), 100)
         var lines = [""]
         lines.append(TextWidth.spread("  " + s.paint("RAIN ETA", Theme.porcelain, bold: true) + s.paint("  ·  ", Theme.faint) + place.name,
-                                      s.paint("RAINVIEWER" + (fetched.isStale ? " · stale" : ""), fetched.isStale ? Theme.advisory : Theme.faint), width: width))
+                                      s.paint(n.radarName.uppercased() + (fetched.isStale ? " · stale" : ""), fetched.isStale ? Theme.advisory : Theme.faint), width: width))
         lines.append("")
         lines.append("  " + headline(n, fmt: fmt, ctx: ctx, styled: true))
         lines.append("")
@@ -88,8 +88,9 @@ enum EtaCommand {
 
         let label = { (text: String) in "  " + s.paint(TextWidth.pad(text, to: 12), Theme.mist) }
         lines.append(label("Motion") + motionLine(n, fmt: fmt))
+        lines.append(label("Radar") + n.radarCredit)
         if let first = n.frameTimes.first, let last = n.frameTimes.last {
-            lines.append(label("Frames") + "\(n.source ?? "RainViewer") \(fmt.time(first))–\(fmt.time(last))" + s.paint("  (\(n.frameTimes.count) frames, about \(max(1, Int((last.timeIntervalSince(first) / Double(max(1, n.frameTimes.count - 1)) / 60).rounded()))) min apart)", Theme.faint))
+            lines.append(label("Frames") + "\(fmt.time(first))–\(fmt.time(last))" + s.paint("  (\(n.frameTimes.count) frames, about \(max(1, Int((last.timeIntervalSince(first) / Double(max(1, n.frameTimes.count - 1)) / 60).rounded()))) min apart)", Theme.faint))
         }
         let confidenceColor: RGB = n.confidence == .high ? Theme.mint : n.confidence == .medium ? Theme.advisory : Theme.warning
         var reasons: [String] = []
@@ -127,7 +128,10 @@ struct EtaJSON: Encodable {
     struct Step: Encodable { let minutes: Int; let dbz: Double? }
     let schema = "dreadcast.eta/1"
     let location: LocationJSON
-    let source = "rainviewer"
+    /// `dreadcast` (the Dreadcast API) or `rainviewer`.
+    let source: String
+    /// Whom to credit, such as "NOAA MRMS" or "EUMETNET OPERA (CC BY 4.0, resampled)".
+    let credit: String
     let method = "cross-correlation motion, backward trace through the latest frame"
     let generatedAt: Date
     let frames: [Date]
@@ -147,6 +151,8 @@ struct EtaJSON: Encodable {
 
     init(place: Place, nowcast n: Nowcast, stale: Bool) {
         location = LocationJSON(place)
+        source = n.radarSourceID
+        credit = n.radarCredit
         generatedAt = n.generatedAt
         frames = n.frameTimes
         raining = n.isRainingNow

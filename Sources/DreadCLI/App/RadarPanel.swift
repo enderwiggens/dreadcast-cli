@@ -13,7 +13,7 @@ final class RadarPanel: @unchecked Sendable {
         let frames: [Raster]
         let times: [Date]
         let loadedAt: Date
-        var credit = "RainViewer"
+        var credit = Context.rainViewerCredit
         var delayed = false
     }
 
@@ -108,8 +108,8 @@ final class RadarPanel: @unchecked Sendable {
         return (loop.delayed ? "radar delayed · " : "latest frame ") + Formatter.ago(latest, now: Date())
     }
 
-    /// Whose radar is showing, such as NOAA MRMS or RainViewer.
-    var credit: String { lock.withLock { loop?.credit } ?? "RainViewer" }
+    /// Whose radar is showing, such as NOAA MRMS or RainViewer; nil until it loads.
+    var credit: String? { lock.withLock { loop?.credit } }
 
     private func load(_ f: AppFrame, key: String, width: Int, rows: Int) {
         lock.withLock { loading = key }

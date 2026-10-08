@@ -197,7 +197,7 @@ enum TopCommand {
         if let storms = snapshot.tropical?.value {
             for (i, storm) in storms.enumerated() where storm.coordinate.distanceMiles(to: here) <= 1500 {
                 let miles = storm.coordinate.distanceMiles(to: here)
-                rows.append(Row(pid: 7001 + i, system: storm.classification.capitalized + " " + storm.name, state: "TRACKING",
+                rows.append(Row(pid: 7001 + i, system: storm.title, state: "TRACKING",
                                 distance: fmt.distance(miles: miles), bearing: Compass.point(here.bearingDegrees(to: storm.coordinate)), moving: "—", eta: "—",
                                 peak: storm.maximumWindKnots.map { "\($0) kt" } ?? "—", color: Theme.mint, stateColor: Theme.mint,
                                 detail: ["NHC advisory \(storm.advisory ?? ""). Follow the NHC and local officials for forecasts."],
