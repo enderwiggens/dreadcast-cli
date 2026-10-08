@@ -125,6 +125,16 @@ routes:)` returns the exit code, output and errors, with any provider host left 
 `routes` failing as if offline. Use `DREADCAST_CREDENTIAL_STORE=none` (set by the
 helper) so tests never read real credentials.
 
+## Feature board
+
+Keep the feature board current. It tracks work across the app, server, CLI and
+website at `~/code/radarbar-plan/plan/board.html`, which exists only on Kevin's
+Mac; skip this where that folder is absent. When you open a PR, link it to its
+card and move the card with `node ~/code/radarbar-plan/plan/board-cli.js`
+(`list`, `update <id> --link <PR url>`, `move <id> review`). When you leave a
+bug for later, add one: `add "<title>" --column bugs --type bug`. A background
+sync follows linked PRs to Done and adds cards for PRs nobody linked.
+
 ## Definition of done
 
 - Tests pass and new behavior has deterministic tests.
