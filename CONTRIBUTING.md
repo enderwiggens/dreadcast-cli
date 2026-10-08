@@ -26,9 +26,9 @@ there instead of `scripts/test.sh`).
 
 `scripts/test.sh` runs everything; `scripts/test.sh --filter CommandTests` runs one
 suite. `scripts/smoke-test.sh .build/release/dread` checks a built binary end to end
-without the network, as CI does for the static Linux build. Provider decoding lives in `Tests/DreadcastKitTests`, terminal rendering in
-`Tests/DreadTerminalTests`, and the app, scenes, saved places and commands in
-`Tests/DreadCLITests`. A behavior change should come with a test that fails without it;
+without the network, as CI does for the static Linux build. Provider decoding lives in
+`Tests/DreadcastKitTests`, terminal rendering in `Tests/DreadTerminalTests`, and the
+app, scenes, saved places and commands in `Tests/DreadCLITests`. A behavior change should come with a test that fails without it;
 for a command, add a case to `CommandTests`, which runs the real command with provider
 responses stubbed and checks its output and exit code.
 
@@ -43,4 +43,5 @@ responses stubbed and checks its output and exit code.
 
 See [CLAUDE.md](CLAUDE.md) for the architecture and conventions,
 [TRADEMARKS.md](TRADEMARKS.md) before publishing a fork, and [SECURITY.md](SECURITY.md)
-to report a vulnerability privately.
+to report a vulnerability privately. Everyone taking part follows the
+[code of conduct](CODE_OF_CONDUCT.md).

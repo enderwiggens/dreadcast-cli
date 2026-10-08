@@ -20,7 +20,7 @@ shells, never polls a provider faster than this table allows.
 | Kp index | [NOAA SWPC](https://www.swpc.noaa.gov/) | 10 min | Global | Public domain |
 | Aurora | [NOAA SWPC OVATION](https://www.swpc.noaa.gov/products/aurora-30-minute-forecast) | 15 min | Global | Public domain |
 | HF radio absorption | [NOAA SWPC D-RAP](https://www.swpc.noaa.gov/products/d-region-absorption-predictions-d-rap) | 15 min | Global | Public domain |
-| Earthquakes | [USGS](https://earthquake.usgs.gov/earthquakes/feed/) | 5 min | Global, M2.5+ | Public domain |
+| Earthquakes | [USGS](https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php) | 5 min | Global, M2.5+ | Public domain |
 | Volcanoes | [USGS HANS](https://volcanoes.usgs.gov/hans-public/) | 15 min | US-monitored volcanoes | Public domain |
 | Tsunamis | [NTWC / PTWC](https://www.tsunami.gov/) | 15 min | Bulletin areas | Public domain |
 | Smoke | [NOAA HMS](https://www.ospo.noaa.gov/products/land/hms.html) | 15 min | North America | Public domain |
