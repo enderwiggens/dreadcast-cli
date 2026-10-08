@@ -11,6 +11,8 @@
   adds a `credit`. `dread eta` shows the credit on its own Radar row, so Europe's fits
   in 80 columns.
 - The app's Radar tab no longer credits RainViewer while its radar is still loading.
+- The Systems tab named tropical storms twice, as in "Tropical Storm Tropical Storm
+  Isaias": NHC's names already include the classification.
 
 ## 0.3.0 — 2026-10-07
 

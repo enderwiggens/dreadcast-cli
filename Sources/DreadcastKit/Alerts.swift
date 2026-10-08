@@ -321,6 +321,12 @@ public struct TropicalStorm: Identifiable, Sendable, Codable {
     public let maximumWindKnots: Int?
 
     public var coordinate: GeoCoordinate { GeoCoordinate(latitude: latitude, longitude: longitude) }
+
+    /// "Tropical Storm Isaias". NHC's names usually carry the classification already,
+    /// so it's added only when missing.
+    public var title: String {
+        name.lowercased().hasPrefix(classification.lowercased()) ? name : classification.capitalized + " " + name
+    }
 }
 
 public struct TropicalService: Sendable {
