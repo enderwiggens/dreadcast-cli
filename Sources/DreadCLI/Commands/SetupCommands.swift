@@ -35,9 +35,10 @@ func radarSummary(_ ctx: Context) -> String {
     let s = ctx.styler
     if ctx.config.radarSource == "rainviewer" { return "RainViewer" + s.paint("  (radar-source rainviewer)", Theme.faint) }
     guard let api = ctx.dreadcastAPI else {
-        return "RainViewer" + s.paint("  (NOAA MRMS from the Dreadcast API once an api-url is set)", Theme.faint)
+        return "RainViewer" + s.paint("  (the Dreadcast API's radar once an api-url is set)", Theme.faint)
     }
-    return "NOAA MRMS in the contiguous US, RainViewer elsewhere" + s.paint("  (\(api.host ?? api.absoluteString))", Theme.faint)
+    return "The Dreadcast API where it covers a place (the US and Europe), RainViewer elsewhere"
+        + s.paint("  (\(api.host ?? api.absoluteString))", Theme.faint)
 }
 
 /// `dread setup`: choose a location and units.
@@ -179,7 +180,7 @@ enum ConfigCommand {
                 config.forecast = row.rawValue
             case "radar-source":
                 guard ["auto", "rainviewer"].contains(value) else {
-                    return ctx.fail("radar-source: auto (NOAA MRMS from the Dreadcast API in the contiguous US, RainViewer elsewhere) or rainviewer.", code: .usage)
+                    return ctx.fail("radar-source: auto (the Dreadcast API where it covers a place, RainViewer elsewhere) or rainviewer.", code: .usage)
                 }
                 config.radarSource = value
             case "api-url":
@@ -254,7 +255,9 @@ enum CreditsCommand {
         let s = ctx.styler
         let sources: [(String, String, String)] = [
             ("Open-Meteo", "Weather and air quality forecasts, geocoding. CC BY 4.0.", "https://open-meteo.com/"),
-            ("NOAA MRMS", "Radar for the contiguous US, through the Dreadcast API when one is set. Public domain.", "https://www.nssl.noaa.gov/projects/mrms/"),
+            ("NOAA MRMS", "Radar for the US, Puerto Rico and Guam, through the Dreadcast API. Public domain.", "https://www.nssl.noaa.gov/projects/mrms/"),
+            ("EUMETNET OPERA", "Radar for Europe, through the Dreadcast API, which resamples it into tiles. CC BY 4.0.",
+             "https://www.eumetnet.eu/observations/weather-radar-network/\nhttps://creativecommons.org/licenses/by/4.0/"),
             ("RainViewer", "Radar imagery. Free API for personal and non-commercial use.", "https://www.rainviewer.com/api.html"),
             ("National Weather Service", "Active alerts. US government work, public domain.", "https://www.weather.gov/documentation/services-web-api"),
             ("NOAA SPC", "Day 1 convective outlook.", "https://www.spc.noaa.gov/"),
@@ -271,9 +274,11 @@ enum CreditsCommand {
             ("SunCalc", "Moon phase method. BSD-2-Clause, Vladimir Agafonkin.", "https://github.com/mourner/suncalc")
         ]
         var lines = ["", "  " + s.paint("DATA SOURCES", Theme.porcelain, bold: true), ""]
-        for (name, detail, url) in sources {
+        for (name, detail, urls) in sources {
             lines.append("  " + s.bold(TextWidth.pad(name, to: 24)) + detail)
-            lines.append("  " + String(repeating: " ", count: 24) + s.paint(url, Theme.faint))
+            for url in urls.split(separator: "\n") {
+                lines.append("  " + String(repeating: " ", count: 24) + s.paint(String(url), Theme.faint))
+            }
         }
         lines.append(contentsOf: ["", "  Locations are rounded to two decimals (about 1 km) before they're stored or sent.", ""])
         ctx.write(lines)

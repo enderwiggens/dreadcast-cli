@@ -75,8 +75,9 @@ then notarize with `xcrun notarytool submit dist/dread-macos-universal.zip
 - [ ] Manual check in Terminal, iTerm2, Ghostty and Kitty: `dread` (every tab, and the
       Places tab with two or more saved places), `dread now`, `dread radar`
 - [ ] Manual check on a Linux machine: `dread`, `dread now`, `dread radar --still`
-- [ ] Radar from the Dreadcast API: `curl -fsS https://api.dreadcast.app/v1/radar/latest`
-      answers, and `dread radar` at a US location credits NOAA MRMS
+- [ ] Radar from the Dreadcast API: `curl -fsS https://api.dreadcast.app/v2/radar/latest`
+      answers, `dread radar` at a US location credits NOAA MRMS, and in London credits
+      EUMETNET OPERA with its license
 - [ ] The repository URL in the User-Agent resolves
 - [ ] Release has six files and notes; the formula is updated and `brew test` passes
 - [ ] Provider terms re-checked for any new source; privacy docs match what’s sent

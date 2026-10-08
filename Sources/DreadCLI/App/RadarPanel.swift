@@ -23,8 +23,8 @@ final class RadarPanel: @unchecked Sendable {
         case note(String, failed: Bool)
     }
 
-    /// Reload every few minutes for new frames (MRMS scans every two, RainViewer every
-    /// ten); failures wait a minute to retry.
+    /// Reload every few minutes for new frames (the Dreadcast API's come every four
+    /// minutes, RainViewer's every ten); failures wait a minute to retry.
     static let reload: TimeInterval = 180
     static let retry: TimeInterval = 60
 

@@ -70,11 +70,14 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
   `FoundationXML` on Linux. CI builds and tests both platforms.
 - Network work goes through `HTTPClient` with the identifying User-Agent, timeouts and
   size limits.
-- Radar has two sources behind `Context.radarLoop`: NOAA MRMS from the Dreadcast API
-  (`DreadcastRadar.swift`, following dreadcast-server's `docs/API.md`) for the
-  contiguous US when an API is set, and RainViewer elsewhere and as the fallback.
-  `Dreadcast.apiBaseURL` is nil until the public API is live. Validate manifests the
-  way the Mac app does, and only request tiles from the allowed hosts.
+- Radar has two sources behind `Context.radarLoop`: the Dreadcast API's
+  `/v2/radar/latest` (`DreadcastRadar.swift`, following dreadcast-server's
+  `docs/API.md`) where one of its regions covers the place, and RainViewer elsewhere
+  and as the fallback. A place uses the API only when its own pixel has coverage; its
+  region times the loop and decides "delayed"; regions are drawn together in the
+  manifest's order. `Dreadcast.apiBaseURL` is nil until the public API is live.
+  Validate manifests the way the Mac app does, only request tiles from the allowed
+  hosts, and never show manifest text that could hold control characters.
 - New data sources get a cached loader in `Context` with an honest refresh interval,
   independent failure, and entries in `docs/DATA_PROVIDERS.md`, `docs/PRIVACY.md` and
   `dread credits`.

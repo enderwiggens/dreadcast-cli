@@ -16,7 +16,7 @@ enum EtaCommand {
             ctx.writeJSON(EtaJSON(place: place, nowcast: nowcast, stale: fetched.isStale))
         case .plain:
             ctx.write([headline(nowcast, fmt: fmt, ctx: ctx, styled: false), motionLine(nowcast, fmt: fmt),
-                       "Confidence: \(nowcast.confidence.rawValue). Source: \(nowcast.source ?? "RainViewer") radar, \(nowcast.frameTimes.count) frames."])
+                       "Confidence: \(nowcast.confidence.rawValue). Radar: \(nowcast.source ?? "RainViewer"), \(nowcast.frameTimes.count) frames."])
         case .pretty:
             ctx.write(pretty(place: place, nowcast: nowcast, fetched: fetched, fmt: fmt, ctx: ctx))
         }

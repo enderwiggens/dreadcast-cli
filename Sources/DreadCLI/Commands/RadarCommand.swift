@@ -41,7 +41,7 @@ enum RadarCommand {
 
         var state = LoopState(range: range, frames: [], frameIndex: 0, paused: still)
         // Whose radar this is, whether it's late, and the newest frame, from the last load.
-        var credit = "RainViewer", delayed = false, newest: String?
+        var credit = "RainViewer", delayed = false, fromAPI = false, newest: String?
         var problem = "unknown error"
         func load(range: Double) async -> (RadarScene, Raster, [Raster], [Date]) {
             let viewport = RadarViewport(center: place.coordinate, rangeMiles: range, width: layout.pixelWidth, height: layout.pixelHeight)
@@ -52,6 +52,7 @@ enum RadarCommand {
                 let loop = try await ctx.radarLoop(for: place, viewport: viewport, frames: frameCount)
                 credit = loop.credit
                 delayed = loop.delayed
+                fromAPI = loop.fromAPI
                 newest = loop.newestFrame
                 return (scene, base, loop.fields.map { scene.compose(base: base, field: $0) }, loop.fields.map(\.time))
             } catch {
@@ -214,11 +215,11 @@ enum RadarCommand {
                 if once, advances >= state.frames.count - 1 { return .ok }
             }
 
-            // New frames arrive every two minutes (MRMS) to ten (RainViewer).
+            // New frames arrive every four minutes (the Dreadcast API) to ten (RainViewer).
             if Date().timeIntervalSince(lastManifestCheck) > 120 {
                 lastManifestCheck = Date()
                 ctx.refreshClock()
-                if let fresh = await ctx.newestRadarFrame(for: place), fresh != newest {
+                if let fresh = await ctx.newestRadarFrame(for: place, fromAPI: fromAPI), fresh != newest {
                     let reloaded = await load(range: state.range)
                     if !reloaded.2.isEmpty {
                         scene = reloaded.0
@@ -285,7 +286,7 @@ enum RadarCommand {
         if let mph = n.motionMPH, let bearing = n.motionBearing {
             lines.append("Echoes are moving \(Compass.word(bearing)) at \(fmt.speed(mph: mph)).")
         }
-        lines.append("Source: \(n.source ?? "RainViewer").")
+        lines.append("Radar: \(n.source ?? "RainViewer").")
         ctx.write(lines)
         return .ok
     }
@@ -294,7 +295,10 @@ enum RadarCommand {
 struct RadarJSON: Encodable {
     let schema = "dreadcast.radar/1"
     let location: LocationJSON
-    let source = "rainviewer"
+    /// `dreadcast` (the Dreadcast API) or `rainviewer`.
+    let source: String
+    /// Whom to credit, such as "NOAA MRMS" or "EUMETNET OPERA (CC BY 4.0, resampled)".
+    let credit: String
     let frames: [Date]
     let raining: Bool
     let currentDBZ: Double?
@@ -307,6 +311,8 @@ struct RadarJSON: Encodable {
 
     init(place: Place, nowcast: Nowcast, stale: Bool) {
         location = LocationJSON(place)
+        credit = nowcast.source ?? "RainViewer"
+        source = credit == "RainViewer" ? "rainviewer" : "dreadcast"
         frames = nowcast.frameTimes
         raining = nowcast.isRainingNow
         currentDBZ = nowcast.currentDBZ
