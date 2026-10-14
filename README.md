@@ -23,7 +23,7 @@ dread           # live radar and conditions
 `dread` puts live radar in your terminal, with the weather around it: animated radar
 centered on you, current conditions and the next two hours above it, every active
 warning in full, and a window that keeps itself up to date. It’s the open-source
-companion to **Dreadcast: Radar & Weather** for Mac and is laid out the same way, a
+companion to **Dreadcast: Weather Radar & Forecasts** for Mac and is laid out the same way, a
 calm instrument panel with the radar first. It doesn’t need the app or an account, and
 it runs on macOS and Linux.
 
