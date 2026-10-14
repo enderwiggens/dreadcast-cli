@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The README, the agent guide and TRADEMARKS.md call the Mac app by its one product
+  name, Dreadcast: Radar & Weather. TRADEMARKS.md keeps the earlier names as former names.
+
 ## 0.3.2 — 2026-10-08
 
 ### Changed
