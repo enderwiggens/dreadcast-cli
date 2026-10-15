@@ -31,12 +31,15 @@ public enum Dread {
             case "now", "weather":
                 return context.opensApp ? try await DreadApp.run(context, tab: .radar) : try await NowCommand.run(context)
             case "radar": return try await RadarCommand.run(context)
+            case "systems": return try await SystemsCommand.run(context)
             case "alerts": return try await AlertsCommand.run(context)
             case "prompt": return await PromptCommand.run(context)
             case "refresh": return await RefreshCommand.run(context)
             case "forecast": return try await ForecastCommand.run(context)
             case "outlook": return try await OutlookCommand.run(context)
-            case "top": return try await TopCommand.run(context)
+            case "top":
+                // Removed now that every view has its own command; say what replaced it.
+                return context.fail("`dread top` has been removed. Run `dread` for the app, or `dread systems` for weather systems near you.", code: .usage)
             case "lightning": return try await LightningCommand.run(context)
             case "eta": return try await EtaCommand.run(context)
             case "scene": return try await SceneCommand.run(context)
@@ -147,14 +150,31 @@ enum Help {
             Each scene brings its own highlight and map colors, as in the Dreadcast app;
             highlight and map can be fixed instead.
             """
-        case "top", "app":
+        case "systems":
+            return """
+            \(title) systems — weather systems near you, sorted by threat
+
+              dread systems                opens the app on Systems; ↑/↓ choose a system to
+                                           see its details
+              dread systems --plain        each system on one line, as when piped
+              dread systems --pretty       the table once, in color, with every system's details
+              dread systems --json         structured output (dreadcast.systems/1)
+
+            Alerts, rain and storm cells, lightning, the SPC outlook, tropical storms,
+            wildfires, air quality, smoke, dust, volcanoes and earthquakes, each with its
+            distance, bearing, timing and peak, most serious first. Listed once, it names
+            any source it couldn't reach; missing data is never reported as all clear.
+
+            Exit codes: 0 listed, 3 no source could be reached.
+            """
+        case "app":
             return """
             \(title) — the app
 
               dread                        opens on Radar: live radar under the conditions,
                                            alerts and the next two hours
-              dread top [view]             opens on a view: radar, systems, forecast, alerts,
-                                           outlook, lightning, scene or places (or 1–8)
+              dread systems                opens on Systems: weather systems near you,
+                                           sorted by threat
               dread -l <name>              opens on a saved place
 
             Keys: tab and shift-tab or 1–8 switch views · [ and ] switch places · a goes to
@@ -169,7 +189,7 @@ enum Help {
             2 minutes and conditions every 10. The place you're viewing gets everything.
 
             Piped, or with --plain or --json, `dread` prints the quick look instead, as
-            `dread now` always does.
+            `dread now` always does, and `dread systems` lists the systems once.
             """
         case "places":
             return """
@@ -225,6 +245,7 @@ enum Help {
               dread prompt                 a cached segment for prompts and status lines
 
             \(styler.bold("Weather enthusiasts"))
+              dread systems                storms, alerts, fires and more near you, by threat
               dread forecast               hourly and 7-day forecast
               dread eta                    rain arrival from radar motion
               dread outlook                solar, aurora, earthquakes, meteors and hazards
@@ -242,8 +263,8 @@ enum Help {
               --location <query>           ZIP code, place name or lat,lon
               --units imperial|metric      --json   --plain   --no-color   --ascii
 
-            Run `dread help <command>` for details. Every reading shows its source and age,
-            and `dread credits` lists the providers.
+            Run `dread help <command>` for details, and `dread help app` for the app's keys.
+            Every reading shows its source and age, and `dread credits` lists the providers.
             """
         }
     }

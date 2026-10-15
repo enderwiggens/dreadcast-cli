@@ -82,7 +82,7 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
 - New data sources get a cached loader in `Context` with an honest refresh interval,
   independent failure, and entries in `docs/DATA_PROVIDERS.md`, `docs/PRIVACY.md` and
   `dread credits`.
-- `dread` is one app with a tab per view, sharing `TopCommand.State`'s live data. A tab
+- `dread` is one app with a tab per view, sharing `LiveData.State`'s live data. A tab
   reuses its command's pretty renderer, sized by the app (`width`/`height` parameters)
   rather than the terminal, and `ctx.inApp` drops titles the app header already shows.
   New views go in `App/AppViews.swift`, keep the one-shot command, and get a tab only

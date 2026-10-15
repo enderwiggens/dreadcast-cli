@@ -41,11 +41,11 @@ it runs on macOS and Linux.
 <table>
   <tr>
     <td width="50%"><img src="docs/images/radar.png" alt="Radar at 150 miles over the built-in map"></td>
-    <td width="50%"><img src="docs/images/top.png" alt="The Systems tab listing nearby weather systems like processes"></td>
+    <td width="50%"><img src="docs/images/systems.png" alt="The Systems tab listing nearby weather systems like processes"></td>
   </tr>
   <tr>
     <td align="center"><b>Radar</b> · <code>dread radar</code></td>
-    <td align="center"><b>Systems</b> · tab 2</td>
+    <td align="center"><b>Systems</b> · <code>dread systems</code></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/alerts.png" alt="An active NWS Storm Surge Watch shown in full"></td>
@@ -172,9 +172,10 @@ step through its frames and `+` `−` change the range. Elsewhere `↑` `↓` sc
 select. `[` `]` switch places, `a` jumps to the most serious alert anywhere, `r`
 refreshes, `q` quits and `Ctrl-Z` suspends it like any other program.
 
-`dread top systems` opens straight to a tab. When output is piped, or with `--plain` or
-`--json`, `dread` prints the quick look instead, so scripts and shell profiles keep
-working. The app needs a window at least 60 columns by 16 rows.
+`dread systems` opens the app on Systems. When output is piped, or with `--plain` or
+`--json`, `dread` prints the quick look instead and `dread systems` lists the systems
+once, so scripts and shell profiles keep working. The app needs a window at least 60
+columns by 16 rows.
 
 ## Commands
 
@@ -183,6 +184,7 @@ working. The app needs a window at least 60 columns by 16 rows.
 | `dread` | The app |
 | `dread now` | A quick look: conditions, alerts, the next two hours and five days |
 | `dread radar` | Animated radar with ranges, palettes and lightning ages |
+| `dread systems` | Storm cells, alerts, fires, tropical storms and more near you, sorted by threat |
 | `dread alerts` | Active NWS watches, warnings and advisories in full |
 | `dread forecast` | Hourly and seven-day charts |
 | `dread eta` | When rain reaches you, from recent radar motion |
@@ -314,6 +316,7 @@ on). `dread alerts` is built for automation:
 dread alerts --fail-on severe && ./start-field-crew.sh
 dread alerts --follow --json | jq -r '"\(.type): \(.alert.event)"'
 dread now --all --json | jq -r '.places[] | "\(.name) \(.now.conditions.temperature)"'
+dread systems --json | jq -r '.systems[] | select(.kind == "storm-cell") | "\(.name) \(.distance) \(.bearing)"'
 ```
 
 | Exit | Meaning |

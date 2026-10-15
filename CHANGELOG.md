@@ -2,11 +2,31 @@
 
 ## Unreleased
 
+### Added
+
+- `dread systems` opens the app on its Systems tab: storm cells, alerts, fires, tropical
+  storms and more near you, sorted by threat. Piped, or with `--plain`, `--json` or
+  `--pretty`, it lists every system once with its details, names the sources it read
+  and any it couldn't reach, and exits 3 when none answered. `--json` follows the new
+  `dreadcast.systems/1` schema, with each system's `kind` and `source`.
+
 ### Changed
 
 - The README and the agent guide call the Mac app by its full name, Dreadcast: Weather
   Radar & Forecasts. TRADEMARKS.md lists it with the App Store name, Dreadcast: Radar &
   Weather, and keeps the earlier names as former names.
+
+### Removed
+
+- `dread top`. It opened the app on a view, and every view now has its own command:
+  `dread` opens the app and `dread systems` opens it on Systems, with the other tabs a
+  keypress away. `dread top` now says so and exits 2. `dread help app` replaces
+  `dread help top`.
+
+### Fixed
+
+- The Systems tab said conditions were loading after they had failed to load; it now
+  says they're unavailable.
 
 ## 0.3.2 — 2026-10-08
 

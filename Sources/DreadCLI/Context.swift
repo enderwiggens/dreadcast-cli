@@ -89,11 +89,16 @@ public final class Context: @unchecked Sendable {
         "  " + styler.paint(name, Theme.porcelain, bold: true) + (inApp ? "" : styler.paint("  ·  ", Theme.faint) + place.name)
     }
 
+    /// A person at the terminal, without --pretty, --plain or --json asking for printed
+    /// output: the app can take over the screen.
+    var interactive: Bool {
+        mode == .pretty && !arguments.has("pretty") && terminal.isInputTTY && terminal.isOutputTTY
+    }
+
     /// Plain `dread` opens the app when a person is at the terminal; piped, or with
     /// --pretty, --plain or --json, it prints the quick look instead.
     var opensApp: Bool {
-        !arguments.commandGiven && mode == .pretty && !arguments.has("pretty") && !arguments.has("all")
-            && terminal.isInputTTY && terminal.isOutputTTY
+        !arguments.commandGiven && !arguments.has("all") && interactive
     }
 
     public var quipsEnabled: Bool { config.quips && !arguments.has("no-quip") && mode == .pretty }

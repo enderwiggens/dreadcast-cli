@@ -157,8 +157,6 @@ struct PlacesTests {
     @Test func thePlacesTabAppearsWithASecondPlace() {
         #expect(!AppTab.visible(places: 1).contains(.places))
         #expect(AppTab.visible(places: 3).last == .places)
-        #expect(AppTab.named("places") == .places)
-        #expect(AppTab.named("8") == .places)
     }
 
     static func frame(_ ctx: Context, alertsAt index: Int?, selected: Int = 0, height: Int = 30) -> AppFrame {

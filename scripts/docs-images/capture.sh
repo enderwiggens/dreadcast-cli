@@ -45,22 +45,22 @@ shot eta 100 eta --location $LOCATION
 shot outlook 100 outlook --location $LOCATION
 MAX_ROWS=30 shot alerts 100 alerts --location $ALERT_LOCATION
 
-# The app runs in a pseudo-terminal, opened on one tab per screenshot.
-$T2P pty $OUT/top.png --cols 108 --rows 40 --wait 10 -- $BIN top systems --location $LOCATION
-print "  $OUT/top.png"
+# The app runs in a pseudo-terminal; `dread systems` opens it on Systems.
+$T2P pty $OUT/systems.png --cols 108 --rows 40 --wait 10 -- $BIN systems --location $LOCATION
+print "  $OUT/systems.png"
 
 # Saved places, last so the shots above show a single place. The alert location
 # stands in for a second US place.
 $BIN setup $LOCATION --plain < /dev/null > /dev/null
 $BIN places add $ALERT_LOCATION --name ${DREAD_DOCS_PLACE_NAME:-family} --plain < /dev/null > /dev/null || true
 $BIN places add "${DREAD_DOCS_ABROAD:-London}" --name abroad --plain < /dev/null > /dev/null || true
-$T2P pty $OUT/places.png --cols 112 --rows 20 --wait 14 -- $BIN top places
+$T2P pty $OUT/places.png --cols 112 --rows 20 --wait 14 --keys 8 -- $BIN
 print "  $OUT/places.png"
 
 # The tour at the top of the README: Radar zoomed out to 75 miles, then Systems, Places
 # and Scene. The first wait lets every source load.
 $T2P demo $OUT/demo.gif --cols 100 --rows 40 \
-  --script "w8,k-,w4,c16x0.45,k2,w0.3,c5x0.5,k8,w0.6,c5x0.5,k7,w0.5,c10x0.3" -- $BIN top radar
+  --script "w8,k-,w4,c16x0.45,k2,w0.3,c5x0.5,k8,w0.6,c5x0.5,k7,w0.5,c10x0.3" -- $BIN
 print "  $OUT/demo.gif"
 
 # Every free scene at dusk.

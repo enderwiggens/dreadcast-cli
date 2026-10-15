@@ -5,13 +5,14 @@ Requires Python 3 with pyte (`pip install pyte`) and Google Chrome or Chromium
 (set CHROME to its path if it isn't in the usual place).
 
   term2png.py inline <ansi-file> <out.png> [--cols N] [--max-rows N]
-  term2png.py pty <out.png> --cols N --rows N [--wait SECONDS] -- command [args...]
+  term2png.py pty <out.png> --cols N --rows N [--wait SECONDS] [--keys K,K] -- command [args...]
   term2png.py gallery <out.png> "Title=image.png" ...
   term2png.py demo <out.gif> --cols N --rows N --script STEPS -- command [args...]
 
 Inline output is replayed into a terminal emulator sized to fit. Full-screen programs
-run in a pseudo-terminal, and the screen is captured after --wait seconds. Half-block
-characters become real two-color cells, so pixel art stays crisp at any zoom.
+run in a pseudo-terminal, and the screen is captured after --wait seconds; --keys presses
+keys (as in a demo) once the program has started. Half-block characters become real
+two-color cells, so pixel art stays crisp at any zoom.
 
 A demo drives a full-screen program and records a looping GIF (needs ImageMagick).
 STEPS is comma-separated: w2 waits two seconds, c8x0.5 captures eight frames half a
@@ -178,7 +179,10 @@ def inline(path, out_png, cols, max_rows=None):
     render(trimmed, last - first, out_png)
 
 
-def run_pty(out_png, cols, rows, wait, command):
+KEYS = {"tab": b"\t", "enter": b"\r", "up": b"\x1b[A", "down": b"\x1b[B", "right": b"\x1b[C", "left": b"\x1b[D"}
+
+
+def run_pty(out_png, cols, rows, wait, command, keys=()):
     pid, fd = pty.fork()
     if pid == 0:
         os.execvpe(command[0], command, os.environ)
@@ -188,7 +192,12 @@ def run_pty(out_png, cols, rows, wait, command):
     stream = pyte.Stream(screen)
     decoder = __import__("codecs").getincrementaldecoder("utf-8")("replace")
     deadline = time.time() + wait
+    # Keys wait until the program has taken over the terminal.
+    pending, press_at = list(keys), time.time() + min(2, wait / 2)
     while time.time() < deadline:
+        if pending and time.time() >= press_at:
+            key = pending.pop(0)
+            os.write(fd, KEYS.get(key, key.encode()))
         ready, _, _ = select.select([fd], [], [], 0.1)
         if ready:
             try:
@@ -205,9 +214,6 @@ def run_pty(out_png, cols, rows, wait, command):
         os.kill(pid, signal.SIGTERM)
     except OSError:
         pass
-
-
-KEYS = {"tab": b"\t", "enter": b"\r", "up": b"\x1b[A", "down": b"\x1b[B", "right": b"\x1b[C", "left": b"\x1b[D"}
 
 
 def demo(out_gif, cols, rows, steps, command):
@@ -307,7 +313,7 @@ if __name__ == "__main__":
         inline(args[0], args[1], int(option("--cols", "100")), int(rows) if rows else None)
     elif mode == "pty":
         run_pty(args[0], int(option("--cols", "100")), int(option("--rows", "30")), float(option("--wait", "3")),
-                args[args.index("--") + 1:])
+                args[args.index("--") + 1:], keys=[key for key in option("--keys", "").split(",") if key])
     elif mode == "gallery":
         gallery(args[0], args[1:])
     elif mode == "demo":

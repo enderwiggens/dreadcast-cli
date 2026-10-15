@@ -69,7 +69,7 @@ struct CommandTests {
 
     @discardableResult
     static func run(_ words: [String], environment: [String: String], routes: [String: (Int, String)] = online,
-                    tty: Bool = false) async throws -> (code: ExitCode, out: String, err: String) {
+                    tty: Bool = false, at time: String = "2026-10-05T18:30:00Z") async throws -> (code: ExitCode, out: String, err: String) {
         StubProvider.reset(routes)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubProvider.self]
@@ -77,7 +77,7 @@ struct CommandTests {
                                     graphics: .none, program: nil, insideMultiplexer: false, reduceMotion: false)
         let ctx = Context(arguments: try Arguments.parse(words), environment: environment, terminal: terminal,
                           http: HTTPClient(session: URLSession(configuration: configuration)),
-                          now: ISODate.parse("2026-10-05T18:30:00Z")!)
+                          now: ISODate.parse(time)!)
         let buffer = Context.OutputBuffer()
         ctx.output = buffer
         let code = await Dread.dispatch(ctx)
@@ -218,17 +218,86 @@ struct CommandTests {
         #expect(try await Self.run(["now", "--all", "--plain"], environment: env).code == .setupRequired)
     }
 
-    @Test func theAppNeedsAnInteractiveTerminal() async throws {
+    @Test func topSaysWhatReplacedIt() async throws {
         let env = try await Self.home()
-        let result = try await Self.run(["top", "radar"], environment: env)
-        #expect(result.code == .usage)
-        #expect(result.err.contains("interactive terminal"))
-        #expect(try await Self.run(["top", "tornado"], environment: env).code == .usage)
+        for words in [["top"], ["top", "systems"], ["top", "radar"]] {
+            let result = try await Self.run(words, environment: env)
+            #expect(result.code == .usage)
+            #expect(result.err.contains("dread systems"), "\(words)")
+            #expect(StubProvider.seen.isEmpty)
+        }
+        let json = try Self.json(try await Self.run(["top", "--json"], environment: env).out)
+        #expect((json["error"] as? String)?.contains("removed") == true)
+    }
+
+    // MARK: Systems
+
+    /// Piped, `dread systems` lists every system once, most serious first, and names the
+    /// sources it couldn't reach.
+    @Test func systemsListOnceWhenPiped() async throws {
+        let env = try await Self.home()
+        let plain = try await Self.run(["systems"], environment: env)
+        #expect(plain.code == .ok)
+        let lines = plain.out.split(separator: "\n").map(String.init)
+        #expect(lines.first?.hasPrefix("Weather systems near") == true)
+        #expect(lines.dropFirst().first?.hasPrefix("Severe Thunderstorm Warning (ACTIVE, here") == true)
+        #expect(lines.dropFirst(2).first?.hasPrefix("Flood Watch (ACTIVE, here") == true)
+        #expect(plain.out.contains("Move to an interior room."))
+        #expect(plain.out.contains("Radar (UNAVAILABLE)."))
+        #expect(plain.out.contains("Sources: Open-Meteo, NWS."))
+        #expect(plain.out.contains("Unavailable: radar,"))
+        #expect(!plain.out.contains("▲"))
+
+        let json = try Self.json(try await Self.run(["systems", "--json"], environment: env).out)
+        #expect(json["schema"] as? String == "dreadcast.systems/1")
+        let first = try #require((json["systems"] as? [[String: Any]])?.first)
+        #expect(first["kind"] as? String == "alert")
+        #expect(first["name"] as? String == "Severe Thunderstorm Warning")
+        #expect(first["source"] as? String == "NWS")
+        #expect(first["distance"] as? String == "here" && first["bearing"] == nil)
+        let missing = (json["unavailable"] as? [[String: Any]])?.compactMap { $0["source"] as? String } ?? []
+        #expect(missing.contains("radar") && !missing.contains("alerts"))
+
+        let pretty = try await Self.run(["systems", "--pretty"], environment: env)
+        let text = TextWidth.strippingANSI(pretty.out)
+        #expect(text.contains("SYSTEMS") && text.contains("PID") && text.contains("▲ Severe Thunderstorm Warn…"))
+        #expect(text.contains("Move to an interior room.") && text.contains("OPEN-METEO · NWS"))
+    }
+
+    @Test func systemsOfflineAreNeverAllClear() async throws {
+        let env = try await Self.home()
+        let result = try await Self.run(["systems"], environment: env, routes: [:])
+        #expect(result.code == .unavailable)
+        #expect(result.out.contains("NWS alerts (UNAVAILABLE)."))
+        #expect(result.out.contains("Unavailable: conditions, alerts, radar"))
+        #expect(!result.out.lowercased().contains("no active alerts"))
+    }
+
+    /// Offline, cached readings are listed but labeled stale, and nothing fresh exits 3.
+    @Test func systemsFromTheCacheAloneAreStale() async throws {
+        let env = try await Self.home()
+        try await Self.run(["systems"], environment: env)
+        let later = try await Self.run(["systems"], environment: env, routes: [:], at: "2026-10-05T18:45:00Z")
+        #expect(later.code == .unavailable)
+        #expect(later.out.contains("Severe Thunderstorm Warning (ACTIVE"))
+        #expect(later.out.contains("Updated 15 min ago."))
+        #expect(later.out.contains("Stale: conditions, alerts."))
+    }
+
+    /// Outside the US, the US-only sources are left out rather than called unavailable.
+    @Test func systemsOutsideTheUSLeaveOutUSSources() async throws {
+        let env = try await Self.home(location: "51.51,-0.13")
+        let result = try await Self.run(["systems", "--json"], environment: env)
+        #expect(result.code == .ok)
+        let missing = (try Self.json(result.out)["unavailable"] as? [[String: Any]])?.compactMap { $0["source"] as? String } ?? []
+        #expect(missing.contains("radar"))
+        #expect(!missing.contains("alerts") && !missing.contains("severe-outlook") && !missing.contains("wildfires"))
+        #expect(StubProvider.seen.allSatisfy { $0.url?.host != Self.nws })
     }
 
     @Test func helpCoversEveryCommand() async throws {
         let env = try await Self.home(location: nil)
-        for topic in ["", "top", "places", "alerts", "radar", "scene", "prompt", "eta"] {
+        for topic in ["", "app", "systems", "places", "alerts", "radar", "scene", "prompt", "eta"] {
             let result = try await Self.run(topic.isEmpty ? ["help"] : ["help", topic], environment: env)
             #expect(result.code == .ok)
             #expect(result.out.contains("dread"), "help \(topic)")

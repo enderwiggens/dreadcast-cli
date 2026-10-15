@@ -180,8 +180,8 @@ final class SystemsView: AppView {
     var hints: [(String, String)] { [("↑/↓", "select")] }
 
     func body(_ f: AppFrame) -> AppBody {
-        let result = TopCommand.systemsLines(ctx: f.ctx, place: f.place, snapshot: f.snapshot, selected: selected,
-                                             width: f.width, height: f.height)
+        let result = SystemsCommand.lines(ctx: f.ctx, place: f.place, snapshot: f.snapshot, selected: selected,
+                                          width: f.width, height: f.height)
         selected = result.selected
         return .lines(result.lines)
     }
