@@ -29,27 +29,14 @@ it runs on macOS and Linux.
 
 ## Highlights
 
-- **Radar first.** Open `dread` and the last eight radar frames fill the window,
-  animated, centered on you and redrawn in Dreadcast’s palettes over a built-in map:
-  NOAA’s 1 km MRMS radar across the US and EUMETNET OPERA across Europe, from
-  Dreadcast’s radar API, and RainViewer everywhere else. Conditions and the next two
-  hours sit above it and the coming days below, as in the Mac app. `dread radar` draws full-resolution images in Kitty, Ghostty, iTerm2 and
-  WezTerm.
-- **Every warning, in full.** NWS watches, warnings and advisories with their official
-  instructions. A new alert shows up in the header whichever tab you’re on.
-- **When will it rain?** `dread eta` measures how storms moved over the last four radar
-  frames and tells you when rain reaches you, how heavy it gets and when it eases.
-- **Everything else, one keypress away.** Systems, Forecast, Alerts, Outlook, Lightning
+- **Radar-first weather.** Open `dread` to see your local radar, beautifully rendered in the terminal. Data provided by Dreadcast's radar API.
+- **Advisories, alerts, and warnings.** Watches, warnings and advisories direct from the National Weather Service.
+- **When will it rain?** `dread eta` measures how storms are moving and tells you when to expect precipitation. 
+- **Shortcuts** Systems, Forecast, Alerts, Outlook, Lightning
   and Scene tabs share the same live data. Like `htop`, but for the sky.
-- **All your places.** Save home, the cabin and your parents’ town. The app watches them
-  all, and `--all` covers them in scripts.
-- **Honest by default.** Every reading shows its source and age. Stale data says so, and
-  missing data is never reported as all clear.
-- **Made for scripts and prompts.** `--json` on every command, exit codes for alerts, and
-  a prompt segment that returns in about 15 ms.
-- **Dreadcast’s scenes.** Asteroid Watch, Deep Trouble and six more as animated pixel
-  art on a tab of their own, at sunset by day and at night after dark. They don’t describe the
-  weather. The numbers underneath do.
+- **Saved places** Monitor multiple locations at once with saved places. 
+- **Extend with your own scripts and prompts.** `--json` on every command.
+- **Themes.** The Dreadcast experience wouldn't be complete without beautiful themes, built pixel by pixel for the terminal.
 
 <table>
   <tr>
