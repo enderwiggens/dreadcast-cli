@@ -23,14 +23,6 @@ enum AppTab: Int, CaseIterable, Sendable {
     static func visible(places: Int) -> [AppTab] {
         places > 1 ? allCases : allCases.filter { $0 != .places }
     }
-
-    static func named(_ name: String) -> AppTab? {
-        let key = name.lowercased()
-        if let number = Int(key), let tab = AppTab(rawValue: number - 1) { return tab }
-        // Radar was called Now before it took the radar in.
-        let aliases: [String: AppTab] = ["now": .radar, "home": .radar, "top": .systems]
-        return allCases.first { $0.title.lowercased() == key } ?? aliases[key]
-    }
 }
 
 /// What a view draws in the body: text, or pixel art with text above and below it.
@@ -94,9 +86,9 @@ extension AppView {
     func placeChanged() {}
 }
 
-/// `dread` in an interactive terminal (and `dread top`): one full-screen app with a tab
-/// for each view. Every view reads the same live data, which each source refreshes on
-/// its own schedule; nothing is fetched twice when you switch tabs.
+/// `dread` in an interactive terminal (and `dread systems`, on its tab): one full-screen
+/// app with a tab for each view. Every view reads the same live data, which each source
+/// refreshes on its own schedule; nothing is fetched twice when you switch tabs.
 enum DreadApp {
     static let headerRows = 3
     static let footerRows = 2

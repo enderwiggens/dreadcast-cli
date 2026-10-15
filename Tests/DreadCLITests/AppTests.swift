@@ -18,20 +18,31 @@ struct AppTests {
         #expect(try SceneTests.context(arguments: Arguments.parse(["--pretty"])).opensApp == false)
     }
 
-    @Test func radarIsHome() {
-        #expect(AppTab.allCases.prefix(3) == [.radar, .systems, .forecast])
-        #expect(AppTab.named("now") == .radar)
+    /// `dread systems` opens the app on its tab at a terminal and lists the systems otherwise.
+    @Test func systemsOpensTheAppOnlyAtATerminal() throws {
+        #expect(try SceneTests.context(arguments: Arguments.parse(["systems"])).interactive)
+        #expect(try SceneTests.context(arguments: Arguments.parse(["systems"])).opensApp == false)
+        for flag in ["--plain", "--json", "--pretty"] {
+            #expect(try SceneTests.context(arguments: Arguments.parse(["systems", flag])).interactive == false, "\(flag)")
+        }
     }
 
-    @Test func tabsHaveNamesAndNumbers() {
-        #expect(AppTab.named("radar") == .radar)
-        #expect(AppTab.named("Forecast") == .forecast)
-        #expect(AppTab.named("1") == .radar)
-        #expect(AppTab.named("2") == .systems)
-        #expect(AppTab.named("7") == .scene)
-        #expect(AppTab.named("top") == .systems)
-        #expect(AppTab.named("9") == nil)
-        #expect(AppTab.named("tornado") == nil)
+    @Test func radarIsHome() {
+        #expect(AppTab.allCases.prefix(3) == [.radar, .systems, .forecast])
+    }
+
+    /// Active alerts are marked in the table, and conditions that failed don't say "loading".
+    @Test func theSystemsTabMarksAlertsAndSaysWhatsMissing() throws {
+        let ctx = try SceneTests.context()
+        func text(_ snapshot: LiveData.Snapshot) -> String {
+            guard case .lines(let lines) = SystemsView().body(Self.frame(ctx, snapshot, width: 100, height: 30)) else { return "" }
+            return lines.map(TextWidth.strippingANSI).joined(separator: "\n")
+        }
+        #expect(text(Self.snapshot(alerts: [SceneTests.warning()])).contains("▲ Tornado Warning"))
+        #expect(text(LiveData.Snapshot()).contains("Conditions loading"))
+        var failed = Self.snapshot()
+        failed.weather = .failure("offline")
+        #expect(text(failed).contains("Conditions unavailable"))
     }
 
     static func snapshot(alerts: [WeatherAlert]? = []) -> LiveData.Snapshot {

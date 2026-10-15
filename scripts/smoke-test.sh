@@ -14,9 +14,12 @@ fail() { echo "smoke test failed: $*" >&2; exit 1; }
 exit_code() { set +e; "$@" > /dev/null 2>&1; code=$?; set -e; echo "$code"; }
 
 "$BIN" version | grep -q '^dread [0-9]' || fail "version"
-for topic in "" top places scene radar alerts config prompt eta; do
+for topic in "" app systems places scene radar alerts config prompt eta; do
   "$BIN" help $topic > /dev/null || fail "help $topic"
 done
+
+# dread top was removed; it says what replaced it.
+[ "$(exit_code "$BIN" top)" -eq 2 ] || fail "dread top should exit 2"
 
 # Commands that need a place exit 4 before setup.
 [ "$(exit_code "$BIN" now --plain)" -eq 4 ] || fail "now before setup should exit 4"

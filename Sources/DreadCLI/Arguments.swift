@@ -10,8 +10,10 @@ public struct Arguments: Sendable {
     public var options: [String: String] = [:]
     public var flags: Set<String> = []
 
+    /// Every command name. "top" was removed and stays only so `dread top` can say what
+    /// replaced it.
     public static let commands: Set<String> = [
-        "now", "weather", "radar", "alerts", "prompt", "forecast", "outlook", "top", "lightning", "eta", "scene",
+        "now", "weather", "radar", "systems", "alerts", "prompt", "forecast", "outlook", "top", "lightning", "eta", "scene",
         "setup", "places", "auth", "config", "credits", "refresh", "help", "version"
     ]
 

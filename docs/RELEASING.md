@@ -93,7 +93,8 @@ more than one certificate has that name. Then, with the notarization key’s val
 - [ ] Version and changelog updated in a merged pull request, and CI green on macOS,
       Linux and static Linux
 - [ ] Manual check in Terminal, iTerm2, Ghostty and Kitty: `dread` (every tab, and the
-      Places tab with two or more saved places), `dread now`, `dread radar`
+      Places tab with two or more saved places), `dread systems`, `dread now`,
+      `dread radar`
 - [ ] Manual check on a Linux machine: `dread`, `dread now`, `dread radar --still`
 - [ ] Radar from the Dreadcast API: `curl -fsS https://api.dreadcast.app/v2/radar/latest`
       answers, `dread radar` at a US location credits NOAA MRMS, and in London credits
