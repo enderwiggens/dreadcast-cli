@@ -21,12 +21,19 @@
 
 ### Changed
 
+- Weather, air quality, dust and place search come from the Dreadcast API
+  (`/v1/weather/current` and `/forecast`, `/v1/air/current`, `/v1/places/search`)
+  instead of Open-Meteo's free API, which is for non-commercial use only. The data is
+  still Open-Meteo's, with CAMS air quality and GeoNames places, and it's credited the
+  same way. Open-Meteo now sees the API's address instead of yours. A reading the API
+  serves while its provider is down is marked stale. Dust is read at the place itself
+  rather than as the nearest of 25 points.
 - The README and the agent guide call the Mac app by its full name, Dreadcast: Weather
   Radar & Forecasts. TRADEMARKS.md lists it with the App Store name, Dreadcast: Radar &
   Weather, and keeps the earlier names as former names.
-
 - Radar comes only from the Dreadcast API. If the API is down, radar is unavailable.
-  `api-url off` now turns radar off.
+  `api-url off` now turns off radar, weather, air quality and place search; ZIP codes
+  and coordinates still resolve.
 - `dread now` dates the forecast model's rain from the start of each 15-minute step
   rather than its end, so it can say rain starts up to 15 minutes earlier than before.
   `--plain` shows the model's next two hours when there's no radar timing to show.
@@ -46,6 +53,9 @@
 
 - The Systems tab said conditions were loading after they had failed to load; it now
   says they're unavailable.
+- On Linux, a request cancelled because another one failed could crash dread inside
+  FoundationNetworking. Requests there now run to their own end, bounded by their
+  timeouts.
 
 ## 0.3.2 — 2026-10-08
 

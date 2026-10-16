@@ -348,7 +348,7 @@ dread systems --json | jq -r '.systems[] | select(.kind == "storm-cell") | "\(.n
 | `highlight` | `auto` (follows the scene), `signal-blue`, `solar-mint`, `superstorm-lime`, `fallout-gold`, `lamp-glow`, `ember-red`, `afterglow-pink` or `ai-violet` |
 | `map` | `theme` (the scene’s map colors) or `graphite` |
 | `forecast` | `days`, `hourly` or `off`, beside the radar’s timeline |
-| `api-url` | the Dreadcast API (`https://api.dreadcast.app` unless set), or `off`, which turns radar off |
+| `api-url` | the Dreadcast API (`https://api.dreadcast.app` unless set), for weather, air quality, place search and radar; `off` turns them off |
 | `quips` | `on` or `off` (one dry line under the quick look, never during alerts) |
 | `icons` | `emoji` or `ascii` |
 
@@ -399,7 +399,7 @@ Details: [docs/PRIVACY.md](docs/PRIVACY.md) and
 
 | Data | Provider |
 | --- | --- |
-| Conditions, forecasts, air quality, place search | [Open-Meteo](https://open-meteo.com/) (CC BY 4.0) |
+| Conditions, forecasts, air quality, place search | Through the Dreadcast API: [Open-Meteo](https://open-meteo.com/) (CC BY 4.0), with [CAMS](https://atmosphere.copernicus.eu/) air quality and [GeoNames](https://www.geonames.org/) places |
 | Radar | Through the Dreadcast API: [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) for the US, Puerto Rico and Guam, and [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) for Europe ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), resampled). [NOAA Enterprise Rain Rate](https://www.ospo.noaa.gov/products/atmosphere/err/) satellite estimates elsewhere |
 | Alerts | [National Weather Service](https://www.weather.gov/) |
 | Severe outlook, tropical storms | NOAA SPC and NHC |

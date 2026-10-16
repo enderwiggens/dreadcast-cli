@@ -1,14 +1,16 @@
 # Data providers
 
-Dreadcast CLI requests public data directly from each provider. Each source has its own
-refresh interval in the shared cache, so running many commands, or a prompt in many
-shells, never polls a provider faster than this table allows.
+Dreadcast CLI gets weather, air quality, place search and radar from the Dreadcast API
+at `https://api.dreadcast.app`, which keeps one reading per place for every client, and
+requests everything else directly from each provider. Each source has its own refresh
+interval in the shared cache, so running many commands, or a prompt in many shells,
+never polls a source faster than this table allows.
 
 | Data | Provider | Refresh | Coverage | Terms |
 | --- | --- | --- | --- | --- |
-| Current conditions, hourly and daily forecast, 15-minute precipitation | [Open-Meteo forecast API](https://open-meteo.com/en/docs) | 10 min | Worldwide | CC BY 4.0; free for non-commercial use |
-| Place search | [Open-Meteo geocoding](https://open-meteo.com/en/docs/geocoding-api) | On setup | Worldwide | CC BY 4.0 |
-| Air quality and dust | [Open-Meteo air quality](https://open-meteo.com/en/docs/air-quality-api) (CAMS) | 30 min (dust 15 min) | Worldwide | CC BY 4.0; CAMS attribution |
+| Current conditions, hourly and daily forecast, 15-minute precipitation | [Open-Meteo forecast API](https://open-meteo.com/en/docs) through the Dreadcast API (`/v1/weather/current`, `/v1/weather/forecast`) | 10 min; the API refreshes conditions every 15 min and the forecast hourly | Worldwide | CC BY 4.0 |
+| Place search | [Open-Meteo geocoding](https://open-meteo.com/en/docs/geocoding-api) (GeoNames) through the Dreadcast API (`/v1/places/search`) | On setup; the API keeps answers a day | Worldwide | CC BY 4.0 |
+| Air quality and dust | [Open-Meteo air quality](https://open-meteo.com/en/docs/air-quality-api) (CAMS) through the Dreadcast API (`/v1/air/current`) | 30 min (dust 15 min); the API refreshes hourly | Worldwide, at the place itself | CC BY 4.0; generated using Copernicus Atmosphere Monitoring Service information |
 | ZIP lookup | [Zippopotam.us](https://zippopotam.us/) | Cached 30 days | United States | Free API |
 | Radar (US) | [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) base reflectivity through the Dreadcast API (`/v2/radar/latest`) | Manifest 1 min; tiles are immutable and cached until they age out | Contiguous US, Alaska, Hawaii, Puerto Rico and the Caribbean, Guam | Public domain (U.S. Government data); numeric tiles, zoom 0–8 |
 | Radar (Europe) | [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) maximum reflectivity composite through the Dreadcast API | As above; OPERA publishes every 5 min | The OPERA radars from Iceland to Romania. Italy, Austria and Greece aren't in the composite, so places there get satellite estimates unless a neighbor's radar reaches them | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): credited with its license wherever it's shown, and noted as resampled. No precipitation type, so no snow colors |
@@ -52,8 +54,9 @@ all loops the blends themselves, ten minutes apart, each at its own time.
 
 Rain timing uses radar only. Where no radar reaches the place itself, `dread eta`,
 `dread now` and the Systems tab use the forecast model's 15-minute precipitation,
-labeled as the model's. `api-url off` turns radar off, and `api-url <url>` or
-`DREADCAST_API_URL` points at another API, such as a local development server.
+labeled as the model's. `api-url off` turns off radar, weather, air quality and place
+search, and `api-url <url>` or `DREADCAST_API_URL` points at another API, such as a
+local development server.
 
 ## Adding a provider
 

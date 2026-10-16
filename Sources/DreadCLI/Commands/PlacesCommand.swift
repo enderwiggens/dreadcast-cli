@@ -18,7 +18,7 @@ enum PlacesCommand {
                 let query = words.dropFirst().joined(separator: " ")
                 guard !query.isEmpty else { return ctx.fail("Pass a ZIP code, place name or lat,lon: dread places add 33602 --name mom", code: .usage) }
                 let interactive = ctx.terminal.isInputTTY && ctx.mode != .json
-                let place = SetupCommand.choose(try await PlaceService(http: ctx.http).resolve(query), ctx: ctx, interactive: interactive)
+                let place = SetupCommand.choose(try await PlaceService(http: ctx.http, api: ctx.dreadcastAPI).resolve(query), ctx: ctx, interactive: interactive)
                 places = try PlaceBook.add(place, name: ctx.arguments.value("name"), to: places)
                 let saved = places[places.count - 1]
                 message = places.count == 1
@@ -75,7 +75,7 @@ enum PlacesCommand {
             }
             lines.append("")
             lines.append("  " + s.paint("dread places add <place> --name <name>", ctx.highlight) + s.paint("  ·  remove · default · rename", Theme.mist))
-            lines.append("  " + s.paint("Each saved place is sent to Open-Meteo and the NWS on every refresh, rounded to about 1 km.", Theme.faint))
+            lines.append("  " + s.paint("Each saved place is sent to the Dreadcast API and the NWS on every refresh, rounded to about 1 km.", Theme.faint))
             lines.append("")
             ctx.write(lines)
         }

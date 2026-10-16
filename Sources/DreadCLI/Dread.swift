@@ -216,8 +216,8 @@ enum Help {
               dread alerts --follow --all  changes at every place, each line named
 
             In the app, the Places tab lists them all and [ ] switch between them. Each
-            saved place is sent to Open-Meteo and the NWS on every refresh, rounded to
-            about 1 km.
+            saved place is sent to the Dreadcast API and the NWS on every refresh,
+            rounded to about 1 km.
             """
         case "scene":
             return """

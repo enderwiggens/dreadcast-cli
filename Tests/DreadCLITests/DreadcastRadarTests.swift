@@ -144,13 +144,14 @@ enum RadarAPIFixture {
         PNGEncoder.encode(Raster(width: 256, height: 256, fill: UInt32(dbz + 32) << 16))!
     }
 
-    /// The command fixture's weather, with 15-minute steps (in inches) ending every
+    /// The command fixture's conditions, with 15-minute steps (in inches) ending every
     /// quarter hour from 18:45Z on October 5, 2026.
     static func weather(minutely precipitation: [Double]) -> String {
-        let times = precipitation.indices.map { 1_791_225_900 + $0 * 900 }
-        return WeatherFixture.payload.replacingOccurrences(
-            of: #""minutely_15":{"time":[1791259200,1791260100],"precipitation":[0.0,0.05],"weather_code":[95,95]},"#,
-            with: #""minutely_15":{"time":\#(times),"precipitation":\#(precipitation),"weather_code":\#(precipitation.map { $0 > 0 ? 61 : 3 })},"#)
+        let steps = precipitation.enumerated().map { index, value in
+            #"{"time":"\#(iso(Date(timeIntervalSince1970: Double(1_791_225_900 + index * 900))))","precipitation":\#(value),"weather_code":\#(value > 0 ? 61 : 3)}"#
+        }
+        return WeatherFixture.current.replacingOccurrences(
+            of: #""minutely_15":[{"time":"2026-10-06T04:00:00Z","precipitation":0.0,"weather_code":95},{"time":"2026-10-06T04:15:00Z","precipitation":0.05,"weather_code":95}]"#, with: #""minutely_15":[\#(steps.joined(separator: ","))]"#)
     }
 
     static let now = ISODate.parse("2026-10-07T12:00:00Z")!
@@ -687,7 +688,7 @@ extension CommandTests {
         typealias F = RadarAPIFixture
         let env = try await Self.home(location: "35.68,139.69")
         var routes = Self.online
-        routes[Self.forecast] = (200, F.weather(minutely: [0, 0, 0.02, 0.15, 0.03, 0, 0, 0, 0]))
+        routes[Self.current] = (200, F.weather(minutely: [0, 0, 0.02, 0.15, 0.03, 0, 0, 0, 0]))
         routes["api.dreadcast.app"] = (200, String(decoding: F.json(newest: ISODate.parse("2026-10-05T18:30:00Z")!, satellite: true), as: UTF8.self))
 
         let json = try await Self.run(["eta", "--json"], environment: env, routes: routes)

@@ -88,6 +88,8 @@ public struct HazardSnapshot: Equatable, Sendable {
     public let sourceAt: Date?
     public let fetchedAt: Date
     public let note: String?
+    /// One reading at the place, for hazards read at a point rather than over a grid.
+    public var value: Double? = nil
 }
 
 /// Everything `dread outlook` and the app's Systems tab report about hazards near one place.
@@ -117,9 +119,12 @@ public struct HazardSummary: Codable, Sendable {
 
 public struct HazardService: Sendable {
     private let http: HTTPClient
+    private let api: URL?
 
-    public init(http: HTTPClient = HTTPClient()) {
+    /// Dust comes from the Dreadcast API at `api`; without it, dust is unavailable.
+    public init(http: HTTPClient = HTTPClient(), api: URL?) {
         self.http = http
+        self.api = api
     }
 
     public func fetch(_ kind: HazardKind, center: GeoCoordinate, now: Date = Date()) async throws -> HazardSnapshot {
@@ -147,8 +152,11 @@ public struct HazardService: Sendable {
             let data = try await http.data(URL(string: "https://services.swpc.noaa.gov/text/drap_global_frequencies.txt")!, timeout: 20, source: "NOAA SWPC")
             return try HazardDecoder.radioDisruption(data, now: now)
         case .dust:
-            let request = try Self.dustRequest(center: center, radiusMiles: 60)
-            return try HazardDecoder.dust(try await http.data(request.url, timeout: 20, source: "Open-Meteo"), grid: request.grid, now: now)
+            // The place's own modeled dust, from the API's air quality.
+            guard let api else { throw DreadcastError.unavailable("Dust comes from the Dreadcast API, which `api-url off` turns off.") }
+            let dust = try await AirQualityService(http: http, api: api).dust(at: center, now: now)
+            return HazardSnapshot(kind: .dust, features: [], grid: nil, sourceAt: dust.time, fetchedAt: now,
+                                  note: "Modeled dust, µg/m³.", value: dust.value)
         }
     }
 
@@ -206,36 +214,9 @@ public struct HazardService: Sendable {
             summary.radioMHz = snapshot.grid?.value(at: center)
             summary.radioAt = snapshot.sourceAt
         case .dust:
-            summary.dust = snapshot.grid?.value(at: center)
+            summary.dust = snapshot.value ?? snapshot.grid?.value(at: center)
             summary.dustAt = snapshot.sourceAt
         }
-    }
-
-    static func dustRequest(center: GeoCoordinate, radiusMiles: Double) throws -> (url: URL, grid: HazardGrid) {
-        guard center.isValid, radiusMiles.isFinite, radiusMiles > 0 else { throw DreadcastError.invalidResponse("Open-Meteo") }
-        let latitude = min(84.5, max(-84.5, center.latitude))
-        let latitudeSpan = min(500, max(25, radiusMiles)) / 69.0
-        let longitudeSpan = min(30, latitudeSpan / max(0.1, cos(latitude * .pi / 180)))
-        let south = max(-85, latitude - latitudeSpan)
-        let north = min(85, latitude + latitudeSpan)
-        let west = max(-180, center.longitude - longitudeSpan)
-        let east = min(180, center.longitude + longitudeSpan)
-        let grid = HazardGrid(columns: 5, rows: 5, south: south, west: west,
-                              latitudeStep: (north - south) / 5, longitudeStep: (east - west) / 5, values: [])
-        guard grid.hasValidBounds else { throw DreadcastError.invalidResponse("Open-Meteo") }
-        let coordinates = (0..<25).map { index in
-            GeoCoordinate(latitude: south + (Double(index / 5) + 0.5) * grid.latitudeStep,
-                          longitude: west + (Double(index % 5) + 0.5) * grid.longitudeStep)
-        }
-        let posix = Locale(identifier: "en_US_POSIX")
-        var components = URLComponents(string: "https://air-quality-api.open-meteo.com/v1/air-quality")!
-        components.queryItems = [
-            .init(name: "latitude", value: coordinates.map { String(format: "%.3f", locale: posix, $0.latitude) }.joined(separator: ",")),
-            .init(name: "longitude", value: coordinates.map { String(format: "%.3f", locale: posix, $0.longitude) }.joined(separator: ",")),
-            .init(name: "current", value: "dust"), .init(name: "timeformat", value: "unixtime"),
-            .init(name: "timezone", value: "GMT"), .init(name: "cell_selection", value: "nearest")
-        ]
-        return (components.url!, grid)
     }
 
     static func smokeURL(date: Date) -> URL {
@@ -419,34 +400,6 @@ public enum HazardDecoder {
         guard grid.isValid else { throw DreadcastError.invalidResponse("NOAA SWPC") }
         return HazardSnapshot(kind: .radioDisruption, features: [], grid: grid, sourceAt: sourceAt, fetchedAt: now,
                               note: "Highest frequency affected by 1 dB absorption, in MHz.")
-    }
-
-    public static func dust(_ data: Data, grid: HazardGrid, now: Date = Date()) throws -> HazardSnapshot {
-        struct Sample: Decodable {
-            struct Units: Decodable { let dust: String }
-            struct Current: Decodable { let time: Double; let dust: Double? }
-            let latitude: Double
-            let longitude: Double
-            let current_units: Units
-            let current: Current
-        }
-        let rows: [Sample]
-        do { rows = try JSONDecoder().decode([Sample].self, from: data) }
-        catch { throw DreadcastError.invalidResponse("Open-Meteo") }
-        guard rows.count == grid.rows * grid.columns else { throw DreadcastError.invalidResponse("Open-Meteo") }
-        var values: [Double?] = []
-        var times: [Date] = []
-        for row in rows {
-            guard ["μg/m³", "µg/m³", "ug/m3"].contains(row.current_units.dust) else { throw DreadcastError.invalidResponse("Open-Meteo") }
-            let time = Date(timeIntervalSince1970: row.current.time)
-            guard row.current.time.isFinite, !isFuture(time, now) else { throw DreadcastError.invalidResponse("Open-Meteo") }
-            times.append(time)
-            values.append(row.current.dust.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil })
-        }
-        return HazardSnapshot(kind: .dust, features: [],
-                              grid: HazardGrid(columns: grid.columns, rows: grid.rows, south: grid.south, west: grid.west,
-                                               latitudeStep: grid.latitudeStep, longitudeStep: grid.longitudeStep, values: values),
-                              sourceAt: times.min(), fetchedAt: now, note: "Modeled dust, µg/m³.")
     }
 
     // MARK: Helpers

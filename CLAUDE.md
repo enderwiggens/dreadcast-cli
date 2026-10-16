@@ -13,11 +13,12 @@ separate project that shares no code with the app at build time and never requir
 - **Same honesty rules as the app.** Every reading shows its source and age. Stale data
   is labeled stale. Missing data is never reported as all clear, and scripts get exit
   code 3 when data is unavailable.
-- **Honest about where data goes.** Today every request goes directly to a provider,
-  with no account or analytics. Any dreadcast-run service must be described in
-  `docs/PRIVACY.md` and `docs/DATA_PROVIDERS.md` before it ships, and user-facing copy
-  never promises there's no server. Coordinates are rounded to two decimals before
-  storage or requests.
+- **Honest about where data goes.** Weather, air quality, place search and radar come
+  from the Dreadcast API (`DreadcastAPI.swift`, `Context.dreadcastAPI`); everything
+  else goes directly to its provider, with no account or analytics. Any dreadcast-run
+  service must be described in `docs/PRIVACY.md` and `docs/DATA_PROVIDERS.md` before
+  it ships, and user-facing copy never promises there's no server. Coordinates are
+  rounded to two decimals before storage or requests.
 - **Voice with limits.** At most one dry line, from `Sources/DreadCLI/Copy.swift`, only
   in pretty output, and never while any alert is active. No comedy in alerts, errors,
   plain or JSON output.

@@ -16,7 +16,8 @@ public enum UnitSystem: String, Codable, Sendable, CaseIterable {
     public func speed(mph: Double) -> Double { self == .imperial ? mph : mph * 1.609344 }
 }
 
-/// Current conditions plus 15-minute, hourly and daily forecasts from Open-Meteo.
+/// Current conditions plus 15-minute, hourly and daily forecasts from the Dreadcast
+/// API, which gets them from Open-Meteo.
 public struct WeatherReport: Codable, Sendable {
     public struct Current: Codable, Sendable {
         public var time: Date
@@ -84,6 +85,8 @@ public struct WeatherReport: Codable, Sendable {
     public var minutely: [Minutely]
     public var hourly: [Hour]
     public var daily: [Day]
+    /// The API couldn't reach the provider and served an older reading.
+    public var stale: Bool? = nil
 
     public var timeZone: TimeZone {
         TimeZone(identifier: timeZoneIdentifier)
@@ -124,219 +127,212 @@ public struct WeatherReport: Codable, Sendable {
     }
 }
 
+/// Weather from the Dreadcast API: current conditions, with 15-minute steps, from
+/// `/v1/weather/current`, and the hourly and daily forecast from `/v1/weather/forecast`.
+/// The API converts units, so each answer arrives in the units asked for.
 public struct WeatherService: Sendable {
     private let http: HTTPClient
+    private let api: URL
 
-    public init(http: HTTPClient = HTTPClient()) {
+    public init(http: HTTPClient = HTTPClient(), api: URL) {
         self.http = http
+        self.api = api
     }
 
-    public static func requestURL(for coordinate: GeoCoordinate, units: UnitSystem) -> URL {
-        var components = URLComponents(string: "https://api.open-meteo.com/v1/forecast")!
-        let c = coordinate.coarsened
-        components.queryItems = [
-            .init(name: "latitude", value: String(c.latitude)),
-            .init(name: "longitude", value: String(c.longitude)),
-            .init(name: "current", value: "temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,is_day,precipitation,pressure_msl,cloud_cover"),
-            .init(name: "minutely_15", value: "precipitation,weather_code"),
-            .init(name: "forecast_minutely_15", value: "12"),
-            .init(name: "hourly", value: "temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,is_day,wind_speed_10m,wind_direction_10m,cloud_cover,pressure_msl,dew_point_2m,cape"),
-            .init(name: "daily", value: "weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max,uv_index_max,sunrise,sunset"),
-            .init(name: "past_hours", value: "6"),
-            .init(name: "forecast_hours", value: "168"),
-            .init(name: "forecast_days", value: "7"),
-            .init(name: "temperature_unit", value: units.temperatureParameter),
-            .init(name: "wind_speed_unit", value: units.windParameter),
-            .init(name: "precipitation_unit", value: units.precipitationParameter),
-            .init(name: "timezone", value: "auto"),
-            .init(name: "timeformat", value: "unixtime")
-        ]
-        return components.url!
+    /// The request for `path` at the rounded coordinate, in `units`.
+    static func url(_ api: URL, _ path: String, coordinate: GeoCoordinate, units: UnitSystem) -> URL? {
+        DreadcastAPI.url(api, path, DreadcastAPI.coordinate(coordinate) + [
+            URLQueryItem(name: "temperature_unit", value: units.temperatureParameter),
+            URLQueryItem(name: "wind_speed_unit", value: units.windParameter),
+            URLQueryItem(name: "precipitation_unit", value: units.precipitationParameter)
+        ])
     }
 
     public func report(at coordinate: GeoCoordinate, units: UnitSystem, now: Date = Date()) async throws -> WeatherReport {
-        let url = Self.requestURL(for: coordinate, units: units)
-        let data = try await http.data(url, accept: "application/json", timeout: 20, maximumBytes: 4 * 1024 * 1024, source: "Open-Meteo")
-        return try Self.decode(data, coordinate: coordinate.coarsened, units: units, fetchedAt: now)
+        let http = self.http
+        async let current = DreadcastAPI.data(http, Self.url(api, "v1/weather/current", coordinate: coordinate, units: units),
+                                              what: "Weather", maximumBytes: 256 * 1024)
+        async let forecast = DreadcastAPI.data(http, Self.url(api, "v1/weather/forecast", coordinate: coordinate, units: units),
+                                               what: "The forecast", maximumBytes: 2 * 1024 * 1024)
+        return try Self.decode(current: try await current, forecast: try await forecast,
+                               coordinate: coordinate.coarsened, units: units, now: now)
     }
 
-    public static func decode(_ data: Data, coordinate: GeoCoordinate, units: UnitSystem, fetchedAt: Date) throws -> WeatherReport {
-        let payload: Payload
-        do {
-            payload = try JSONDecoder().decode(Payload.self, from: data)
-        } catch {
-            throw DreadcastError.invalidResponse("Open-Meteo")
-        }
-        guard let current = payload.current, let currentTime = current.number("time") else {
-            throw DreadcastError.invalidResponse("Open-Meteo")
-        }
-        // Minimal Linux systems may lack a time zone database; fall back to the fixed offset.
-        let zone = TimeZone(identifier: payload.timezone)
-            ?? payload.utc_offset_seconds.flatMap(TimeZone.init(secondsFromGMT:))
-            ?? TimeZone(secondsFromGMT: 0)!
-        try payload.hourly?.validate()
-        try payload.daily?.validate()
-        try payload.minutely_15?.validate()
+    struct Units: Decodable {
+        let temperature: String
+        let windSpeed: String
+        let precipitation: String
+    }
 
-        let report = WeatherReport.Current(
-            time: Date(timeIntervalSince1970: currentTime),
-            temperature: current.number("temperature_2m"),
-            apparentTemperature: current.number("apparent_temperature"),
-            humidity: current.number("relative_humidity_2m").flatMap { (0...100).contains($0) ? $0 : nil },
-            dewPoint: current.number("dew_point_2m"),
-            weatherCode: current.number("weather_code").flatMap { (0...99).contains($0) ? Int($0) : nil },
-            windSpeed: current.number("wind_speed_10m").flatMap { $0 >= 0 ? $0 : nil },
-            windDirection: current.number("wind_direction_10m"),
-            windGusts: current.number("wind_gusts_10m").flatMap { $0 >= 0 ? $0 : nil },
-            isDay: (current.number("is_day") ?? 1) != 0,
-            precipitation: current.number("precipitation").flatMap { $0 >= 0 ? $0 : nil },
-            pressure: current.number("pressure_msl"),
-            cloudCover: current.number("cloud_cover")
+    struct CurrentAnswer: Decodable {
+        struct Current: Decodable {
+            let time: String
+            let temperature: Double?
+            let apparentTemperature: Double?
+            let relativeHumidity: Double?
+            let weatherCode: Double?
+            let isDay: Bool?
+            let windSpeed: Double?
+            let windDirection: Double?
+            let windGusts: Double?
+            let precipitation: Double?
+            let cloudCover: Double?
+            let dewPoint: Double?
+            let pressure: Double?
+        }
+        struct Step: Decodable {
+            let time: String
+            let precipitation: Double?
+            let weatherCode: Double?
+        }
+        let location: DreadcastAPI.Location
+        let current: Current
+        let minutely15: [Step]?
+        let units: Units
+        let source: DreadcastAPI.Source?
+    }
+
+    struct ForecastAnswer: Decodable {
+        struct Hour: Decodable {
+            let time: String
+            let temperature: Double?
+            let apparentTemperature: Double?
+            let precipitationProbability: Double?
+            let precipitation: Double?
+            let weatherCode: Double?
+            let isDay: Bool?
+            let windSpeed: Double?
+            let windDirection: Double?
+            let cloudCover: Double?
+            let pressure: Double?
+            let dewPoint: Double?
+            let cape: Double?
+        }
+        struct Day: Decodable {
+            let date: String
+            let weatherCode: Double?
+            let temperatureMax: Double?
+            let temperatureMin: Double?
+            let apparentTemperatureMax: Double?
+            let apparentTemperatureMin: Double?
+            let precipitationProbabilityMax: Double?
+            let precipitationSum: Double?
+            let windSpeedMax: Double?
+            let windGustsMax: Double?
+            let uvIndexMax: Double?
+            let sunrise: String?
+            let sunset: String?
+        }
+        let location: DreadcastAPI.Location
+        let hourly: [Hour]
+        let daily: [Day]
+        let units: Units
+        let source: DreadcastAPI.Source?
+    }
+
+    /// Both answers as one report. Values that can't be right become nil; anything that
+    /// leaves the report unreadable, or in other units than asked for, fails it.
+    public static func decode(current currentData: Data, forecast forecastData: Data, coordinate: GeoCoordinate,
+                              units: UnitSystem, now: Date) throws -> WeatherReport {
+        let currentAnswer = try DreadcastAPI.decode(CurrentAnswer.self, from: currentData)
+        let forecastAnswer = try DreadcastAPI.decode(ForecastAnswer.self, from: forecastData)
+        for answer in [currentAnswer.units, forecastAnswer.units] {
+            guard answer.temperature == units.temperatureParameter, answer.windSpeed == units.windParameter,
+                  answer.precipitation == units.precipitationParameter else { throw DreadcastError.invalidResponse(DreadcastAPI.source) }
+        }
+        let location = forecastAnswer.location
+        let identifier = location.timeZoneIdentifier ?? currentAnswer.location.timeZoneIdentifier
+        // Minimal Linux systems may lack a time zone database; fall back to the fixed offset.
+        let zone = identifier.flatMap(TimeZone.init(identifier:))
+            ?? location.offset.flatMap(TimeZone.init(secondsFromGMT:))
+            ?? TimeZone(secondsFromGMT: 0)!
+
+        let c = currentAnswer.current
+        guard let currentTime = ISODate.parse(c.time) else { throw DreadcastError.invalidResponse(DreadcastAPI.source) }
+        let current = WeatherReport.Current(
+            time: currentTime,
+            temperature: finite(c.temperature),
+            apparentTemperature: finite(c.apparentTemperature),
+            humidity: percent(c.relativeHumidity),
+            dewPoint: finite(c.dewPoint),
+            weatherCode: code(c.weatherCode),
+            windSpeed: nonnegative(c.windSpeed),
+            windDirection: finite(c.windDirection),
+            windGusts: nonnegative(c.windGusts),
+            isDay: c.isDay ?? true,
+            precipitation: nonnegative(c.precipitation),
+            pressure: finite(c.pressure),
+            cloudCover: percent(c.cloudCover)
         )
 
-        var minutely: [WeatherReport.Minutely] = []
-        if let m = payload.minutely_15 {
-            minutely = m.time.indices.map { i in
-                WeatherReport.Minutely(time: Date(timeIntervalSince1970: m.time[i]),
-                                       precipitation: m.nonnegative("precipitation", i),
-                                       weatherCode: m.code(i))
+        let minutely = try (currentAnswer.minutely15 ?? []).map { step -> WeatherReport.Minutely in
+            guard let time = ISODate.parse(step.time) else { throw DreadcastError.invalidResponse(DreadcastAPI.source) }
+            return WeatherReport.Minutely(time: time, precipitation: nonnegative(step.precipitation), weatherCode: code(step.weatherCode))
+        }
+        let hourly = try forecastAnswer.hourly.map { hour -> WeatherReport.Hour in
+            guard let time = ISODate.parse(hour.time) else { throw DreadcastError.invalidResponse(DreadcastAPI.source) }
+            return WeatherReport.Hour(
+                time: time,
+                temperature: finite(hour.temperature),
+                apparentTemperature: finite(hour.apparentTemperature),
+                precipitationProbability: percent(hour.precipitationProbability),
+                precipitation: nonnegative(hour.precipitation),
+                weatherCode: code(hour.weatherCode),
+                isDay: hour.isDay ?? true,
+                windSpeed: nonnegative(hour.windSpeed),
+                windDirection: finite(hour.windDirection),
+                cloudCover: percent(hour.cloudCover),
+                pressure: finite(hour.pressure),
+                dewPoint: finite(hour.dewPoint),
+                cape: nonnegative(hour.cape)
+            )
+        }
+        // Daily rows name local calendar dates: each becomes local midnight there.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let daily = try forecastAnswer.daily.map { day -> WeatherReport.Day in
+            let parts = day.date.split(separator: "-").compactMap { Int($0) }
+            guard day.date.count == 10, parts.count == 3,
+                  let date = calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2])) else {
+                throw DreadcastError.invalidResponse(DreadcastAPI.source)
             }
+            return WeatherReport.Day(
+                date: date,
+                high: finite(day.temperatureMax), low: finite(day.temperatureMin),
+                apparentHigh: finite(day.apparentTemperatureMax), apparentLow: finite(day.apparentTemperatureMin),
+                weatherCode: code(day.weatherCode),
+                precipitationProbability: percent(day.precipitationProbabilityMax),
+                precipitation: nonnegative(day.precipitationSum),
+                windSpeed: nonnegative(day.windSpeedMax),
+                windGusts: nonnegative(day.windGustsMax),
+                uvIndex: nonnegative(day.uvIndexMax),
+                sunrise: ISODate.parse(day.sunrise),
+                sunset: ISODate.parse(day.sunset)
+            )
+        }
+        for times in [minutely.map(\.time), hourly.map(\.time), daily.map(\.date)] {
+            guard zip(times, times.dropFirst()).allSatisfy({ $0.0 < $0.1 }) else { throw DreadcastError.invalidResponse(DreadcastAPI.source) }
+        }
+        guard hourly.count <= 24 * 17, daily.count <= 16, minutely.count <= 4 * 24 else {
+            throw DreadcastError.invalidResponse(DreadcastAPI.source)
         }
 
-        var hourly: [WeatherReport.Hour] = []
-        if let h = payload.hourly {
-            hourly = h.time.indices.map { i in
-                WeatherReport.Hour(
-                    time: Date(timeIntervalSince1970: h.time[i]),
-                    temperature: h.number("temperature_2m", i),
-                    apparentTemperature: h.number("apparent_temperature", i),
-                    precipitationProbability: h.probability("precipitation_probability", i),
-                    precipitation: h.nonnegative("precipitation", i),
-                    weatherCode: h.code(i),
-                    isDay: (h.number("is_day", i) ?? 1) != 0,
-                    windSpeed: h.nonnegative("wind_speed_10m", i),
-                    windDirection: h.number("wind_direction_10m", i),
-                    cloudCover: h.probability("cloud_cover", i),
-                    pressure: h.number("pressure_msl", i),
-                    dewPoint: h.number("dew_point_2m", i),
-                    cape: h.nonnegative("cape", i)
-                )
-            }
-        }
-
-        var daily: [WeatherReport.Day] = []
-        if let d = payload.daily, !d.time.isEmpty {
-            // Daily values name calendar dates. Use the provider offset so a DST change
-            // can't turn the next day's midnight into yesterday at 23:00.
-            let offset = payload.utc_offset_seconds ?? zone.secondsFromGMT(for: Date(timeIntervalSince1970: d.time[0]))
-            var utc = Calendar(identifier: .gregorian)
-            utc.timeZone = TimeZone(secondsFromGMT: 0)!
-            var local = Calendar(identifier: .gregorian)
-            local.timeZone = zone
-            func calendarDay(_ timestamp: Double) -> Date {
-                let noon = Date(timeIntervalSince1970: timestamp + Double(offset) + 43200)
-                let parts = utc.dateComponents([.year, .month, .day], from: noon)
-                return local.date(from: parts) ?? Date(timeIntervalSince1970: timestamp)
-            }
-            daily = d.time.indices.map { i in
-                WeatherReport.Day(
-                    date: calendarDay(d.time[i]),
-                    high: d.number("temperature_2m_max", i), low: d.number("temperature_2m_min", i),
-                    apparentHigh: d.number("apparent_temperature_max", i), apparentLow: d.number("apparent_temperature_min", i),
-                    weatherCode: d.code(i),
-                    precipitationProbability: d.probability("precipitation_probability_max", i),
-                    precipitation: d.nonnegative("precipitation_sum", i),
-                    windSpeed: d.nonnegative("wind_speed_10m_max", i),
-                    windGusts: d.nonnegative("wind_gusts_10m_max", i),
-                    uvIndex: d.nonnegative("uv_index_max", i),
-                    sunrise: d.number("sunrise", i).flatMap { $0 > 0 ? Date(timeIntervalSince1970: $0) : nil },
-                    sunset: d.number("sunset", i).flatMap { $0 > 0 ? Date(timeIntervalSince1970: $0) : nil }
-                )
-            }
-        }
-
-        return WeatherReport(fetchedAt: fetchedAt, coordinate: coordinate, units: units,
-                             timeZoneIdentifier: payload.timezone, utcOffsetSeconds: payload.utc_offset_seconds,
-                             current: report, minutely: minutely, hourly: hourly, daily: daily)
+        // The forecast's fetch time, never later than now.
+        let fetched = ISODate.parse(forecastAnswer.source?.fetchedAt).map { min($0, now) } ?? now
+        let stale = currentAnswer.source?.stale == true || forecastAnswer.source?.stale == true
+        return WeatherReport(fetchedAt: fetched, coordinate: coordinate, units: units,
+                             timeZoneIdentifier: identifier ?? zone.identifier, utcOffsetSeconds: location.offset,
+                             current: current, minutely: minutely, hourly: hourly, daily: daily, stale: stale ? true : nil)
     }
 
-    private struct Payload: Decodable {
-        let timezone: String
-        let utc_offset_seconds: Int?
-        let current: CurrentValues?
-        let minutely_15: Series?
-        let hourly: Series?
-        let daily: Series?
-    }
-
-    /// Current values arrive as a flat object of numbers.
-    private struct CurrentValues: Decodable {
-        let values: [String: Double]
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: DynamicKey.self)
-            var values: [String: Double] = [:]
-            for key in container.allKeys {
-                if let value = try? container.decode(Double.self, forKey: key), value.isFinite {
-                    values[key.stringValue] = value
-                }
-            }
-            self.values = values
-        }
-
-        func number(_ name: String) -> Double? { values[name] }
-    }
-
-    /// Column-oriented series that keeps missing observations as nil rather than zero.
-    struct Series: Decodable {
-        let time: [Double]
-        let columns: [String: [Double?]]
-
-        init(from decoder: Decoder) throws {
-            let values = try decoder.container(keyedBy: DynamicKey.self)
-            time = try values.decode([Double].self, forKey: DynamicKey(stringValue: "time"))
-            var columns: [String: [Double?]] = [:]
-            for key in values.allKeys where key.stringValue != "time" {
-                columns[key.stringValue] = try values.decodeIfPresent([Double?].self, forKey: key)
-            }
-            self.columns = columns
-        }
-
-        func validate() throws {
-            guard time.allSatisfy({ $0.isFinite && $0 > 0 }),
-                  zip(time, time.dropFirst()).allSatisfy({ $0.0 < $0.1 }),
-                  columns.values.allSatisfy({ $0.count == time.count }) else {
-                throw DreadcastError.invalidResponse("Open-Meteo")
-            }
-        }
-
-        func number(_ name: String, _ index: Int) -> Double? {
-            guard let value = columns[name]?[index], value.isFinite else { return nil }
-            return value
-        }
-
-        func nonnegative(_ name: String, _ index: Int) -> Double? {
-            number(name, index).flatMap { $0 >= 0 ? $0 : nil }
-        }
-
-        func probability(_ name: String, _ index: Int) -> Double? {
-            number(name, index).flatMap { (0...100).contains($0) ? $0 : nil }
-        }
-
-        func code(_ index: Int) -> Int? {
-            number("weather_code", index).flatMap { (0...99).contains($0) ? Int($0) : nil }
-        }
-    }
-
-    struct DynamicKey: CodingKey {
-        let stringValue: String
-        var intValue: Int? { nil }
-        init(stringValue: String) { self.stringValue = stringValue }
-        init?(intValue: Int) { nil }
-    }
+    static func finite(_ value: Double?) -> Double? { value.flatMap { $0.isFinite ? $0 : nil } }
+    static func nonnegative(_ value: Double?) -> Double? { finite(value).flatMap { $0 >= 0 ? $0 : nil } }
+    static func percent(_ value: Double?) -> Double? { finite(value).flatMap { (0...100).contains($0) ? $0 : nil } }
+    static func code(_ value: Double?) -> Int? { finite(value).flatMap { (0...99).contains($0) ? Int($0) : nil } }
 }
 
-/// Current US AQI at one point, from Open-Meteo's CAMS-based air-quality API.
+/// Current US AQI and its pollutants at one point: CAMS model values from the Dreadcast
+/// API's `/v1/air/current`, which gets them from Open-Meteo.
 public struct AirQualityReading: Codable, Sendable {
     public var fetchedAt: Date
     public var time: Date
@@ -360,38 +356,56 @@ public struct AirQualityReading: Codable, Sendable {
 
 public struct AirQualityService: Sendable {
     private let http: HTTPClient
+    private let api: URL
 
-    public init(http: HTTPClient = HTTPClient()) {
+    public init(http: HTTPClient = HTTPClient(), api: URL) {
         self.http = http
+        self.api = api
     }
 
     public func reading(at coordinate: GeoCoordinate, now: Date = Date()) async throws -> AirQualityReading {
-        var components = URLComponents(string: "https://air-quality-api.open-meteo.com/v1/air-quality")!
-        let c = coordinate.coarsened
-        components.queryItems = [
-            .init(name: "latitude", value: String(c.latitude)),
-            .init(name: "longitude", value: String(c.longitude)),
-            .init(name: "current", value: "us_aqi,pm2_5,pm10,ozone,dust"),
-            .init(name: "timeformat", value: "unixtime"),
-            .init(name: "timezone", value: "GMT")
-        ]
-        struct Response: Decodable {
-            struct Current: Decodable {
-                let time: Double
-                let us_aqi: Double?
-                let pm2_5: Double?
-                let pm10: Double?
-                let ozone: Double?
-                let dust: Double?
-            }
-            let current: Current?
+        try Self.decode(try await answer(at: coordinate), now: now)
+    }
+
+    /// Modeled dust at the place, µg/m³, and the hour it describes; it needs no AQI.
+    public func dust(at coordinate: GeoCoordinate, now: Date = Date()) async throws -> (value: Double?, time: Date) {
+        let current = try Self.current(try await answer(at: coordinate), now: now)
+        return (WeatherService.nonnegative(current.dust), current.time)
+    }
+
+    private func answer(at coordinate: GeoCoordinate) async throws -> Data {
+        let url = DreadcastAPI.url(api, "v1/air/current", DreadcastAPI.coordinate(coordinate))
+        return try await DreadcastAPI.data(http, url, what: "Air quality", maximumBytes: 64 * 1024)
+    }
+
+    struct Answer: Decodable {
+        struct Current: Decodable {
+            let time: String
+            let usAqi: Double?
+            let pm25: Double?
+            let pm10: Double?
+            let ozone: Double?
+            let dust: Double?
         }
-        let response = try await http.json(Response.self, from: components.url!, source: "Open-Meteo air quality")
-        guard let current = response.current, let aqi = current.us_aqi, aqi.isFinite, aqi >= 0 else {
+        let current: Current
+    }
+
+    /// The answer's values, with the hour they describe, which can't be hours ahead.
+    static func current(_ data: Data, now: Date) throws -> (time: Date, usAqi: Double?, pm25: Double?, pm10: Double?, ozone: Double?, dust: Double?) {
+        let current = try DreadcastAPI.decode(Answer.self, from: data).current
+        guard let time = ISODate.parse(current.time), time.timeIntervalSince(now) < 2 * 3600 else {
+            throw DreadcastError.invalidResponse(DreadcastAPI.source)
+        }
+        return (time, current.usAqi, current.pm25, current.pm10, current.ozone, current.dust)
+    }
+
+    public static func decode(_ data: Data, now: Date) throws -> AirQualityReading {
+        let current = try Self.current(data, now: now)
+        guard let aqi = WeatherService.nonnegative(current.usAqi), aqi <= 1000 else {
             throw DreadcastError.unavailable("Air quality is unavailable for this location.")
         }
-        return AirQualityReading(fetchedAt: now, time: Date(timeIntervalSince1970: current.time),
-                                 usAQI: Int(aqi.rounded()), pm2_5: current.pm2_5, pm10: current.pm10,
-                                 ozone: current.ozone, dust: current.dust)
+        return AirQualityReading(fetchedAt: now, time: current.time, usAQI: Int(aqi.rounded()),
+                                 pm2_5: WeatherService.nonnegative(current.pm25), pm10: WeatherService.nonnegative(current.pm10),
+                                 ozone: WeatherService.nonnegative(current.ozone), dust: WeatherService.nonnegative(current.dust))
     }
 }
