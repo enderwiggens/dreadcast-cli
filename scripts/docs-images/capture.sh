@@ -28,11 +28,18 @@ mkdir -p $DREADCAST_CONFIG_DIR $OUT
 print '{"version":1,"scene":"asteroid"}' > $DREADCAST_CONFIG_DIR/config.json
 
 # Inline commands: no terminal attached, so the size comes from COLUMNS and LINES.
-# MAX_ROWS keeps only the first rows, for long output such as full alert text.
+# MAX_ROWS keeps only the first rows, for long output such as full alert text. A
+# command that prints nothing stops the run rather than leave a blank image, as
+# forecast.png was from October 7 to 16, 2026.
 shot() {
   local name=$1 columns=$2
   shift 2
   COLUMNS=$columns LINES=44 $BIN "$@" --pretty < /dev/null > $WORK/$name.ansi 2> $WORK/$name.log || true
+  if [[ ! -s $WORK/$name.ansi ]]; then
+    print -u2 "dread $* printed nothing, so $OUT/$name.png is unchanged:"
+    cat $WORK/$name.log >&2
+    exit 1
+  fi
   local limit=()
   [[ -n ${MAX_ROWS:-} ]] && limit=(--max-rows $MAX_ROWS)
   $T2P inline $WORK/$name.ansi $OUT/$name.png --cols $columns $limit
