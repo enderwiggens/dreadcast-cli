@@ -14,6 +14,8 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var requests: [URLRequest] = []
     /// Served for routes whose body is empty, such as PNG tiles.
     nonisolated(unsafe) static var tileBody: Data?
+    /// Served instead of `tileBody` for a host and path, as "api.dreadcast.app/v2/radar/satellite.png".
+    nonisolated(unsafe) static var binaries: [String: Data] = [:]
     static let lock = NSLock()
 
     static func reset(_ routes: [String: (Int, String)]) {
@@ -30,9 +32,11 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
 
     override func startLoading() {
         let url = request.url!
+        // A route for the host and path wins over one for the whole host.
         let (route, binary) = Self.lock.withLock { () -> ((status: Int, body: String)?, Data?) in
             Self.requests.append(request)
-            return (Self.routes[url.host ?? ""], Self.tileBody)
+            let path = (url.host ?? "") + url.path
+            return (Self.routes[path] ?? Self.routes[url.host ?? ""], Self.binaries[path] ?? Self.tileBody)
         }
         guard let route else {
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
@@ -41,7 +45,8 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
         let response = HTTPURLResponse(url: url, statusCode: route.status, httpVersion: "HTTP/1.1",
                                        headerFields: ["Content-Type": "application/json"])!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: route.body.isEmpty ? (binary ?? Data()) : Data(route.body.utf8))
+        let body = route.status == 204 ? Data() : route.body.isEmpty ? (binary ?? Data()) : Data(route.body.utf8)
+        client?.urlProtocol(self, didLoad: body)
         client?.urlProtocolDidFinishLoading(self)
     }
 

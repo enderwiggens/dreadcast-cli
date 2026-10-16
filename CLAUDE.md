@@ -23,8 +23,8 @@ separate project that shares no code with the app at build time and never requir
   plain or JSON output.
 - **Visual first, with fallbacks.** Kitty graphics, iTerm2 images, truecolor
   half-blocks, 256-color, then plain text. Honor `NO_COLOR`, Reduce Motion and `--still`.
-- **Free palettes and scenes only.** Dreadcast, Classic, Viridis and RainViewer's colors,
-  and the app's eight free scenes. The Pro palettes and Pro scenes stay in the app.
+- **Free palettes and scenes only.** Dreadcast, Classic and Viridis, and the app's eight
+  free scenes. The Pro palettes and Pro scenes stay in the app.
 - **Scenes are decorative.** They never describe the weather; real readings sit beside
   them. The `dread now` banner steps aside while any alert is active or alert data is
   unknown, and scene lines follow the voice rules above.
@@ -70,13 +70,17 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
   `FoundationXML` on Linux. CI builds and tests both platforms.
 - Network work goes through `HTTPClient` with the identifying User-Agent, timeouts and
   size limits.
-- Radar has two sources behind `Context.radarLoop`: the Dreadcast API's
-  `/v2/radar/latest` (`DreadcastRadar.swift`, following dreadcast-server's
-  `docs/API.md`) where one of its regions covers the place, and RainViewer elsewhere
-  and as the fallback. A place uses the API only when its own pixel has coverage; its
-  region times the loop and decides "delayed"; regions are drawn together in the
-  manifest's order. `Dreadcast.apiBaseURL` (`https://api.dreadcast.app`) is the
-  default; `api-url off` and `radar-source rainviewer` opt out.
+- Radar comes only from the Dreadcast API, behind `Context.radarLoop`: its
+  `/v2/radar/latest` regions (`DreadcastRadar.swift`, following dreadcast-server's
+  `docs/API.md`), drawn together in the manifest's order, and NOAA's satellite
+  estimates (`/v2/radar/satellite.png`) only in pixels no region covers. The place's
+  region times the loop and decides "delayed"; the credit names each source in view
+  and the satellite blend's time. A view with no radar pixels loops the blends
+  themselves at their own times, so its age is never a radar frame's. Rain timing (`Context.nowcast`) reads radar alone:
+  where the place's own pixel has no radar it reports `outsideCoverage`, which is not
+  a failure, and `dread eta` falls back to the model's 15-minute precipitation
+  (`ModelRain`), labeled as such. `Dreadcast.apiBaseURL` (`https://api.dreadcast.app`)
+  is the default; `api-url off` turns radar off, with nothing in its place.
   Validate manifests the way the Mac app does, only request tiles from the allowed
   hosts, and never show manifest text that could hold control characters.
 - New data sources get a cached loader in `Context` with an honest refresh interval,
@@ -101,8 +105,8 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
   nothing from one place may be drawn under another's header.
 - Every command supports `--json`, `--plain` and pretty output. JSON schemas are
   versioned (`dreadcast.<command>/1`); change the version for breaking changes.
-- Generated files (`BasemapData.swift`, `RainViewerColorTable.swift`,
-  `ViridisSamples.swift`, `docs/images`) are not edited by hand.
+- Generated files (`BasemapData.swift`, `ViridisSamples.swift`, `docs/images`) are not
+  edited by hand.
 - Scenes are designed for the terminal with the scene kit: hand-drawn sprites at one
   pixel scale, flat banded skies, stepped light, no anti-aliasing, and a deliberate
   window, panorama and strip composition for each. Larger terminals show more sky;

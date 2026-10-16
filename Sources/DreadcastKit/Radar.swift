@@ -1,62 +1,5 @@
 import Foundation
 
-// MARK: - RainViewer manifest (radar outside the Dreadcast API's coverage)
-
-public struct RadarFrame: Codable, Sendable, Equatable {
-    public let time: Date
-    public let path: String
-}
-
-public struct RadarManifest: Codable, Sendable {
-    public let host: String
-    public let frames: [RadarFrame]
-    public let fetchedAt: Date
-}
-
-public struct RainViewerService: Sendable {
-    private let http: HTTPClient
-    public static let maximumZoom = 7
-
-    public init(http: HTTPClient = HTTPClient()) {
-        self.http = http
-    }
-
-    public func manifest(now: Date = Date()) async throws -> RadarManifest {
-        let url = URL(string: "https://api.rainviewer.com/public/weather-maps.json")!
-        let data = try await http.data(url, accept: "application/json", timeout: 15, maximumBytes: 1024 * 1024, source: "RainViewer")
-        return try Self.decodeManifest(data, now: now)
-    }
-
-    public static func decodeManifest(_ data: Data, now: Date) throws -> RadarManifest {
-        struct Payload: Decodable {
-            struct Radar: Decodable {
-                struct Frame: Decodable { let time: Double; let path: String }
-                let past: [Frame]
-            }
-            let host: String
-            let radar: Radar
-        }
-        let payload: Payload
-        do { payload = try JSONDecoder().decode(Payload.self, from: data) }
-        catch { throw DreadcastError.invalidResponse("RainViewer") }
-        guard let host = URL(string: payload.host), host.scheme == "https", host.host != nil,
-              payload.radar.past.allSatisfy({ $0.path.hasPrefix("/v2/radar/") && !$0.path.contains("..") }) else {
-            throw DreadcastError.invalidResponse("RainViewer")
-        }
-        let frames = payload.radar.past
-            .filter { $0.time.isFinite && $0.time > 0 }
-            .map { RadarFrame(time: Date(timeIntervalSince1970: $0.time), path: $0.path) }
-            .sorted { $0.time < $1.time }
-        guard !frames.isEmpty else { throw DreadcastError.unavailable("No recent radar frames are available.") }
-        return RadarManifest(host: payload.host, frames: frames, fetchedAt: now)
-    }
-
-    /// Universal Blue (scheme 2), unsmoothed so every pixel matches the published color table.
-    public static func tileURL(host: String, frame: RadarFrame, zoom: Int, x: Int, y: Int, size: Int = 512) -> URL? {
-        URL(string: "\(host)\(frame.path)/\(size)/\(zoom)/\(x)/\(y)/2/0_1.png")
-    }
-}
-
 // MARK: - Projection and viewport
 
 public enum WebMercator {
@@ -120,17 +63,55 @@ public struct ReflectivityField: Sendable {
     public let time: Date
     public var dbz: [Int8]
     public var snow: [Bool]
-    /// Which pixels have radar coverage, from sources that say; nil for RainViewer,
-    /// which doesn't.
+    /// Which pixels have radar coverage, from sources that say; nil when a source
+    /// doesn't, which counts everything as covered.
     public var covered: [Bool]?
+    /// When satellite estimates fill pixels no radar reaches: the blend's time.
+    public var estimatedAt: Date?
+    /// Which pixels hold satellite estimates rather than radar; nil when none do.
+    public var estimated: [Bool]?
 
-    public init(width: Int, height: Int, time: Date, dbz: [Int8], snow: [Bool], covered: [Bool]? = nil) {
+    public init(width: Int, height: Int, time: Date, dbz: [Int8], snow: [Bool], covered: [Bool]? = nil, estimatedAt: Date? = nil) {
         self.width = width
         self.height = height
         self.time = time
         self.dbz = dbz
         self.snow = snow
         self.covered = covered
+        self.estimatedAt = estimatedAt
+    }
+
+    /// Takes `other`'s pixels wherever this field has no coverage and `other` does, as
+    /// satellite estimates fill in beyond the radar, and marks them `estimated`. Returns
+    /// whether any pixel came from it. Both fields must be the same size and record
+    /// coverage.
+    public mutating func fill(from other: ReflectivityField) -> Bool {
+        guard var covered, let theirs = other.covered, other.width == width, other.height == height else { return false }
+        var estimated = self.estimated ?? [Bool](repeating: false, count: covered.count)
+        var filled = false
+        for i in covered.indices where !covered[i] && theirs[i] {
+            covered[i] = true
+            estimated[i] = true
+            dbz[i] = other.dbz[i]
+            snow[i] = other.snow[i]
+            filled = true
+        }
+        self.covered = covered
+        if filled { self.estimated = estimated }
+        return filled
+    }
+
+    /// Some pixel has radar rather than a satellite estimate.
+    public var hasAnyRadar: Bool {
+        guard let covered else { return true }
+        return covered.indices.contains { covered[$0] && !(estimated?[$0] ?? false) }
+    }
+
+    /// Radar, not a satellite estimate, covers the pixel.
+    public func hasRadar(x: Int, y: Int) -> Bool {
+        guard isCovered(x: x, y: y) else { return false }
+        guard let estimated, x >= 0, y >= 0, x < width, y < height else { return true }
+        return !estimated[y * width + x]
     }
 
     /// Whether radar covers pixel (x, y), as far as the source says.
@@ -163,56 +144,40 @@ public struct ReflectivityField: Sendable {
     }
 }
 
-/// Converts RainViewer Universal Blue pixels back to reflectivity.
-public enum UniversalBlueDecoder {
-    struct Entry: Sendable { let dbz: Int8; let snow: Bool }
-
-    static let lookup: [UInt32: Entry] = {
-        var table: [UInt32: Entry] = [:]
-        for (isSnow, colors) in [(false, RainViewerColorTable.rain), (true, RainViewerColorTable.snow)] {
-            for (index, rgba) in colors.enumerated() where rgba & 0xFF != 0 {
-                let dbz = Int8(index + RainViewerColorTable.minimumDBZ)
-                // Repeated colors keep the lowest reflectivity they represent.
-                if table[rgba] == nil { table[rgba] = Entry(dbz: dbz, snow: isSnow) }
-            }
-        }
-        return table
-    }()
-
-    /// Reflectivity for one RGBA pixel, or nil for transparent and unknown colors.
-    public static func reflectivity(rgba: UInt32) -> (dbz: Int8, snow: Bool)? {
-        guard rgba & 0xFF != 0, let entry = lookup[rgba] else { return nil }
-        return (entry.dbz, entry.snow)
-    }
-
-    /// The display color for a dBZ value in RainViewer's own scheme.
-    public static func color(dbz: Double, snow: Bool) -> UInt32 {
-        let index = max(0, min(127, Int(dbz.rounded()) - RainViewerColorTable.minimumDBZ))
-        return snow ? RainViewerColorTable.snow[index] : RainViewerColorTable.rain[index]
-    }
-
+/// Turns radar tiles into reflectivity: the API's numeric MRMS and OPERA tiles (see
+/// DreadcastRadar.swift) and NOAA's satellite estimates in Rainbow.ai's dbz_u8 encoding.
+public enum RadarTileDecoder {
     struct Tile: Sendable {
         let size: Int
         let dbz: [Int8]
         let snow: [Bool]
     }
 
-    static func decodeTile(_ image: RGBAImage) -> Tile {
-        var dbz = [Int8](repeating: ReflectivityField.none, count: image.width * image.height)
-        var snow = [Bool](repeating: false, count: image.width * image.height)
+    /// dbz_u8's code for dry ground, −20 dBZ: the satellite blend's "no echo".
+    static let dryCode: UInt8 = 12
+
+    /// A satellite estimate tile in dbz_u8: red holds (R & 127) − 32 dBZ and R & 128
+    /// marks snow. Alpha 0 is no data, which counts as no coverage.
+    static func decodeSatelliteTile(_ image: RGBAImage) -> Tile {
+        let count = image.width * image.height
+        var dbz = [Int8](repeating: uncovered, count: count)
+        var snow = [Bool](repeating: false, count: count)
         image.pixels.withUnsafeBufferPointer { p in
-            for i in 0..<(image.width * image.height) {
-                let o = i * 4
-                guard p[o + 3] != 0 else { continue }
-                let rgba = UInt32(p[o]) << 24 | UInt32(p[o + 1]) << 16 | UInt32(p[o + 2]) << 8 | UInt32(p[o + 3])
-                if let entry = lookup[rgba] {
-                    dbz[i] = entry.dbz
-                    snow[i] = entry.snow
-                }
+            for i in 0..<count where p[i * 4 + 3] != 0 {
+                let code = p[i * 4] & 127
+                dbz[i] = code <= dryCode ? ReflectivityField.none : Int8(Int(code) - 32)
+                snow[i] = p[i * 4] & 128 != 0
             }
         }
         return Tile(size: image.width, dbz: dbz, snow: snow)
     }
+
+    /// A satellite tile the API answered 204 for: covered, and dry throughout.
+    static let drySatelliteTile: Tile = {
+        let size = DreadcastRadarManifest.Satellite.tileSize
+        return Tile(size: size, dbz: [Int8](repeating: ReflectivityField.none, count: size * size),
+                    snow: [Bool](repeating: false, count: size * size))
+    }()
 }
 
 // MARK: - Loading
@@ -227,65 +192,82 @@ public protocol RadarTileStore: Sendable {
 public struct RadarLoader: Sendable {
     private let http: HTTPClient
     private let store: (any RadarTileStore)?
-    public let tileSize = 512
 
     public init(http: HTTPClient = HTTPClient(), store: (any RadarTileStore)? = nil) {
         self.http = http
         self.store = store
     }
 
-    /// The lowest zoom whose source resolution meets the viewport's, capped at RainViewer's maximum.
-    public func zoom(for viewport: RadarViewport) -> Int {
+    /// The lowest zoom whose `tileSize`-pixel tiles meet the viewport's resolution,
+    /// between `minimum` and `maximum`; closer views stretch the deepest tiles.
+    static func zoom(for viewport: RadarViewport, tileSize: Int, minimum: Int = 0, maximum: Int) -> Int {
         let circumference = 24_901.0 * max(0.05, cos(viewport.center.latitude * .pi / 180))
         let needed = circumference / (Double(tileSize) * viewport.milesPerPixel)
         let zoom = Int(ceil(log2(max(1, needed))))
-        return max(1, min(RainViewerService.maximumZoom, zoom))
+        return max(minimum, min(maximum, zoom))
     }
 
-    public func field(host: String, frame: RadarFrame, viewport: RadarViewport) async throws -> ReflectivityField {
-        let http = self.http, store = self.store, tileSize = self.tileSize
-        return try await sample(viewport: viewport, zoom: zoom(for: viewport), time: frame.time) { z, x, y in
-            guard let url = RainViewerService.tileURL(host: host, frame: frame, zoom: z, x: x, y: y, size: tileSize) else { return nil }
-            let cacheKey = "\(frame.path.split(separator: "/").last ?? "frame")-\(tileSize)-\(z)-\(x)-\(y)"
-            let data: Data
-            if let cached = store?.tileData(for: cacheKey) {
-                data = cached
-            } else {
-                data = try await http.data(url, accept: "image/png", timeout: 15, maximumBytes: 2 * 1024 * 1024, source: "RainViewer")
-                store?.storeTile(data, for: cacheKey)
-            }
-            let image = try PNGDecoder.decode(data)
-            guard image.width == tileSize, image.height == tileSize else { return nil }
-            return UniversalBlueDecoder.decodeTile(image)
-        }
-    }
-
-    /// The zoom for a view of Dreadcast radar: the region's tiles stop at zoom 8, and
+    /// The zoom for a view of Dreadcast radar: the regions' tiles stop at zoom 8, and
     /// closer views sample zoom 8.
     public func dreadcastZoom(for viewport: RadarViewport, minimum: Int = 0) -> Int {
-        let circumference = 24_901.0 * max(0.05, cos(viewport.center.latitude * .pi / 180))
-        let needed = circumference / (Double(DreadcastRadarManifest.tileSize) * viewport.milesPerPixel)
-        let zoom = Int(ceil(log2(max(1, needed))))
-        return max(minimum, min(DreadcastRadarManifest.maximumZoom, zoom))
+        Self.zoom(for: viewport, tileSize: DreadcastRadarManifest.tileSize, minimum: minimum, maximum: DreadcastRadarManifest.maximumZoom)
     }
 
-    /// One frame from the Dreadcast API, at the zoom `region` (the place's) needs.
-    /// Regions are drawn together as the API describes: each pixel comes from the
-    /// first region, in drawing order, with coverage there. Only stored (`t`) tiles
-    /// are requested; listed tiles with no echo or no coverage are filled in without
-    /// a request.
+    /// Whether any region's radar reaches the view in a frame: a tile there that's stored
+    /// or covered with no echo. Nothing is loaded.
+    public func radarReaches(_ manifest: DreadcastRadarManifest, frame: DreadcastRadarManifest.Frame, viewport: RadarViewport) -> Bool {
+        let z = dreadcastZoom(for: viewport, minimum: manifest.regions.map(\.minimumZoom).min() ?? 0)
+        let size = DreadcastRadarManifest.tileSize, tiles = 1 << z
+        func tile(_ x: Double, _ y: Double) -> (x: Int, y: Int) {
+            let p = WebMercator.pixel(viewport.coordinate(x: x, y: y), zoom: z, tileSize: size)
+            return (Int(floor(p.x / Double(size))), Int(floor(p.y / Double(size))))
+        }
+        let middle = (x: Double(viewport.width) / 2, y: Double(viewport.height) / 2)
+        let west = tile(0, middle.y).x, east = tile(Double(viewport.width - 1), middle.y).x
+        let north = max(0, tile(middle.x, 0).y), south = min(tiles - 1, tile(middle.x, Double(viewport.height - 1)).y)
+        guard west <= east, north <= south else { return false }
+        for region in manifest.regions {
+            guard let scan = frame.scans[region.id], let states = DreadcastRadarManifest.expand(scan.tileStates) else { continue }
+            for x in west...east {
+                for y in north...south {
+                    let state = region.state(states, z: z, x: ((x % tiles) + tiles) % tiles, y: y)
+                    if state == DreadcastRadarManifest.t || state == DreadcastRadarManifest.n { return true }
+                }
+            }
+        }
+        return false
+    }
+
+    /// One frame from the Dreadcast API. Regions are drawn together as the API describes:
+    /// each pixel comes from the first region, in drawing order, with coverage there.
+    /// Only stored (`t`) tiles are requested; listed tiles with no echo or no coverage are
+    /// filled in without a request. With `satellite`, the API's base URL, NOAA's
+    /// satellite estimates fill the pixels no region covers, from the frame's blend; if
+    /// they can't load, the regions are drawn alone.
     public func field(dreadcast manifest: DreadcastRadarManifest, frame: DreadcastRadarManifest.Frame,
-                      region: DreadcastRadarManifest.Region, viewport: RadarViewport) async throws -> ReflectivityField {
+                      viewport: RadarViewport, satellite api: URL? = nil) async throws -> ReflectivityField {
+        var field = try await regionField(manifest, frame: frame, viewport: viewport)
+        guard let api, let satellite = manifest.satellite, let snapshot = manifest.satelliteSnapshot(for: frame),
+              field.covered?.contains(false) == true,
+              let estimates = try? await satelliteField(api: api, satellite: satellite, snapshot: snapshot,
+                                                        viewport: viewport, time: frame.observedAt) else { return field }
+        if field.fill(from: estimates) { field.estimatedAt = snapshot.observedAt }
+        return field
+    }
+
+    private func regionField(_ manifest: DreadcastRadarManifest, frame: DreadcastRadarManifest.Frame,
+                             viewport: RadarViewport) async throws -> ReflectivityField {
         let http = self.http, store = self.store
         let layers = manifest.regions.compactMap { region -> (DreadcastRadarManifest.Region, DreadcastRadarManifest.Scan, [UInt8])? in
             guard let scan = frame.scans[region.id], let states = DreadcastRadarManifest.expand(scan.tileStates) else { return nil }
             return (region, scan, states)
         }
-        let zoom = dreadcastZoom(for: viewport, minimum: region.minimumZoom)
-        return try await sample(viewport: viewport, zoom: zoom, time: frame.observedAt, coverage: true) { z, x, y in
-            var tile: UniversalBlueDecoder.Tile?
+        let zoom = dreadcastZoom(for: viewport, minimum: manifest.regions.map(\.minimumZoom).min() ?? 0)
+        return try await sample(viewport: viewport, zoom: zoom, time: frame.observedAt, coverage: true,
+                                tileSize: DreadcastRadarManifest.tileSize) { z, x, y in
+            var tile: RadarTileDecoder.Tile?
             for (region, scan, states) in layers {
-                let next: UniversalBlueDecoder.Tile
+                let next: RadarTileDecoder.Tile
                 switch region.state(states, z: z, x: x, y: y) {
                 case DreadcastRadarManifest.t:
                     guard let url = scan.tileURL(z: z, x: x, y: y) else { continue }
@@ -301,25 +283,60 @@ public struct RadarLoader: Sendable {
                     }
                     let image = try PNGDecoder.decode(data)
                     guard image.width == DreadcastRadarManifest.tileSize, image.height == DreadcastRadarManifest.tileSize else { continue }
-                    next = UniversalBlueDecoder.decodeMRMSTile(image)
+                    next = RadarTileDecoder.decodeMRMSTile(image)
                 case DreadcastRadarManifest.n:
-                    next = UniversalBlueDecoder.emptyMRMSTile
+                    next = RadarTileDecoder.emptyMRMSTile
                 default:
                     continue
                 }
                 tile = tile?.filling(from: next) ?? next
                 if tile?.isFullyCovered == true { break }
             }
-            return tile ?? UniversalBlueDecoder.uncoveredMRMSTile
+            return tile ?? RadarTileDecoder.uncoveredMRMSTile
         }
     }
 
-    /// Several frames from the Dreadcast API, oldest first. Frames that fail are skipped.
-    public func fields(dreadcast manifest: DreadcastRadarManifest, frames: some Sequence<DreadcastRadarManifest.Frame> & Sendable,
-                       region: DreadcastRadarManifest.Region, viewport: RadarViewport) async -> [ReflectivityField] {
+    /// A blend of NOAA's satellite estimates over the viewport, from the API's tiles.
+    private func satelliteField(api: URL, satellite: DreadcastRadarManifest.Satellite,
+                                snapshot: DreadcastRadarManifest.Satellite.Snapshot,
+                                viewport: RadarViewport, time: Date) async throws -> ReflectivityField {
+        let http = self.http, store = self.store, size = DreadcastRadarManifest.Satellite.tileSize
+        let zoom = Self.zoom(for: viewport, tileSize: size, maximum: satellite.maximumZoom)
+        let endpoint = api.appendingPathComponent("v2/radar/satellite.png")
+        return try await sample(viewport: viewport, zoom: zoom, time: time, coverage: true, tileSize: size) { z, x, y in
+            var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
+            components?.queryItems = [("snapshot", snapshot.id), ("z", z), ("x", x), ("y", y)].map { URLQueryItem(name: $0.0, value: String($0.1)) }
+            guard let url = components?.url else { return nil }
+            // A blend's tiles never change.
+            let cacheKey = "satellite-\(snapshot.id)-\(z)-\(x)-\(y)"
+            let data: Data
+            if let cached = store?.tileData(for: cacheKey) {
+                data = cached
+            } else {
+                data = try await http.data(url, accept: "image/png", timeout: 15, maximumBytes: 1024 * 1024, source: "The Dreadcast API")
+                store?.storeTile(data, for: cacheKey)
+            }
+            // The API answers 204, with no body, for a tile that's dry throughout.
+            guard !data.isEmpty else { return RadarTileDecoder.drySatelliteTile }
+            let image = try PNGDecoder.decode(data)
+            guard image.width == size, image.height == size else { return nil }
+            return RadarTileDecoder.decodeSatelliteTile(image)
+        }
+    }
+
+    /// Satellite estimates alone, one field per blend at the blend's own time, oldest
+    /// first, for views no region reaches. Blends that fail are skipped.
+    public func fields(satellite: DreadcastRadarManifest.Satellite, snapshots: [DreadcastRadarManifest.Satellite.Snapshot],
+                       api: URL, viewport: RadarViewport) async -> [ReflectivityField] {
         await withTaskGroup(of: ReflectivityField?.self) { group in
-            for frame in frames {
-                group.addTask { try? await field(dreadcast: manifest, frame: frame, region: region, viewport: viewport) }
+            for snapshot in snapshots {
+                group.addTask {
+                    guard var field = try? await satelliteField(api: api, satellite: satellite, snapshot: snapshot,
+                                                                viewport: viewport, time: snapshot.observedAt) else { return nil }
+                    field.estimatedAt = snapshot.observedAt
+                    field.estimated = field.covered
+                    return field
+                }
             }
             var result: [ReflectivityField] = []
             for await field in group { if let field { result.append(field) } }
@@ -327,11 +344,24 @@ public struct RadarLoader: Sendable {
         }
     }
 
-    /// Samples tiles at `zoom` onto the viewport. `tile` loads one tile by (z, x, y),
-    /// with x already wrapped around the world. With `coverage`, tiles mark pixels
-    /// without radar coverage, and the field records which pixels are covered.
-    private func sample(viewport: RadarViewport, zoom z: Int, time: Date, coverage: Bool = false,
-                        tile: @escaping @Sendable (Int, Int, Int) async throws -> UniversalBlueDecoder.Tile?) async throws -> ReflectivityField {
+    /// Several frames from the Dreadcast API, oldest first. Frames that fail are skipped.
+    public func fields(dreadcast manifest: DreadcastRadarManifest, frames: some Sequence<DreadcastRadarManifest.Frame> & Sendable,
+                       viewport: RadarViewport, satellite api: URL? = nil) async -> [ReflectivityField] {
+        await withTaskGroup(of: ReflectivityField?.self) { group in
+            for frame in frames {
+                group.addTask { try? await field(dreadcast: manifest, frame: frame, viewport: viewport, satellite: api) }
+            }
+            var result: [ReflectivityField] = []
+            for await field in group { if let field { result.append(field) } }
+            return result.sorted { $0.time < $1.time }
+        }
+    }
+
+    /// Samples `tileSize`-pixel tiles at `zoom` onto the viewport. `tile` loads one tile
+    /// by (z, x, y), with x already wrapped around the world. With `coverage`, tiles mark
+    /// pixels without coverage, and the field records which pixels are covered.
+    private func sample(viewport: RadarViewport, zoom z: Int, time: Date, coverage: Bool = false, tileSize: Int,
+                        tile: @escaping @Sendable (Int, Int, Int) async throws -> RadarTileDecoder.Tile?) async throws -> ReflectivityField {
         let tiles = 1 << z
 
         // Separable mapping: latitude depends on the row, longitude on the column.
@@ -352,8 +382,8 @@ public struct RadarLoader: Sendable {
             throw DreadcastError.unavailable("The radar view is too large for one request.")
         }
 
-        var decoded: [String: UniversalBlueDecoder.Tile] = [:]
-        try await withThrowingTaskGroup(of: (String, UniversalBlueDecoder.Tile?).self) { group in
+        var decoded: [String: RadarTileDecoder.Tile] = [:]
+        try await withThrowingTaskGroup(of: (String, RadarTileDecoder.Tile?).self) { group in
             for ty in minTileY...maxTileY {
                 for tx in minTileX...maxTileX {
                     let wrapped = ((tx % tiles) + tiles) % tiles
@@ -380,7 +410,7 @@ public struct RadarLoader: Sendable {
                 let target = y * viewport.width + x
                 let value = tile.dbz[source]
                 if coverage {
-                    guard value != UniversalBlueDecoder.uncovered else { continue }
+                    guard value != RadarTileDecoder.uncovered else { continue }
                     covered[target] = true
                 }
                 dbz[target] = value
@@ -389,17 +419,5 @@ public struct RadarLoader: Sendable {
         }
         return ReflectivityField(width: viewport.width, height: viewport.height, time: time, dbz: dbz, snow: snow,
                                  covered: coverage ? covered : nil)
-    }
-
-    /// Loads several frames concurrently, oldest first. Frames that fail are skipped.
-    public func fields(manifest: RadarManifest, frames: [RadarFrame], viewport: RadarViewport) async -> [ReflectivityField] {
-        await withTaskGroup(of: ReflectivityField?.self) { group in
-            for frame in frames {
-                group.addTask { try? await field(host: manifest.host, frame: frame, viewport: viewport) }
-            }
-            var result: [ReflectivityField] = []
-            for await field in group { if let field { result.append(field) } }
-            return result.sorted { $0.time < $1.time }
-        }
     }
 }

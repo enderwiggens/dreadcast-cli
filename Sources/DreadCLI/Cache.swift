@@ -65,7 +65,7 @@ private extension JSONEncoder {
     }
 }
 
-/// Raw radar tiles on disk, from RainViewer and the Dreadcast API. Frames are immutable, so entries stay
+/// Raw radar and satellite tiles on disk, from the Dreadcast API. Frames are immutable, so entries stay
 /// valid until the frame ages out; anything older than three hours is pruned.
 public final class DiskTileStore: RadarTileStore, @unchecked Sendable {
     let directory: URL
@@ -101,15 +101,23 @@ public struct Fetched<Value: Sendable>: Sendable {
     public let error: String?
     /// True when the value is older than its refresh interval because a refresh failed.
     public let isStale: Bool
+    /// True when the source doesn't reach the place, as radar beyond every region: there
+    /// is nothing to show, and nothing has failed.
+    public let outsideCoverage: Bool
 
-    public init(value: Value?, storedAt: Date?, error: String?, isStale: Bool) {
+    public init(value: Value?, storedAt: Date?, error: String?, isStale: Bool, outsideCoverage: Bool = false) {
         self.value = value
         self.storedAt = storedAt
         self.error = error
         self.isStale = isStale
+        self.outsideCoverage = outsideCoverage
     }
 
     public static func failure(_ message: String) -> Fetched { Fetched(value: nil, storedAt: nil, error: message, isStale: false) }
+
+    public static func outsideCoverage(_ message: String) -> Fetched {
+        Fetched(value: nil, storedAt: nil, error: message, isStale: false, outsideCoverage: true)
+    }
 }
 
 extension Error {

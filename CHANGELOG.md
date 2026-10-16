@@ -9,6 +9,15 @@
   `--pretty`, it lists every system once with its details, names the sources it read
   and any it couldn't reach, and exits 3 when none answered. `--json` follows the new
   `dreadcast.systems/1` schema, with each system's `kind` and `source`.
+- Where no radar reaches, radar views show NOAA's satellite rain estimates from the
+  Dreadcast API, credited with the blend's time. They fill only pixels that no radar
+  region covers, and a view no radar reaches at all loops the blends themselves, ten
+  minutes apart, at their own times.
+- Where no radar reaches, `dread eta` times rain from the forecast model's 15-minute
+  precipitation and says so. Its `--json` has `source: "model"`, the model's `units`
+  and each step's `precipitation`, with no frames, reflectivity, motion, trend or
+  storm cells. The Systems tab shows "No radar here" with the model's timing, rather
+  than an outage.
 
 ### Changed
 
@@ -16,8 +25,18 @@
   Radar & Forecasts. TRADEMARKS.md lists it with the App Store name, Dreadcast: Radar &
   Weather, and keeps the earlier names as former names.
 
+- Radar comes only from the Dreadcast API. If the API is down, radar is unavailable.
+  `api-url off` now turns radar off.
+- `dread now` dates the forecast model's rain from the start of each 15-minute step
+  rather than its end, so it can say rain starts up to 15 minutes earlier than before.
+  `--plain` shows the model's next two hours when there's no radar timing to show.
+
 ### Removed
 
+- RainViewer, with its palette and `config set radar-source`. Places outside the
+  Dreadcast API's radar regions (the US, Puerto Rico, Guam and most of Europe) now get
+  satellite estimates in radar views and the forecast model's rain timing, not
+  RainViewer's radar. A saved RainViewer palette reads as Dreadcast.
 - `dread top`. It opened the app on a view, and every view now has its own command:
   `dread` opens the app and `dread systems` opens it on Systems, with the other tabs a
   keypress away. `dread top` now says so and exits 2. `dread help app` replaces
