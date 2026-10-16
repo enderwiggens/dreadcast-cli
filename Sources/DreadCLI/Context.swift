@@ -168,7 +168,7 @@ public final class Context: @unchecked Sendable {
             if let cached = cache.read(Place.self, key: key), now.timeIntervalSince(cached.storedAt) < 30 * 86400 {
                 return cached.value
             }
-            let places = try await PlaceService(http: http).resolve(query)
+            let places = try await PlaceService(http: http, api: dreadcastAPI).resolve(query)
             guard let place = places.first else { throw DreadcastError.notFound("No places matched “\(query)”.") }
             cache.write(place, key: key, at: now)
             return place
@@ -214,11 +214,20 @@ public final class Context: @unchecked Sendable {
         String(format: "%.2f_%.2f", locale: Locale(identifier: "en_US_POSIX"), place.coordinate.latitude, place.coordinate.longitude)
     }
 
+    /// Why there's no weather when the API is turned off.
+    static func apiOff(_ what: String) -> String { "\(what) comes from the Dreadcast API, which `api-url off` turns off" }
+
+    /// Conditions and the forecast from the Dreadcast API. When the API couldn't reach
+    /// its provider and served an older reading, it's marked stale like any other.
     public func weather(_ place: Place) async -> Fetched<WeatherReport> {
+        guard let api = dreadcastAPI else { return .failure(Self.apiOff("Weather")) }
         let units = self.units, http = self.http, now = self.now
-        return await load(key: "weather-\(Self.placeKey(place))-\(units.rawValue)", maxAge: 600) {
-            try await WeatherService(http: http).report(at: place.coordinate, units: units, now: now)
+        let fetched = await load(key: "weather-v2-\(Self.placeKey(place))-\(units.rawValue)", maxAge: 600) {
+            try await WeatherService(http: http, api: api).report(at: place.coordinate, units: units, now: now)
         }
+        guard fetched.value?.stale == true, !fetched.isStale else { return fetched }
+        return Fetched(value: fetched.value, storedAt: fetched.storedAt,
+                       error: "The weather provider couldn’t be reached, so this reading is older.", isStale: true)
     }
 
     public func alerts(_ place: Place) async -> Fetched<[WeatherAlert]> {
@@ -415,9 +424,10 @@ public final class Context: @unchecked Sendable {
     }
 
     public func airQuality(_ place: Place) async -> Fetched<AirQualityReading> {
+        guard let api = dreadcastAPI else { return .failure(Self.apiOff("Air quality")) }
         let http = self.http, now = self.now
         return await load(key: "aqi-\(Self.placeKey(place))", maxAge: 1800) {
-            try await AirQualityService(http: http).reading(at: place.coordinate, now: now)
+            try await AirQualityService(http: http, api: api).reading(at: place.coordinate, now: now)
         }
     }
 
@@ -439,9 +449,9 @@ public final class Context: @unchecked Sendable {
     }
 
     public func hazards(_ place: Place) async -> Fetched<HazardSummary> {
-        let http = self.http, now = self.now
+        let http = self.http, now = self.now, api = dreadcastAPI
         return await load(key: "hazards-\(Self.placeKey(place))", maxAge: 900) {
-            await HazardService(http: http).summary(near: place.coordinate, now: now)
+            await HazardService(http: http, api: api).summary(near: place.coordinate, now: now)
         }
     }
 }

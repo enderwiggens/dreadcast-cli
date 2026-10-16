@@ -71,7 +71,7 @@ enum SetupCommand {
             query = answer
         }
 
-        let place = choose(try await PlaceService(http: ctx.http).resolve(query), ctx: ctx, interactive: interactive)
+        let place = choose(try await PlaceService(http: ctx.http, api: ctx.dreadcastAPI).resolve(query), ctx: ctx, interactive: interactive)
 
         var config = ctx.config
         config.location = place
@@ -254,7 +254,10 @@ enum CreditsCommand {
     static func run(_ ctx: Context) -> ExitCode {
         let s = ctx.styler
         let sources: [(String, String, String)] = [
-            ("Open-Meteo", "Weather and air quality forecasts, geocoding. CC BY 4.0.", "https://open-meteo.com/"),
+            ("Open-Meteo", "Weather, air quality and place search, through the Dreadcast API. CC BY 4.0.", "https://open-meteo.com/"),
+            ("Copernicus Atmosphere Monitoring Service", "Air quality and dust, through Open-Meteo. Generated using CAMS information.",
+             "https://atmosphere.copernicus.eu/"),
+            ("GeoNames", "Place names for search, through Open-Meteo. CC BY 4.0.", "https://www.geonames.org/"),
             ("NOAA MRMS", "Radar for the US, Puerto Rico and Guam, through the Dreadcast API. Public domain.", "https://www.nssl.noaa.gov/projects/mrms/"),
             ("EUMETNET OPERA", "Radar for Europe, through the Dreadcast API, which resamples it into tiles. CC BY 4.0.",
              "https://www.eumetnet.eu/observations/weather-radar-network/\nhttps://creativecommons.org/licenses/by/4.0/"),

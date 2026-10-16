@@ -12,6 +12,13 @@
 
 ### Changed
 
+- Weather, air quality, dust and place search come from the Dreadcast API
+  (`/v1/weather/current` and `/forecast`, `/v1/air/current`, `/v1/places/search`)
+  instead of Open-Meteo's free API, which is for non-commercial use only. The data is
+  still Open-Meteo's, with CAMS air quality and GeoNames places, and it's credited the
+  same way. Open-Meteo now sees the API's address instead of yours. A reading the API
+  serves while its provider is down is marked stale, and `api-url off` turns these off
+  too. Dust is read at the place itself rather than as the nearest of 25 points.
 - The README and the agent guide call the Mac app by its full name, Dreadcast: Weather
   Radar & Forecasts. TRADEMARKS.md lists it with the App Store name, Dreadcast: Radar &
   Weather, and keeps the earlier names as former names.

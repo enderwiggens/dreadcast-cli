@@ -109,58 +109,121 @@ struct AlertTests {
     }
 }
 
-@Suite("Open-Meteo")
+@Suite("Weather from the Dreadcast API")
 struct WeatherTests {
-    static let payload = """
-    {"latitude":27.95,"longitude":-82.46,"utc_offset_seconds":-14400,"timezone":"America/New_York",
-     "current":{"time":1791259200,"interval":900,"temperature_2m":71.2,"apparent_temperature":74.0,"relative_humidity_2m":82,
-       "dew_point_2m":66,"weather_code":95,"wind_speed_10m":14,"wind_direction_10m":225,"wind_gusts_10m":31,"is_day":1,
-       "precipitation":0.1,"pressure_msl":1004.2,"cloud_cover":100},
-     "minutely_15":{"time":[1791259200,1791260100],"precipitation":[0.0,0.05],"weather_code":[95,95]},
-     "hourly":{"time":[1791248400,1791252000,1791255600,1791259200,1791262800],
-       "temperature_2m":[80,79,75,71,72],"apparent_temperature":[85,84,78,74,75],"precipitation_probability":[10,20,60,90,45],
-       "precipitation":[0,0,0.1,0.4,0.1],"weather_code":[2,3,80,95,61],"is_day":[1,1,1,1,1],"wind_speed_10m":[8,9,12,14,12],
-       "wind_direction_10m":[200,210,220,225,230],"cloud_cover":[40,60,90,100,95],"pressure_msl":[1007.5,1006.8,1005.6,1004.2,1004.8],
-       "dew_point_2m":[66,66,67,66,66],"cape":[2000,2400,2800,3280,2500]},
-     "daily":{"time":[1791172800,1791259200],"weather_code":[95,61],"temperature_2m_max":[88,87],"temperature_2m_min":[69,70],
-       "apparent_temperature_max":[95,94],"apparent_temperature_min":[72,73],"precipitation_probability_max":[90,40],
-       "precipitation_sum":[1.2,0.3],"wind_speed_10m_max":[18,12],"wind_gusts_10m_max":[35,20],"uv_index_max":[8,6],
-       "sunrise":[1791197100,1791283500],"sunset":[1791239400,1791325800]}}
+    /// `/v1/weather/current` and `/v1/weather/forecast` for Tampa, in imperial units
+    /// (dreadcast-server `docs/API.md`).
+    static let current = """
+    {"location":{"latitude":27.95,"longitude":-82.46,"elevation":6.0,"timezone":"America/New_York","timezone_abbreviation":"GMT-4","utc_offset_seconds":-14400},
+     "current":{"time":"2026-10-06T04:00:00Z","interval_seconds":900,"temperature":71.2,"apparent_temperature":74.0,"relative_humidity":82,"weather_code":95,"is_day":true,"wind_speed":14,"wind_direction":225,"wind_gusts":31,"precipitation":0.1,"cloud_cover":100,"dew_point":66,"pressure":1004.2},
+     "minutely_15":[{"time":"2026-10-06T04:00:00Z","precipitation":0.0,"weather_code":95},{"time":"2026-10-06T04:15:00Z","precipitation":0.05,"weather_code":95}],
+     "units":{"temperature":"fahrenheit","wind_speed":"mph","precipitation":"inch"},
+     "source":{"name":"Open-Meteo","url":"https://open-meteo.com/","license":"CC BY 4.0","provider":"open-meteo","fetched_at":"2026-10-05T18:25:00Z","expires_at":"2026-10-05T18:40:00Z","stale":false}}
     """
 
+    static let forecast = """
+    {"location":{"latitude":27.95,"longitude":-82.46,"elevation":6.0,"timezone":"America/New_York","timezone_abbreviation":"GMT-4","utc_offset_seconds":-14400},
+     "hourly":[
+       {"time":"2026-10-06T01:00:00Z","temperature":80,"apparent_temperature":85,"precipitation_probability":10,"precipitation":0,"weather_code":2,"is_day":true,"wind_speed":8,"cloud_cover":40,"wind_direction":200,"pressure":1007.5,"dew_point":66,"cape":2000},
+       {"time":"2026-10-06T02:00:00Z","temperature":79,"apparent_temperature":84,"precipitation_probability":20,"precipitation":0,"weather_code":3,"is_day":true,"wind_speed":9,"cloud_cover":60,"wind_direction":210,"pressure":1006.8,"dew_point":66,"cape":2400},
+       {"time":"2026-10-06T03:00:00Z","temperature":75,"apparent_temperature":78,"precipitation_probability":60,"precipitation":0.1,"weather_code":80,"is_day":true,"wind_speed":12,"cloud_cover":90,"wind_direction":220,"pressure":1005.6,"dew_point":67,"cape":2800},
+       {"time":"2026-10-06T04:00:00Z","temperature":71,"apparent_temperature":74,"precipitation_probability":90,"precipitation":0.4,"weather_code":95,"is_day":true,"wind_speed":14,"cloud_cover":100,"wind_direction":225,"pressure":1004.2,"dew_point":66,"cape":3280},
+       {"time":"2026-10-06T05:00:00Z","temperature":72,"apparent_temperature":75,"precipitation_probability":45,"precipitation":0.1,"weather_code":61,"is_day":true,"wind_speed":12,"cloud_cover":95,"wind_direction":230,"pressure":1004.8,"dew_point":66,"cape":2500}],
+     "daily":[
+       {"date":"2026-10-05","weather_code":95,"temperature_max":88,"temperature_min":69,"apparent_temperature_max":95,"apparent_temperature_min":72,"precipitation_probability_max":90,"precipitation_sum":1.2,"wind_speed_max":18,"wind_gusts_max":35,"uv_index_max":8,"sunrise":"2026-10-05T10:45:00Z","sunset":"2026-10-05T22:30:00Z"},
+       {"date":"2026-10-06","weather_code":61,"temperature_max":87,"temperature_min":70,"apparent_temperature_max":94,"apparent_temperature_min":73,"precipitation_probability_max":40,"precipitation_sum":0.3,"wind_speed_max":12,"wind_gusts_max":20,"uv_index_max":6,"sunrise":"2026-10-06T10:45:00Z","sunset":"2026-10-06T22:30:00Z"}],
+     "units":{"temperature":"fahrenheit","wind_speed":"mph","precipitation":"inch"},
+     "source":{"name":"Open-Meteo","url":"https://open-meteo.com/","license":"CC BY 4.0","provider":"open-meteo","fetched_at":"2026-10-05T18:00:00Z","expires_at":"2026-10-05T19:00:00Z","stale":false}}
+    """
+
+    static let tampa = GeoCoordinate(latitude: 27.95, longitude: -82.46)
+    static let now = Date(timeIntervalSince1970: 1_791_259_300)
+
+    static func report(current: String = current, forecast: String = forecast, units: UnitSystem = .imperial) throws -> WeatherReport {
+        try WeatherService.decode(current: Data(current.utf8), forecast: Data(forecast.utf8), coordinate: tampa, units: units, now: now)
+    }
+
     @Test func decodesAllSections() throws {
-        let report = try WeatherService.decode(Data(Self.payload.utf8), coordinate: GeoCoordinate(latitude: 27.95, longitude: -82.46),
-                                               units: .imperial, fetchedAt: Date(timeIntervalSince1970: 1_791_259_300))
-        #expect(report.timeZoneIdentifier == "America/New_York")
-        #expect(report.current.temperature == 71.2)
-        #expect(report.current.weatherCode == 95)
-        #expect(report.minutely.count == 2)
-        #expect(report.hourly.count == 5)
-        #expect(report.daily.count == 2)
-        #expect(report.hourly[3].cape == 3280)
+        let report = try Self.report()
+        #expect(report.timeZoneIdentifier == "America/New_York" && report.utcOffsetSeconds == -14400)
+        #expect(report.current.temperature == 71.2 && report.current.weatherCode == 95 && report.current.isDay)
+        #expect(report.current.time == ISODate.parse("2026-10-06T04:00:00Z"))
+        #expect(report.minutely.count == 2 && report.minutely[1].precipitation == 0.05)
+        #expect(report.hourly.count == 5 && report.hourly[3].cape == 3280)
+        #expect(report.daily.count == 2 && report.daily[0].high == 88 && report.daily[1].sunset == ISODate.parse("2026-10-06T22:30:00Z"))
+        // Daily dates are local midnights in the place's zone.
+        #expect(report.daily[0].date == ISODate.parse("2026-10-05T04:00:00Z"))
+        #expect(report.fetchedAt == ISODate.parse("2026-10-05T18:00:00Z") && report.stale == nil)
     }
 
     @Test func pressureTendencyAndCape() throws {
-        let report = try WeatherService.decode(Data(Self.payload.utf8), coordinate: GeoCoordinate(latitude: 27.95, longitude: -82.46),
-                                               units: .imperial, fetchedAt: Date())
-        let now = Date(timeIntervalSince1970: 1_791_259_300)
-        let tendency = try #require(report.pressureTendency(at: now))
+        let report = try Self.report()
+        let tendency = try #require(report.pressureTendency(at: Self.now))
         #expect(abs(tendency - (1004.2 - 1007.5)) < 0.001)
-        #expect(report.cape(at: now) == 3280)
+        #expect(report.cape(at: Self.now) == 3280)
     }
 
-    @Test func rejectsMalformedSeries() {
-        let bad = Self.payload.replacingOccurrences(of: "\"temperature_2m\":[80,79,75,71,72]", with: "\"temperature_2m\":[80,79]")
+    @Test func valuesThatCantBeRightAreLeftOut() throws {
+        let odd = Self.current.replacingOccurrences(of: #""relative_humidity":82"#, with: #""relative_humidity":140"#)
+            .replacingOccurrences(of: #""weather_code":95,"is_day""#, with: #""weather_code":250,"is_day""#)
+            .replacingOccurrences(of: #""wind_speed":14"#, with: #""wind_speed":-3"#)
+        let report = try Self.report(current: odd)
+        #expect(report.current.humidity == nil && report.current.weatherCode == nil && report.current.windSpeed == nil)
+        #expect(report.current.temperature == 71.2)
+        let stale = try Self.report(current: Self.current.replacingOccurrences(of: #""stale":false"#, with: #""stale":true"#))
+        #expect(stale.stale == true)
+    }
+
+    @Test func rejectsAnswersItCantTrust() {
+        func rejects(current: String = Self.current, forecast: String = Self.forecast, units: UnitSystem = .imperial) -> Bool {
+            (try? Self.report(current: current, forecast: forecast, units: units)) == nil
+        }
+        #expect(!rejects())
+        // Other units than asked for, or than the other answer.
+        #expect(rejects(units: .metric))
+        #expect(rejects(forecast: Self.forecast.replacingOccurrences(of: #""precipitation":"inch""#, with: #""precipitation":"mm""#)))
+        #expect(rejects(current: "not json"))
+        #expect(rejects(current: Self.current.replacingOccurrences(of: #""time":"2026-10-06T04:00:00Z","interval"#, with: #""time":"soon","interval"#)))
+        #expect(rejects(forecast: Self.forecast.replacingOccurrences(of: #""date":"2026-10-06""#, with: #""date":"2026-10-05""#)))
+        #expect(rejects(forecast: Self.forecast.replacingOccurrences(of: #""date":"2026-10-06""#, with: #""date":"Tuesday""#)))
+        #expect(rejects(forecast: Self.forecast.replacingOccurrences(of: "2026-10-06T05:00:00Z", with: "2026-10-06T00:00:00Z")))
+    }
+
+    @Test func aTimeZoneThatIsntOneFallsBackToTheOffset() throws {
+        let odd = Self.forecast.replacingOccurrences(of: #""timezone":"America/New_York""#, with: #""timezone":"\u001b[2J""#)
+        let report = try Self.report(current: Self.current.replacingOccurrences(of: #""timezone":"America/New_York""#, with: #""timezone":null"#),
+                                     forecast: odd)
+        #expect(report.timeZone.secondsFromGMT(for: Self.now) == -14400)
+        #expect(!report.timeZoneIdentifier.contains("\u{1B}"))
+    }
+
+    @Test func requestsUseCoarseCoordinatesAndUnits() throws {
+        let api = try #require(URL(string: "https://api.dreadcast.app"))
+        let url = try #require(WeatherService.url(api, "v1/weather/current", coordinate: GeoCoordinate(latitude: 27.947_52, longitude: -82.458_43), units: .metric))
+        #expect(url.absoluteString == "https://api.dreadcast.app/v1/weather/current?lat=27.95&lon=-82.46&temperature_unit=celsius&wind_speed_unit=kmh&precipitation_unit=mm")
+    }
+
+    @Test func airQualityIsAPointReading() throws {
+        let air = #"{"current":{"time":"2026-10-06T04:00:00Z","interval_seconds":3600,"us_aqi":161.4,"pm2_5":61.0,"pm10":null,"ozone":-1,"dust":12.5}}"#
+        let reading = try AirQualityService.decode(Data(air.utf8), now: Self.now)
+        #expect(reading.usAQI == 161 && reading.category == "Unhealthy")
+        #expect(reading.pm2_5 == 61 && reading.pm10 == nil && reading.ozone == nil && reading.dust == 12.5)
+        // Without an AQI there's no reading, but the dust still counts.
+        let noIndex = Data(air.replacingOccurrences(of: "161.4", with: "null").utf8)
+        #expect(throws: DreadcastError.self) { _ = try AirQualityService.decode(noIndex, now: Self.now) }
+        #expect(try AirQualityService.current(noIndex, now: Self.now).dust == 12.5)
+        // An hour far ahead isn't a current reading.
         #expect(throws: DreadcastError.self) {
-            _ = try WeatherService.decode(Data(bad.utf8), coordinate: GeoCoordinate(latitude: 0, longitude: 0), units: .imperial, fetchedAt: Date())
+            _ = try AirQualityService.current(Data(air.replacingOccurrences(of: "2026-10-06T04:00:00Z", with: "2026-10-07T04:00:00Z").utf8), now: Self.now)
         }
     }
 
-    @Test func requestURLUsesCoarseCoordinates() {
-        let url = WeatherService.requestURL(for: GeoCoordinate(latitude: 27.947_52, longitude: -82.458_43), units: .metric).absoluteString
-        #expect(url.contains("latitude=27.95"))
-        #expect(url.contains("longitude=-82.46"))
-        #expect(url.contains("temperature_unit=celsius"))
+    @Test func placeSearchResultsAreLabeledAndCleaned() throws {
+        let results = #"{"results":[{"name":"Tampa","latitude":27.94752,"longitude":-82.45843,"country_code":"us","country":"United States","admin1":"Florida","timezone":"America/New_York"},{"name":"Lis\u001b[2Jbon","latitude":38.72,"longitude":-9.13,"country_code":null,"country":"Portugal","admin1":null,"timezone":null},{"name":"Nowhere","latitude":95,"longitude":0}],"source":{}}"#
+        let places = try PlaceService.places(Data(results.utf8))
+        #expect(places.map(\.name) == ["Tampa, FL", "Lis[2Jbon, Portugal"])
+        #expect(places[0].countryCode == "US" && places[0].coordinate == GeoCoordinate(latitude: 27.95, longitude: -82.46))
+        #expect(places[1].timeZone == nil && places[1].countryCode == nil)
     }
 
     @Test func conditionWording() {

@@ -47,9 +47,13 @@ enum USCoverage {
 
 public struct PlaceService: Sendable {
     private let http: HTTPClient
+    private let api: URL?
 
-    public init(http: HTTPClient = HTTPClient()) {
+    /// Place names are searched through the Dreadcast API at `api`; without it, only ZIP
+    /// codes and coordinates resolve.
+    public init(http: HTTPClient = HTTPClient(), api: URL?) {
         self.http = http
+        self.api = api
     }
 
     /// Interprets a query as a five-digit US ZIP code, a "lat,lon" pair, or a place name.
@@ -100,45 +104,58 @@ public struct PlaceService: Sendable {
                      countryCode: "US", region: entry.state, source: .zip)
     }
 
-    /// Worldwide place search through Open-Meteo's geocoding API.
+    /// Worldwide place search through the Dreadcast API's `/v1/places/search`, which
+    /// gets GeoNames' places from Open-Meteo.
     public func search(_ name: String, count: Int = 6) async throws -> [Place] {
-        var components = URLComponents(string: "https://geocoding-api.open-meteo.com/v1/search")!
-        components.queryItems = [
-            .init(name: "name", value: name),
-            .init(name: "count", value: String(max(1, min(count, 10)))),
-            .init(name: "language", value: "en"),
-            .init(name: "format", value: "json")
-        ]
-        struct Response: Decodable {
+        guard let api else {
+            throw DreadcastError.unavailable("Place search comes from the Dreadcast API, which `api-url off` turns off. Use a ZIP code or latitude,longitude.")
+        }
+        let query = String(name.prefix(100))
+        guard query.count >= 2 else { throw DreadcastError.notFound("Enter at least two letters of a place name.") }
+        let url = DreadcastAPI.url(api, "v1/places/search", [URLQueryItem(name: "q", value: query),
+                                                             URLQueryItem(name: "count", value: String(max(1, min(count, 10))))])
+        let data = try await DreadcastAPI.data(http, url, what: "Place search", maximumBytes: 256 * 1024)
+        let places = try Self.places(data)
+        guard !places.isEmpty else { throw DreadcastError.notFound("No places matched “\(name)”.") }
+        return places
+    }
+
+    /// The API's results as places, labeled as people write them. Text the terminal
+    /// prints loses control characters.
+    static func places(_ data: Data) throws -> [Place] {
+        struct Answer: Decodable {
             struct Result: Decodable {
                 let name: String
                 let latitude: Double
                 let longitude: Double
-                let country_code: String?
+                let countryCode: String?
                 let country: String?
                 let admin1: String?
                 let timezone: String?
             }
-            let results: [Result]?
+            let results: [Result]
         }
-        let response = try await http.json(Response.self, from: components.url!, source: "Open-Meteo geocoding")
-        let places = (response.results ?? []).compactMap { result -> Place? in
+        func clean(_ text: String?) -> String? {
+            let kept = String(String.UnicodeScalarView((text ?? "").unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }))
+                .trimmingCharacters(in: .whitespaces)
+            return kept.isEmpty ? nil : String(kept.prefix(200))
+        }
+        return try DreadcastAPI.decode(Answer.self, from: data).results.compactMap { result -> Place? in
             let coordinate = GeoCoordinate(latitude: result.latitude, longitude: result.longitude)
-            guard coordinate.isValid else { return nil }
-            let code = result.country_code?.uppercased()
-            var label = result.name
-            if code == "US", let admin = result.admin1 {
+            guard coordinate.isValid, let name = clean(result.name) else { return nil }
+            let code = clean(result.countryCode)?.uppercased()
+            let admin = clean(result.admin1), country = clean(result.country)
+            var label = name
+            if code == "US", let admin {
                 label += ", " + (USStates.abbreviation(for: admin) ?? admin)
-            } else if let admin = result.admin1, admin != result.name {
-                label += ", " + admin + (result.country.map { ", " + $0 } ?? "")
-            } else if let country = result.country {
+            } else if let admin, admin != name {
+                label += ", " + admin + (country.map { ", " + $0 } ?? "")
+            } else if let country {
                 label += ", " + country
             }
             return Place(name: label, coordinate: coordinate, countryCode: code,
-                         region: result.admin1, timeZone: result.timezone, source: .search)
+                         region: admin, timeZone: clean(result.timezone), source: .search)
         }
-        guard !places.isEmpty else { throw DreadcastError.notFound("No places matched “\(name)”.") }
-        return places
     }
 
     /// Accepts "27.95,-82.46", "27.95 -82.46" or "27.95, -82.46".

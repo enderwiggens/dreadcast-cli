@@ -14,6 +14,8 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var requests: [URLRequest] = []
     /// Served for routes whose body is empty, such as PNG tiles.
     nonisolated(unsafe) static var tileBody: Data?
+    /// Served instead of `tileBody` for a host and path, as "api.dreadcast.app/v2/radar/satellite.png".
+    nonisolated(unsafe) static var binaries: [String: Data] = [:]
     static let lock = NSLock()
 
     static func reset(_ routes: [String: (Int, String)]) {
@@ -30,9 +32,11 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
 
     override func startLoading() {
         let url = request.url!
+        // A route for the host and path wins over one for the whole host.
         let (route, binary) = Self.lock.withLock { () -> ((status: Int, body: String)?, Data?) in
             Self.requests.append(request)
-            return (Self.routes[url.host ?? ""], Self.tileBody)
+            let path = (url.host ?? "") + url.path
+            return (Self.routes[path] ?? Self.routes[url.host ?? ""], Self.binaries[path] ?? Self.tileBody)
         }
         guard let route else {
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
@@ -41,7 +45,8 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
         let response = HTTPURLResponse(url: url, statusCode: route.status, httpVersion: "HTTP/1.1",
                                        headerFields: ["Content-Type": "application/json"])!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: route.body.isEmpty ? (binary ?? Data()) : Data(route.body.utf8))
+        let body = route.status == 204 ? Data() : route.body.isEmpty ? (binary ?? Data()) : Data(route.body.utf8)
+        client?.urlProtocol(self, didLoad: body)
         client?.urlProtocolDidFinishLoading(self)
     }
 
@@ -53,9 +58,12 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
 /// the stub's routes are shared.
 @Suite("Commands", .serialized)
 struct CommandTests {
-    static let forecast = "api.open-meteo.com"
+    /// The Dreadcast API's weather, by host and path.
+    static let current = "api.dreadcast.app/v1/weather/current"
+    static let forecast = "api.dreadcast.app/v1/weather/forecast"
     static let nws = "api.weather.gov"
-    static let online: [String: (Int, String)] = [forecast: (200, WeatherFixture.payload), nws: (200, AlertFixture.payload)]
+    static let online: [String: (Int, String)] = [current: (200, WeatherFixture.current), forecast: (200, WeatherFixture.forecast),
+                                                 nws: (200, AlertFixture.payload)]
 
     /// A fresh config and cache directory with an optional default place.
     static func home(location: String? = "27.947,-82.458") async throws -> [String: String] {
@@ -116,7 +124,8 @@ struct CommandTests {
         #expect(result.code == .unavailable)
         #expect(!result.out.lowercased().contains("no active alerts"))
         // Alerts down while the forecast works: the quick look says so.
-        let partial = try await Self.run(["now", "--plain"], environment: try await Self.home(), routes: [Self.forecast: (200, WeatherFixture.payload), Self.nws: (500, "{}")])
+        let partial = try await Self.run(["now", "--plain"], environment: try await Self.home(),
+                                         routes: [Self.current: (200, WeatherFixture.current), Self.forecast: (200, WeatherFixture.forecast), Self.nws: (500, "{}")])
         #expect(partial.code == .ok)
         #expect(!partial.out.lowercased().contains("no active alerts"))
         #expect(partial.out.lowercased().contains("unavailable"))
@@ -128,7 +137,7 @@ struct CommandTests {
         let again = try await Self.run(["now", "--plain"], environment: env, routes: [:])
         #expect(again.code == .ok)
         #expect(again.out.contains("71°F"))
-        #expect(StubProvider.seen.allSatisfy { $0.url?.host != Self.forecast && $0.url?.host != Self.nws })
+        #expect(StubProvider.seen.allSatisfy { $0.url?.host != "api.dreadcast.app" && $0.url?.host != Self.nws })
     }
 
     // MARK: Privacy
@@ -145,6 +154,84 @@ struct CommandTests {
             #expect(!url.contains("27.947") && !url.contains("82.458"))
         }
         #expect(seen.contains { $0.url!.absoluteString.contains("27.95") })
+        // Weather comes from the Dreadcast API, with the rounded coordinate and the units shown.
+        let weather = seen.compactMap(\.url).filter { $0.path.hasPrefix("/v1/weather/") }
+        #expect(Set(weather.map(\.path)) == ["/v1/weather/current", "/v1/weather/forecast"])
+        #expect(weather.allSatisfy { $0.query == "lat=27.95&lon=-82.46&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch" })
+        #expect(!seen.contains { $0.url?.host?.hasSuffix("open-meteo.com") == true })
+    }
+
+    // MARK: The Dreadcast API
+
+    /// An older reading the API serves while its provider is down is labeled stale.
+    @Test func staleWeatherFromTheAPIIsLabeled() async throws {
+        let env = try await Self.home()
+        var routes = Self.online
+        routes[Self.current] = (200, WeatherFixture.current.replacingOccurrences(of: #""stale":false"#, with: #""stale":true"#))
+        let json = try Self.json(try await Self.run(["now", "--json"], environment: env, routes: routes).out)
+        #expect((json["stale"] as? [String])?.contains("conditions") == true)
+        #expect((json["conditions"] as? [String: Any]) != nil)
+    }
+
+    @Test func weatherInOtherUnitsThanAskedIsRefused() async throws {
+        let env = try await Self.home()
+        var routes = Self.online
+        routes[Self.forecast] = (200, WeatherFixture.forecast.replacingOccurrences(of: #""temperature":"fahrenheit""#, with: #""temperature":"celsius""#))
+        let result = try await Self.run(["forecast", "--plain"], environment: env, routes: routes)
+        #expect(result.code == .unavailable)
+        #expect(!result.out.contains("88°"))
+    }
+
+    /// With the API turned off there's no weather, and the commands say why without
+    /// asking anyone else.
+    @Test func weatherNeedsTheAPI() async throws {
+        let env = try await Self.home()
+        #expect(try await Self.run(["config", "set", "api-url", "off", "--plain"], environment: env).code == .ok)
+        let now = try await Self.run(["now", "--plain"], environment: env)
+        #expect(now.code == .unavailable && now.out.contains("api-url off"))
+        #expect(!StubProvider.seen.contains { $0.url?.host == "api.dreadcast.app" || $0.url?.host?.hasSuffix("open-meteo.com") == true })
+        let search = try await Self.run(["setup", "Lisbon", "--plain"], environment: env)
+        #expect(search.code != .ok && search.err.contains("api-url off"))
+    }
+
+    @Test func placeSearchGoesThroughTheAPI() async throws {
+        let env = try await Self.home(location: nil)
+        let results = #"{"results":[{"name":"Lisbon","latitude":38.71667,"longitude":-9.13333,"country_code":"PT","country":"Portugal","admin1":"Lisbon","timezone":"Europe/Lisbon"},{"name":"Lisbon","latitude":44.03,"longitude":-70.10,"country_code":"US","country":"United States","admin1":"Maine","timezone":"America/New_York"}],"source":{"name":"Open-Meteo geocoding, from GeoNames","provider":"open-meteo","fetched_at":"2026-10-05T18:00:00Z"}}"#
+        let setup = try await Self.run(["setup", "Lisbon", "--plain"], environment: env, routes: ["api.dreadcast.app/v1/places/search": (200, results)])
+        #expect(setup.code == .ok)
+        let search = try #require(StubProvider.seen.compactMap(\.url).first { $0.path == "/v1/places/search" })
+        #expect(search.query == "q=Lisbon&count=6")
+        let config = try Self.json(try await Self.run(["config", "--json"], environment: env).out)
+        let saved = try #require((config["places"] as? [[String: Any]])?.first?["place"] as? [String: Any])
+        #expect(saved["name"] as? String == "Lisbon, Portugal" && saved["timeZone"] as? String == "Europe/Lisbon")
+        let coordinate = try #require(saved["coordinate"] as? [String: Double])
+        #expect(coordinate["latitude"] == 38.72 && coordinate["longitude"] == -9.13)
+
+        let none = try await Self.run(["setup", "Nowhereville", "--plain"], environment: env,
+                                      routes: ["api.dreadcast.app/v1/places/search": (200, #"{"results":[],"source":{}}"#)])
+        #expect(none.code != .ok && none.err.contains("No places matched"))
+    }
+
+    /// Air quality and dust both come from the API's point reading.
+    @Test func airQualityAndDustComeFromTheAPI() async throws {
+        let env = try await Self.home()
+        let air = #"{"location":{"latitude":27.95,"longitude":-82.46,"timezone":"America/New_York","utc_offset_seconds":-14400},"current":{"time":"2026-10-05T18:00:00Z","interval_seconds":3600,"us_aqi":61,"pm2_5":17.2,"pm10":30.1,"ozone":80.0,"dust":142.5},"source":{"name":"Open-Meteo, with Copernicus Atmosphere Monitoring Service data","fetched_at":"2026-10-05T18:05:00Z","stale":false}}"#
+        var routes = Self.online
+        routes["api.dreadcast.app/v1/air/current"] = (200, air)
+        StubProvider.reset(routes)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubProvider.self]
+        let ctx = Context(arguments: Arguments(command: "outlook"), environment: env,
+                          terminal: TerminalInfo(isOutputTTY: false, isInputTTY: false, columns: 100, rows: 40, colorMode: .none,
+                                                 graphics: .none, program: nil, insideMultiplexer: false, reduceMotion: false),
+                          http: HTTPClient(session: URLSession(configuration: configuration)), now: ISODate.parse("2026-10-05T18:30:00Z")!)
+        let place = try await ctx.resolveLocation()
+        let reading = try #require(await ctx.airQuality(place).value)
+        #expect(reading.usAQI == 61 && reading.category == "Moderate" && reading.pm2_5 == 17.2 && reading.dust == 142.5)
+        let hazards = try #require(await ctx.hazards(place).value)
+        #expect(hazards.dust == 142.5 && hazards.failures["dust"] == nil)
+        let requests = StubProvider.seen.compactMap(\.url).filter { $0.path == "/v1/air/current" }
+        #expect(!requests.isEmpty && requests.allSatisfy { $0.query == "lat=27.95&lon=-82.46" })
     }
 
     // MARK: Alerts and exit codes
@@ -336,21 +423,29 @@ struct CommandTests {
 }
 
 enum WeatherFixture {
-    static let payload = """
-    {"latitude":27.95,"longitude":-82.46,"utc_offset_seconds":-14400,"timezone":"America/New_York",
-     "current":{"time":1791259200,"interval":900,"temperature_2m":71.2,"apparent_temperature":74.0,"relative_humidity_2m":82,
-       "dew_point_2m":66,"weather_code":95,"wind_speed_10m":14,"wind_direction_10m":225,"wind_gusts_10m":31,"is_day":1,
-       "precipitation":0.1,"pressure_msl":1004.2,"cloud_cover":100},
-     "minutely_15":{"time":[1791259200,1791260100],"precipitation":[0.0,0.05],"weather_code":[95,95]},
-     "hourly":{"time":[1791248400,1791252000,1791255600,1791259200,1791262800],
-       "temperature_2m":[80,79,75,71,72],"apparent_temperature":[85,84,78,74,75],"precipitation_probability":[10,20,60,90,45],
-       "precipitation":[0,0,0.1,0.4,0.1],"weather_code":[2,3,80,95,61],"is_day":[1,1,1,1,1],"wind_speed_10m":[8,9,12,14,12],
-       "wind_direction_10m":[200,210,220,225,230],"cloud_cover":[40,60,90,100,95],"pressure_msl":[1007.5,1006.8,1005.6,1004.2,1004.8],
-       "dew_point_2m":[66,66,67,66,66],"cape":[2000,2400,2800,3280,2500]},
-     "daily":{"time":[1791172800,1791259200],"weather_code":[95,61],"temperature_2m_max":[88,87],"temperature_2m_min":[69,70],
-       "apparent_temperature_max":[95,94],"apparent_temperature_min":[72,73],"precipitation_probability_max":[90,40],
-       "precipitation_sum":[1.2,0.3],"wind_speed_10m_max":[18,12],"wind_gusts_10m_max":[35,20],"uv_index_max":[8,6],
-       "sunrise":[1791197100,1791283500],"sunset":[1791239400,1791325800]}}
+    /// `/v1/weather/current` and `/v1/weather/forecast` for Tampa, in imperial units
+    /// (dreadcast-server `docs/API.md`).
+    static let current = """
+    {"location":{"latitude":27.95,"longitude":-82.46,"elevation":6.0,"timezone":"America/New_York","timezone_abbreviation":"GMT-4","utc_offset_seconds":-14400},
+     "current":{"time":"2026-10-06T04:00:00Z","interval_seconds":900,"temperature":71.2,"apparent_temperature":74.0,"relative_humidity":82,"weather_code":95,"is_day":true,"wind_speed":14,"wind_direction":225,"wind_gusts":31,"precipitation":0.1,"cloud_cover":100,"dew_point":66,"pressure":1004.2},
+     "minutely_15":[{"time":"2026-10-06T04:00:00Z","precipitation":0.0,"weather_code":95},{"time":"2026-10-06T04:15:00Z","precipitation":0.05,"weather_code":95}],
+     "units":{"temperature":"fahrenheit","wind_speed":"mph","precipitation":"inch"},
+     "source":{"name":"Open-Meteo","url":"https://open-meteo.com/","license":"CC BY 4.0","provider":"open-meteo","fetched_at":"2026-10-05T18:25:00Z","expires_at":"2026-10-05T18:40:00Z","stale":false}}
+    """
+
+    static let forecast = """
+    {"location":{"latitude":27.95,"longitude":-82.46,"elevation":6.0,"timezone":"America/New_York","timezone_abbreviation":"GMT-4","utc_offset_seconds":-14400},
+     "hourly":[
+       {"time":"2026-10-06T01:00:00Z","temperature":80,"apparent_temperature":85,"precipitation_probability":10,"precipitation":0,"weather_code":2,"is_day":true,"wind_speed":8,"cloud_cover":40,"wind_direction":200,"pressure":1007.5,"dew_point":66,"cape":2000},
+       {"time":"2026-10-06T02:00:00Z","temperature":79,"apparent_temperature":84,"precipitation_probability":20,"precipitation":0,"weather_code":3,"is_day":true,"wind_speed":9,"cloud_cover":60,"wind_direction":210,"pressure":1006.8,"dew_point":66,"cape":2400},
+       {"time":"2026-10-06T03:00:00Z","temperature":75,"apparent_temperature":78,"precipitation_probability":60,"precipitation":0.1,"weather_code":80,"is_day":true,"wind_speed":12,"cloud_cover":90,"wind_direction":220,"pressure":1005.6,"dew_point":67,"cape":2800},
+       {"time":"2026-10-06T04:00:00Z","temperature":71,"apparent_temperature":74,"precipitation_probability":90,"precipitation":0.4,"weather_code":95,"is_day":true,"wind_speed":14,"cloud_cover":100,"wind_direction":225,"pressure":1004.2,"dew_point":66,"cape":3280},
+       {"time":"2026-10-06T05:00:00Z","temperature":72,"apparent_temperature":75,"precipitation_probability":45,"precipitation":0.1,"weather_code":61,"is_day":true,"wind_speed":12,"cloud_cover":95,"wind_direction":230,"pressure":1004.8,"dew_point":66,"cape":2500}],
+     "daily":[
+       {"date":"2026-10-05","weather_code":95,"temperature_max":88,"temperature_min":69,"apparent_temperature_max":95,"apparent_temperature_min":72,"precipitation_probability_max":90,"precipitation_sum":1.2,"wind_speed_max":18,"wind_gusts_max":35,"uv_index_max":8,"sunrise":"2026-10-05T10:45:00Z","sunset":"2026-10-05T22:30:00Z"},
+       {"date":"2026-10-06","weather_code":61,"temperature_max":87,"temperature_min":70,"apparent_temperature_max":94,"apparent_temperature_min":73,"precipitation_probability_max":40,"precipitation_sum":0.3,"wind_speed_max":12,"wind_gusts_max":20,"uv_index_max":6,"sunrise":"2026-10-06T10:45:00Z","sunset":"2026-10-06T22:30:00Z"}],
+     "units":{"temperature":"fahrenheit","wind_speed":"mph","precipitation":"inch"},
+     "source":{"name":"Open-Meteo","url":"https://open-meteo.com/","license":"CC BY 4.0","provider":"open-meteo","fetched_at":"2026-10-05T18:00:00Z","expires_at":"2026-10-05T19:00:00Z","stale":false}}
     """
 }
 
