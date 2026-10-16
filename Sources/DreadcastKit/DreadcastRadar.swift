@@ -94,6 +94,29 @@ public struct DreadcastRadarManifest: Codable, Sendable {
         public let observedAt: Date
         /// Scans by region ID. A region without one had no scan yet and draws nothing.
         public let scans: [String: Scan]
+        /// The satellite blend the server pairs with the frame, by snapshot ID.
+        public var satellite: Int?
+    }
+
+    /// NOAA's satellite rain estimates for where no region reaches (`satellite` in the
+    /// API's manifest): 256-pixel tiles in Rainbow.ai's dbz_u8 encoding at zooms 0 to
+    /// `maximumZoom`, from the API itself. A blend arrives 15 to 21 minutes after its
+    /// scan, so the newest frames have none of their own.
+    public struct Satellite: Codable, Sendable, Equatable {
+        public struct Snapshot: Codable, Sendable, Equatable {
+            /// The scan's start in epoch seconds.
+            public let id: Int
+            public let observedAt: Date
+        }
+
+        public static let encoding = "rainbow-dbz-u8"
+        public static let tileSize = 256
+        public static let tilePath = "v2/radar/satellite.png?snapshot={snapshot}&z={z}&x={x}&y={y}"
+
+        /// Newest first.
+        public let snapshots: [Snapshot]
+        public let maximumZoom: Int
+        public let source: Source
     }
 
     public static let encoding = "mrms-rg8-v1"
@@ -109,6 +132,17 @@ public struct DreadcastRadarManifest: Codable, Sendable {
     /// Oldest first.
     public let frames: [Frame]
     public let fetchedAt: Date
+    /// Satellite rain where no region reaches; nil when the API has none to offer.
+    public let satellite: Satellite?
+
+    /// The satellite blend a frame shows: the one the server pairs with it, or for the
+    /// newest frames, which NOAA hasn't covered yet, the newest blend up to the frame's
+    /// time, held as the Mac app holds it.
+    public func satelliteSnapshot(for frame: Frame) -> Satellite.Snapshot? {
+        guard let satellite else { return nil }
+        if let id = frame.satellite { return satellite.snapshots.first { $0.id == id } }
+        return satellite.snapshots.first { $0.observedAt <= frame.observedAt }
+    }
 
     public static func covers(_ c: GeoCoordinate, bounds b: [Double]) -> Bool {
         b.count == 4 && c.longitude >= b[0] && c.longitude <= b[2] && c.latitude >= b[1] && c.latitude <= b[3]
@@ -125,9 +159,9 @@ public struct DreadcastRadarManifest: Codable, Sendable {
             let scans = frame.scans.filter { ids.contains($0.key) }
             // A frame that only the dropped regions moved on repeats the one before it.
             guard let newest = scans.values.map(\.observedAt).max(), newest > frames.last?.observedAt ?? .distantPast else { continue }
-            frames.append(Frame(id: Self.frameID(prefix: "radar", for: newest), observedAt: newest, scans: scans))
+            frames.append(Frame(id: Self.frameID(prefix: "radar", for: newest), observedAt: newest, scans: scans, satellite: frame.satellite))
         }
-        return frames.isEmpty ? nil : DreadcastRadarManifest(regions: kept, frames: frames, fetchedAt: fetchedAt)
+        return frames.isEmpty ? nil : DreadcastRadarManifest(regions: kept, frames: frames, fetchedAt: fetchedAt, satellite: satellite)
     }
 
     /// The region a place's radar is timed by: the first around it, in drawing order,
@@ -144,7 +178,7 @@ public struct DreadcastRadarManifest: Codable, Sendable {
         var result: [Frame] = []
         for frame in frames {
             guard let scan = frame.scans[region.id] else { continue }
-            let timed = Frame(id: frame.id, observedAt: scan.observedAt, scans: frame.scans)
+            let timed = Frame(id: frame.id, observedAt: scan.observedAt, scans: frame.scans, satellite: frame.satellite)
             if result.last?.scans[region.id]?.id == scan.id { result[result.count - 1] = timed } else { result.append(timed) }
         }
         return result
@@ -218,6 +252,13 @@ public struct DreadcastRadarManifest: Codable, Sendable {
 
     // MARK: Decoding
 
+    /// Nil instead of an error when a value doesn't fit, so an optional block can't fail
+    /// the radar.
+    private struct Lenient<Value: Decodable>: Decodable {
+        let value: Value?
+        init(from decoder: Decoder) throws { value = try? Value(from: decoder) }
+    }
+
     private struct Wire: Decodable {
         struct Level: Decodable { let z: Int; let x: [Int]; let y: [Int] }
         struct Source: Decodable { let name: String; let license: String? }
@@ -245,6 +286,16 @@ public struct DreadcastRadarManifest: Codable, Sendable {
             let id: String
             let observedAt: String
             let regions: [String: Scan]
+            let satellite: Lenient<Int>?
+        }
+        struct Satellite: Decodable {
+            struct Snapshot: Decodable { let id: Int; let observedAt: String }
+            let source: Source?
+            let encoding: String
+            let tileSize: Int
+            let maxZoom: Int
+            let tilePath: String
+            let snapshots: [Snapshot]
         }
         let status: String
         let newestObservedAt: String
@@ -252,12 +303,34 @@ public struct DreadcastRadarManifest: Codable, Sendable {
         let tileSize: Int
         let regions: [Region]
         let frames: [Frame]
+        let satellite: Lenient<Satellite>?
     }
 
-    private init(regions: [Region], frames: [Frame], fetchedAt: Date) {
+    private init(regions: [Region], frames: [Frame], fetchedAt: Date, satellite: Satellite?) {
         self.regions = regions
         self.frames = frames
         self.fetchedAt = fetchedAt
+        self.satellite = satellite
+    }
+
+    /// The satellite block, checked as the Mac app checks it, or nil when anything about
+    /// it doesn't: satellite rain is left out rather than failing the radar.
+    private static func satellite(_ wire: Wire.Satellite?) -> Satellite? {
+        guard let wire, wire.encoding == Satellite.encoding, wire.tileSize == Satellite.tileSize,
+              (0...8).contains(wire.maxZoom), wire.tilePath == Satellite.tilePath,
+              (1...24).contains(wire.snapshots.count) else { return nil }
+        var snapshots: [Satellite.Snapshot] = []
+        for snapshot in wire.snapshots {
+            guard snapshot.id > 0, let observed = ISODate.parse(snapshot.observedAt),
+                  abs(observed.timeIntervalSince1970 - Double(snapshot.id)) < 1,
+                  snapshots.last.map({ $0.id > snapshot.id }) ?? true else { return nil }
+            snapshots.append(Satellite.Snapshot(id: snapshot.id, observedAt: observed))
+        }
+        let source = wire.source.flatMap { source -> Source? in
+            guard isDisplayable(source.name, limit: 64), source.license.map({ isDisplayable($0, limit: 200) }) ?? true else { return nil }
+            return Source(name: source.name, license: source.license)
+        } ?? Source(name: "NOAA Enterprise Rain Rate", license: nil)
+        return Satellite(snapshots: snapshots, maximumZoom: wire.maxZoom, source: source)
     }
 
     public static func decode(_ data: Data, now: Date, allowLoopback: Bool = false) throws -> DreadcastRadarManifest {
@@ -344,12 +417,20 @@ public struct DreadcastRadarManifest: Codable, Sendable {
                 scans[regionID] = Scan(id: scan.id, observedAt: scanned, tileURL: scan.tileUrl, tileStates: scan.tileStates)
             }
             try check(scans.values.map(\.observedAt).max() == observed, "frame time")
-            frames.append(Frame(id: frame.id, observedAt: observed, scans: scans))
+            frames.append(Frame(id: frame.id, observedAt: observed, scans: scans, satellite: frame.satellite?.value))
         }
         let newest = regions.map(\.newestObservedAt).max()
         try check(ISODate.parse(wire.newestObservedAt) == newest && frames.last?.observedAt == newest, "newest observation")
 
-        return DreadcastRadarManifest(regions: regions, frames: frames, fetchedAt: now)
+        // A frame names only blends the block lists; without the block, none.
+        let satellite = Self.satellite(wire.satellite?.value)
+        let listed = Set(satellite?.snapshots.map(\.id) ?? [])
+        frames = frames.map { frame in
+            var frame = frame
+            if let id = frame.satellite, !listed.contains(id) { frame.satellite = nil }
+            return frame
+        }
+        return DreadcastRadarManifest(regions: regions, frames: frames, fetchedAt: now, satellite: satellite)
     }
 }
 
@@ -378,7 +459,7 @@ public struct DreadcastRadarService: Sendable {
     }
 }
 
-extension UniversalBlueDecoder {
+extension RadarTileDecoder {
     /// No radar coverage, in an MRMS tile's reflectivity. It never reaches a field: the
     /// field records it as uncovered.
     static let uncovered = Int8.min + 1
@@ -416,18 +497,18 @@ extension UniversalBlueDecoder {
     }
 }
 
-extension UniversalBlueDecoder.Tile {
+extension RadarTileDecoder.Tile {
     /// Where regions overlap, each pixel comes from the first region with coverage
     /// there: this tile, with its uncovered pixels taken from a later region's.
     func filling(from later: Self) -> Self {
         guard later.size == size else { return self }
         var dbz = self.dbz, snow = self.snow
-        for i in dbz.indices where dbz[i] == UniversalBlueDecoder.uncovered {
+        for i in dbz.indices where dbz[i] == RadarTileDecoder.uncovered {
             dbz[i] = later.dbz[i]
             snow[i] = later.snow[i]
         }
         return Self(size: size, dbz: dbz, snow: snow)
     }
 
-    var isFullyCovered: Bool { !dbz.contains(UniversalBlueDecoder.uncovered) }
+    var isFullyCovered: Bool { !dbz.contains(RadarTileDecoder.uncovered) }
 }

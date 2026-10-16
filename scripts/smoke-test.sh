@@ -40,5 +40,9 @@ done
 "$BIN" scene uap --still --plain > /dev/null || fail "scene --still"
 
 "$BIN" credits --plain | grep -q 'NOAA MRMS' || fail "credits"
+"$BIN" credits --plain | grep -q 'NOAA Enterprise Rain Rate' || fail "credits: satellite rain"
+
+# RainViewer is gone, and so is the setting that chose it.
+[ "$(exit_code "$BIN" config set radar-source rainviewer --plain)" -eq 2 ] || fail "radar-source should be gone"
 
 echo "smoke test passed: $("$BIN" version)"

@@ -41,7 +41,7 @@ enum RadarCommand {
 
         var state = LoopState(range: range, frames: [], frameIndex: 0, paused: still)
         // Whose radar this is, whether it's late, and the newest frame, from the last load.
-        var credit = "RainViewer", delayed = false, fromAPI = false, newest: String?
+        var credit = "", delayed = false, newest: String?
         var problem = "unknown error"
         func load(range: Double) async -> (RadarScene, Raster, [Raster], [Date]) {
             let viewport = RadarViewport(center: place.coordinate, rangeMiles: range, width: layout.pixelWidth, height: layout.pixelHeight)
@@ -52,7 +52,6 @@ enum RadarCommand {
                 let loop = try await ctx.radarLoop(for: place, viewport: viewport, frames: frameCount)
                 credit = loop.credit
                 delayed = loop.delayed
-                fromAPI = loop.fromAPI
                 newest = loop.newestFrame
                 return (scene, base, loop.fields.map { scene.compose(base: base, field: $0) }, loop.fields.map(\.time))
             } catch {
@@ -94,11 +93,11 @@ enum RadarCommand {
             if !strikes.isEmpty || lightningFetch?.value != nil {
                 legend += "    Lightning " + LightningAgeBand.allCases.map { s.paint($0.label.replacingOccurrences(of: " min", with: ""), Theme.lightning[$0.rawValue]) }.joined(separator: " ") + s.paint(" min", Theme.faint)
             }
-            let age = (delayed ? "radar delayed · " : "latest frame ") + Formatter.ago(times.last ?? ctx.now, now: Date())
+            let ago = Formatter.ago(times.last ?? ctx.now, now: Date())
             return [
                 "  " + s.paint("◀ ", ctx.highlight) + time + " " + dots + s.paint(" ▶", ctx.highlight) + keys,
                 legend,
-                "  " + s.paint("\(credit) · Natural Earth · \(age)", Theme.faint)
+                "  " + s.paint(Self.footer(credit: credit, ago: ago, delayed: delayed, width: ctx.terminal.columns - 3), Theme.faint)
             ]
         }
 
@@ -215,11 +214,11 @@ enum RadarCommand {
                 if once, advances >= state.frames.count - 1 { return .ok }
             }
 
-            // New frames arrive every four minutes (the Dreadcast API) to ten (RainViewer).
+            // New frames arrive about every four minutes, and satellite blends every ten.
             if Date().timeIntervalSince(lastManifestCheck) > 120 {
                 lastManifestCheck = Date()
                 ctx.refreshClock()
-                if let fresh = await ctx.newestRadarFrame(for: place, fromAPI: fromAPI), fresh != newest {
+                if let fresh = await ctx.newestRadarFrame(), fresh != newest {
                     let reloaded = await load(range: state.range)
                     if !reloaded.2.isEmpty {
                         scene = reloaded.0
@@ -233,6 +232,19 @@ enum RadarCommand {
         }
     }
 
+    /// The credits and the newest frame's age on one line, since the animation redraws a
+    /// fixed number of lines. When they don't fit, the basemap's credit goes first, then
+    /// "latest frame", then the radar credits are shortened. The age always shows, and so
+    /// does a delay.
+    static func footer(credit: String, ago: String, delayed: Bool, width: Int) -> String {
+        let age = (delayed ? "radar delayed · " : "latest frame ") + ago
+        let short = delayed ? age : ago
+        for line in ["\(credit) · Natural Earth · \(age)", "\(credit) · \(age)", "\(credit) · \(short)"] where TextWidth.of(line) <= width {
+            return line
+        }
+        return TextWidth.truncate(credit, to: max(1, width - TextWidth.of(short) - 3)) + " · " + short
+    }
+
     struct LoopState {
         var range: Double
         var frames: [Raster]
@@ -244,7 +256,7 @@ enum RadarCommand {
     static func palette(_ ctx: Context) throws -> RadarPalette {
         guard let name = ctx.arguments.value("palette") else { return ctx.config.palette }
         guard let palette = RadarPalette(rawValue: name.lowercased()) else {
-            throw DreadcastError.notFound("Unknown palette \(name). Choose dreadcast, classic, viridis or rainviewer.")
+            throw DreadcastError.notFound("Unknown palette \(name). Choose dreadcast, classic or viridis.")
         }
         return palette
     }
@@ -268,6 +280,9 @@ enum RadarCommand {
     static func summary(_ ctx: Context, place: Place) async throws -> ExitCode {
         let nowcast = await ctx.nowcast(place)
         guard let n = nowcast.value else {
+            if nowcast.outsideCoverage {
+                return ctx.fail("No radar reaches \(place.name). \(Context.radarCoverage) At a terminal, `dread radar` draws NOAA satellite rain estimates here, and `dread eta` times rain from the forecast model.", code: .unavailable)
+            }
             return ctx.fail("Radar is unavailable: \(nowcast.error ?? "unknown error").", code: .unavailable)
         }
         let fmt = Formatter(units: ctx.units, timeZone: ctx.timeZone(for: place))
@@ -295,7 +310,7 @@ enum RadarCommand {
 struct RadarJSON: Encodable {
     let schema = "dreadcast.radar/1"
     let location: LocationJSON
-    /// `dreadcast` (the Dreadcast API) or `rainviewer`.
+    /// `dreadcast`: radar comes from the Dreadcast API.
     let source: String
     /// Whom to credit, such as "NOAA MRMS" or "EUMETNET OPERA (CC BY 4.0, resampled)".
     let credit: String
@@ -350,15 +365,14 @@ struct StormCellJSON: Encodable {
 }
 
 extension Nowcast {
-    /// Whom to credit for the radar behind it, such as "NOAA MRMS", "EUMETNET OPERA
-    /// (CC BY 4.0, resampled)" or "RainViewer". Every place that names the source
-    /// uses this, so none can fall back to naming RainViewer by mistake.
-    var radarCredit: String { source ?? Context.rainViewerCredit }
+    /// Whom to credit for the radar behind it, such as "NOAA MRMS" or "EUMETNET OPERA
+    /// (CC BY 4.0, resampled)". Every place that names the source uses this.
+    var radarCredit: String { source ?? "Dreadcast radar" }
 
     /// The credit without its license note, for headers short on room: "EUMETNET OPERA".
     /// The full credit still appears with the output.
     var radarName: String { radarCredit.components(separatedBy: " (")[0] }
 
-    /// `dreadcast` (the Dreadcast API) or `rainviewer`, for JSON.
-    var radarSourceID: String { radarCredit == Context.rainViewerCredit ? "rainviewer" : "dreadcast" }
+    /// `dreadcast`, for JSON: rain timing comes from the Dreadcast API's radar.
+    var radarSourceID: String { "dreadcast" }
 }

@@ -13,8 +13,8 @@ never polls a source faster than this table allows.
 | Air quality and dust | [Open-Meteo air quality](https://open-meteo.com/en/docs/air-quality-api) (CAMS) through the Dreadcast API (`/v1/air/current`) | 30 min (dust 15 min); the API refreshes hourly | Worldwide, at the place itself | CC BY 4.0; generated using Copernicus Atmosphere Monitoring Service information |
 | ZIP lookup | [Zippopotam.us](https://zippopotam.us/) | Cached 30 days | United States | Free API |
 | Radar (US) | [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) base reflectivity through the Dreadcast API (`/v2/radar/latest`) | Manifest 1 min; tiles are immutable and cached until they age out | Contiguous US, Alaska, Hawaii, Puerto Rico and the Caribbean, Guam | Public domain (U.S. Government data); numeric tiles, zoom 0–8 |
-| Radar (Europe) | [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) maximum reflectivity composite through the Dreadcast API | As above; OPERA publishes every 5 min | The OPERA radars from Iceland to Romania. Italy, Austria and Greece aren't in the composite, so places there keep RainViewer unless a neighbor's radar reaches them | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): credited with its license wherever it's shown, and noted as resampled. No precipitation type, so no snow colors |
-| Radar (everywhere else, and when the API is unavailable) | [RainViewer Weather Maps API](https://www.rainviewer.com/api/weather-maps-api.html) | Manifest 5 min; tiles cached until they age out | Worldwide where radar exists | Free API for personal and non-commercial use; maximum zoom 7 |
+| Radar (Europe) | [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) maximum reflectivity composite through the Dreadcast API | As above; OPERA publishes every 5 min | The OPERA radars from Iceland to Romania. Italy, Austria and Greece aren't in the composite, so places there get satellite estimates unless a neighbor's radar reaches them | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): credited with its license wherever it's shown, and noted as resampled. No precipitation type, so no snow colors |
+| Satellite rain (where no radar reaches) | [NOAA Enterprise Rain Rate](https://www.ospo.noaa.gov/products/atmosphere/err/) blend from five geostationary satellites, through the Dreadcast API (`/v2/radar/satellite.png`) | A blend every 10 min, 15 to 21 min after its scan; tiles are immutable and cached until they age out | 70° N to 60° S | Public domain (U.S. Government data), credited to NOAA with the blend's time; about 2 km, zoom 0–6. Not used for rain timing |
 | Active alerts | [National Weather Service](https://www.weather.gov/documentation/services-web-api) | 2 min | US and territories | Public domain; identifying User-Agent required |
 | Day 1 convective outlook | [NOAA SPC](https://www.spc.noaa.gov/products/outlook/) | 15 min | Contiguous US | Public domain |
 | Tropical cyclones | [NOAA NHC](https://www.nhc.noaa.gov/) | 15 min | Atlantic and eastern Pacific | Public domain |
@@ -39,18 +39,24 @@ all-clear, and `dread alerts` exits 3 rather than 0.
 
 Radar from the Dreadcast API is labeled "radar delayed" with its age once the newest
 scan of the place's region is late: after 10 minutes for NOAA's regions and 20 for
-Europe. A region isn't used after 3 hours. If the API can't
-provide a loop, the radar comes from RainViewer instead, credited as such.
+Europe. A region isn't used after 3 hours. If the API can't provide a loop, there is
+no radar, and commands say it's unavailable. If satellite estimates can't load, the
+regions are drawn alone.
 
-## Choosing the radar source
+## Where radar reaches
 
-Radar comes from the Dreadcast API at `https://api.dreadcast.app` for places inside one
-of its regions, as long as the region's radars reach the place: Italy is inside
-Europe's bounds but not in OPERA's composite, so it keeps RainViewer, as do places
-outside every region. Views that cross a region's edge show no radar beyond it.
-`dread config set radar-source rainviewer` (or `api-url off`) uses RainViewer
-everywhere, and `api-url <url>` or `DREADCAST_API_URL` points at another API, such as
-a local development server.
+Radar comes from the Dreadcast API at `https://api.dreadcast.app`. Each pixel shows the
+first region whose radars reach it, and NOAA's satellite estimates fill the pixels no
+region reaches, as in most of Italy (inside Europe's bounds but not in OPERA's
+composite) or Japan. Beside radar, the estimates hold the newest blend until NOAA
+publishes one for the frame, and the credit gives its time. A view no radar reaches at
+all loops the blends themselves, ten minutes apart, each at its own time.
+
+Rain timing uses radar only. Where no radar reaches the place itself, `dread eta`,
+`dread now` and the Systems tab use the forecast model's 15-minute precipitation,
+labeled as the model's. `api-url off` turns off radar, weather, air quality and place
+search, and `api-url <url>` or `DREADCAST_API_URL` points at another API, such as a
+local development server.
 
 ## Adding a provider
 

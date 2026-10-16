@@ -33,11 +33,10 @@ enum Prompt {
 /// Where radar comes from, for `dread config`.
 func radarSummary(_ ctx: Context) -> String {
     let s = ctx.styler
-    if ctx.config.radarSource == "rainviewer" { return "RainViewer" + s.paint("  (radar-source rainviewer)", Theme.faint) }
     guard let api = ctx.dreadcastAPI else {
-        return "RainViewer" + s.paint("  (api-url off)", Theme.faint)
+        return "None" + s.paint("  (api-url off)", Theme.faint)
     }
-    return "The Dreadcast API where it covers a place (the US and Europe), RainViewer elsewhere"
+    return "The Dreadcast API: radar in the US and Europe, NOAA satellite estimates elsewhere"
         + s.paint("  (\(api.host ?? api.absoluteString))", Theme.faint)
 }
 
@@ -156,7 +155,7 @@ enum ConfigCommand {
                 guard let units = UnitSystem(rawValue: value) else { return ctx.fail("units: imperial or metric.", code: .usage) }
                 config.units = units
             case "palette":
-                guard let palette = RadarPalette(rawValue: value) else { return ctx.fail("palette: dreadcast, classic, viridis or rainviewer.", code: .usage) }
+                guard let palette = RadarPalette(rawValue: value) else { return ctx.fail("palette: dreadcast, classic or viridis.", code: .usage) }
                 config.palette = palette
             case "range":
                 guard let range = Int(value), Config.ranges.contains(range) else { return ctx.fail("range: 15, 35, 75, 150 or 300.", code: .usage) }
@@ -179,10 +178,7 @@ enum ConfigCommand {
                 guard let row = ForecastRow.named(value) else { return ctx.fail("forecast: days, hourly or off.", code: .usage) }
                 config.forecast = row.rawValue
             case "radar-source":
-                guard ["auto", "rainviewer"].contains(value) else {
-                    return ctx.fail("radar-source: auto (the Dreadcast API where it covers a place, RainViewer elsewhere) or rainviewer.", code: .usage)
-                }
-                config.radarSource = value
+                return ctx.fail("radar-source is gone: radar always comes from the Dreadcast API, with NOAA satellite estimates where no radar reaches.", code: .usage)
             case "api-url":
                 guard value == "off" || Context.apiURL(value) != nil else {
                     return ctx.fail("api-url: an https URL, http://localhost for a development server, or off.", code: .usage)
@@ -261,7 +257,8 @@ enum CreditsCommand {
             ("NOAA MRMS", "Radar for the US, Puerto Rico and Guam, through the Dreadcast API. Public domain.", "https://www.nssl.noaa.gov/projects/mrms/"),
             ("EUMETNET OPERA", "Radar for Europe, through the Dreadcast API, which resamples it into tiles. CC BY 4.0.",
              "https://www.eumetnet.eu/observations/weather-radar-network/\nhttps://creativecommons.org/licenses/by/4.0/"),
-            ("RainViewer", "Radar imagery. Free API for personal and non-commercial use.", "https://www.rainviewer.com/api.html"),
+            ("NOAA Enterprise Rain Rate", "Satellite rain estimates where no radar reaches, through the Dreadcast API. Public domain.",
+             "https://www.ospo.noaa.gov/products/atmosphere/err/"),
             ("National Weather Service", "Active alerts. US government work, public domain.", "https://www.weather.gov/documentation/services-web-api"),
             ("NOAA SPC", "Day 1 convective outlook.", "https://www.spc.noaa.gov/"),
             ("NOAA NHC", "Tropical cyclones.", "https://www.nhc.noaa.gov/"),

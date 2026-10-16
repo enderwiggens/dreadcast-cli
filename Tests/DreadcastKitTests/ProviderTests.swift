@@ -234,6 +234,58 @@ struct WeatherTests {
     }
 }
 
+/// The forecast model's rain timing, for places no radar reaches.
+@Suite("Model rain")
+struct ModelRainTests {
+    /// 18:35Z on October 5, 2026: inside the 15-minute step that ends at 18:45.
+    static let now = Date(timeIntervalSince1970: 1_791_225_300)
+
+    /// A report whose 15-minute steps end every quarter hour from 18:45, in inches.
+    static func report(_ precipitation: [Double]) throws -> WeatherReport {
+        let steps = precipitation.enumerated().map { index, value in
+            let time = ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: Double(1_791_225_900 + index * 900)))
+            return #"{"time":"\#(time)","precipitation":\#(value),"weather_code":\#(value > 0 ? 61 : 3)}"#
+        }
+        let current = WeatherTests.current.replacingOccurrences(
+            of: #""minutely_15":[{"time":"2026-10-06T04:00:00Z","precipitation":0.0,"weather_code":95},{"time":"2026-10-06T04:15:00Z","precipitation":0.05,"weather_code":95}]"#, with: #""minutely_15":[\#(steps.joined(separator: ","))]"#)
+        return try WeatherService.decode(current: Data(current.utf8), forecast: Data(WeatherTests.forecast.utf8),
+                                         coordinate: GeoCoordinate(latitude: 35.68, longitude: 139.69), units: .imperial, now: now)
+    }
+
+    @Test func timesTheNextTwoHours() throws {
+        // Dry, then rain from 19:00 (heavy 19:15–19:30), dry again from 19:45. The step
+        // starting 20:45 is past two hours.
+        let model = try #require(ModelRain(report: try Self.report([0, 0, 0.02, 0.15, 0.03, 0, 0, 0, 0, 0.5]), now: Self.now))
+        #expect(!model.rainingNow)
+        #expect(model.arrivalMinutes == 25 && model.endMinutes == 70)
+        #expect(model.heavyMinutes == 15)
+        #expect(model.steps.count == 9 && model.coversTwoHours)
+        #expect(model.precipitation(atMinute: 30) == 0.02)
+        #expect(model.precipitation(atMinute: 200) == nil)
+        #expect(model.equivalentDBZ(atMinute: 0) == 0)
+        #expect((model.equivalentDBZ(atMinute: 45) ?? 0) > Nowcaster.heavyThreshold)
+    }
+
+    @Test func rainNowEndsOrRunsPastTheSteps() throws {
+        let easing = try #require(ModelRain(report: try Self.report([0.1, 0.1, 0]), now: Self.now))
+        #expect(easing.rainingNow && easing.arrival == nil)
+        #expect(easing.endMinutes == 25)
+        // Three steps reach 19:15, not two hours: the timing says where it stops.
+        #expect(!easing.coversTwoHours)
+        #expect(easing.until == Self.now.addingTimeInterval(40 * 60))
+        let steady = try #require(ModelRain(report: try Self.report(Array(repeating: 0.05, count: 12)), now: Self.now))
+        #expect(steady.rainingNow && steady.end == nil && steady.coversTwoHours)
+        #expect(steady.heavyMinutes == 0)
+    }
+
+    @Test func oldReadingsHaveNoTiming() throws {
+        let report = try Self.report([0, 0.1])
+        #expect(ModelRain(report: report, now: Self.now.addingTimeInterval(4 * 3600)) == nil)
+        // The fixture's own steps are hours from this clock.
+        #expect(ModelRain(report: try WeatherTests.report(), now: Self.now) == nil)
+    }
+}
+
 @Suite("Radar decoding")
 struct RadarTests {
     // 4×2 indexed PNG with tRNS: transparent, 0x0088bf (23 dBZ rain), 0xffe000 (36 dBZ rain), 0x9fdfff (15 dBZ snow).
@@ -250,40 +302,8 @@ struct RadarTests {
         #expect(image.rgba(x: 2, y: 1) & 0xFF == 0)
     }
 
-    @Test func invertsUniversalBlueToReflectivity() throws {
-        let image = try PNGDecoder.decode(Data(base64Encoded: Self.indexedPNG)!)
-        let rain = try #require(UniversalBlueDecoder.reflectivity(rgba: image.rgba(x: 1, y: 0)))
-        #expect(rain.dbz == 23 && !rain.snow)
-        let heavier = try #require(UniversalBlueDecoder.reflectivity(rgba: image.rgba(x: 2, y: 0)))
-        #expect(heavier.dbz == 36)
-        let snow = try #require(UniversalBlueDecoder.reflectivity(rgba: image.rgba(x: 3, y: 0)))
-        #expect(snow.dbz == 15 && snow.snow)
-        #expect(UniversalBlueDecoder.reflectivity(rgba: image.rgba(x: 0, y: 0)) == nil)
-    }
-
-    @Test func colorTableRoundTrips() {
-        for dbz in stride(from: 15, through: 60, by: 5) {
-            let color = UniversalBlueDecoder.color(dbz: Double(dbz), snow: false)
-            #expect(UniversalBlueDecoder.reflectivity(rgba: color)?.dbz == Int8(dbz))
-        }
-    }
-
     @Test func rejectsNonPNG() {
         #expect(throws: PNGDecoder.Failure.notPNG) { _ = try PNGDecoder.decode(Data("hello".utf8)) }
-    }
-
-    @Test func manifestValidation() throws {
-        let good = """
-        {"host":"https://tilecache.rainviewer.com","radar":{"past":[{"time":1791258000,"path":"/v2/radar/abc"},{"time":1791257400,"path":"/v2/radar/def"}]}}
-        """
-        let manifest = try RainViewerService.decodeManifest(Data(good.utf8), now: Date())
-        #expect(manifest.frames.count == 2)
-        #expect(manifest.frames.first!.time < manifest.frames.last!.time)
-        let url = RainViewerService.tileURL(host: manifest.host, frame: manifest.frames[0], zoom: 7, x: 34, y: 54)!
-        #expect(url.absoluteString == "https://tilecache.rainviewer.com/v2/radar/def/512/7/34/54/2/0_1.png")
-
-        let hostile = good.replacingOccurrences(of: "https://tilecache.rainviewer.com", with: "http://example.com")
-        #expect(throws: DreadcastError.self) { _ = try RainViewerService.decodeManifest(Data(hostile.utf8), now: Date()) }
     }
 
     @Test func viewportRoundTrip() {
@@ -295,18 +315,21 @@ struct RadarTests {
     }
 
     @Test func zoomFollowsRange() {
-        let loader = RadarLoader()
         let close = RadarViewport(center: GeoCoordinate(latitude: 28, longitude: -82), rangeMiles: 15, width: 100, height: 60)
         let wide = RadarViewport(center: GeoCoordinate(latitude: 28, longitude: -82), rangeMiles: 300, width: 100, height: 60)
-        #expect(loader.zoom(for: close) == 7)
-        #expect(loader.zoom(for: wide) < 6)
+        // Radar's 512-pixel tiles stop at zoom 8, and closer views stretch them.
+        #expect(RadarLoader().dreadcastZoom(for: close) == 8)
+        #expect(RadarLoader().dreadcastZoom(for: wide) == 3)
+        // The satellite's 256-pixel tiles stop at zoom 6.
+        #expect(RadarLoader.zoom(for: close, tileSize: 256, maximum: 6) == 6)
+        #expect(RadarLoader.zoom(for: wide, tileSize: 256, maximum: 6) == 4)
     }
 
     @Test func palettesInterpolate() {
         #expect(RadarPalette.dreadcast.rgb(dbz: 35) == 0xd6e990)
         #expect(RadarPalette.classic.rgb(dbz: 0) == 0x397da9)
         #expect(RadarPalette.viridis.rgb(dbz: 80) == 0xfde725)
-        #expect(RadarPalette.rainviewer.rgb(dbz: 23) == 0x0088bf)
+        #expect(RadarPalette(rawValue: "rainviewer") == nil)
     }
 
     @Test func rainRates() {
@@ -314,6 +337,8 @@ struct RadarTests {
         #expect(RainRate.Intensity(dbz: 10) == RainRate.Intensity.none)
         let rate = RainRate.millimetersPerHour(dbz: 40)
         #expect(rate > 11 && rate < 12.5)
+        #expect(abs(RainRate.dbz(millimetersPerHour: rate) - 40) < 1e-9)
+        #expect(RainRate.dbz(millimetersPerHour: 0) == 0)
     }
 }
 

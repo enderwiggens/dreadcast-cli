@@ -207,16 +207,16 @@ Every command accepts `--location` (or `-l`), `--units imperial|metric`, `--json
 ```sh
 dread radar                    # animate the last eight frames
 dread radar --range 150        # 15, 35, 75, 150 or 300 miles
-dread radar --palette viridis  # dreadcast, classic, viridis or rainviewer
+dread radar --palette viridis  # dreadcast, classic or viridis
 dread radar --still            # just the latest frame
 ```
 
-In the US and Europe, radar comes from the Dreadcast API as measurements: NOAA MRMS and
-EUMETNET OPERA scans at about 1 km, stored as reflectivity values rather than colors.
-Elsewhere, Dreadcast CLI reads RainViewer’s free radar tiles and converts each pixel
-back to reflectivity using RainViewer’s published color table. Either way it works with
-measured values, which is what lets it redraw the radar in other palettes and measure
-storm motion for `dread eta`. The basemap is Natural Earth data built into the binary.
+Radar comes from the Dreadcast API as measurements: NOAA MRMS and EUMETNET OPERA scans
+at about 1 km, stored as reflectivity values rather than colors, for the US, Puerto
+Rico, Guam and most of Europe. Beyond them, NOAA’s satellite rain estimates fill in at
+about 2 km, credited with their time. Working with measured values is what lets
+Dreadcast CLI redraw the radar in other palettes and measure storm motion for
+`dread eta`. The basemap is Natural Earth data built into the binary.
 
 </details>
 
@@ -227,6 +227,11 @@ storm motion for `dread eta`. The basemap is Natural Earth data built into the b
 backward from your location to estimate when rain arrives, how heavy it gets and when
 it eases. It reports its confidence and the frames it used. It can’t foresee storms
 that form or fade along the way.
+
+Satellite estimates are too coarse and too late to time rain by, so where no radar
+reaches, `dread eta` uses the forecast model’s 15-minute precipitation instead and
+says so. In `--json` its `source` is `model`, and the radar-only fields (frames,
+reflectivity, motion, trend and storm cells) are empty or left out.
 
 </details>
 
@@ -335,7 +340,7 @@ dread systems --json | jq -r '.systems[] | select(.kind == "storm-cell") | "\(.n
 | Key | Values |
 | --- | --- |
 | `units` | `imperial` or `metric` |
-| `palette` | `dreadcast`, `classic`, `viridis` or `rainviewer` |
+| `palette` | `dreadcast`, `classic` or `viridis` |
 | `range` | `15`, `35`, `75`, `150` or `300` miles |
 | `renderer` | `auto`, `kitty`, `iterm2`, `halfblock` or `256` |
 | `scene` | a scene name, or `daily` |
@@ -343,8 +348,7 @@ dread systems --json | jq -r '.systems[] | select(.kind == "storm-cell") | "\(.n
 | `highlight` | `auto` (follows the scene), `signal-blue`, `solar-mint`, `superstorm-lime`, `fallout-gold`, `lamp-glow`, `ember-red`, `afterglow-pink` or `ai-violet` |
 | `map` | `theme` (the scene’s map colors) or `graphite` |
 | `forecast` | `days`, `hourly` or `off`, beside the radar’s timeline |
-| `api-url` | the Dreadcast API (`https://api.dreadcast.app` unless set), for weather, air quality, place search and radar; `off` turns all but RainViewer's radar off |
-| `radar-source` | `auto` (the Dreadcast API where it covers a place, RainViewer elsewhere) or `rainviewer` |
+| `api-url` | the Dreadcast API (`https://api.dreadcast.app` unless set), for weather, air quality, place search and radar; `off` turns them off |
 | `quips` | `on` or `off` (one dry line under the quick look, never during alerts) |
 | `icons` | `emoji` or `ascii` |
 
@@ -396,7 +400,7 @@ Details: [docs/PRIVACY.md](docs/PRIVACY.md) and
 | Data | Provider |
 | --- | --- |
 | Conditions, forecasts, air quality, place search | Through the Dreadcast API: [Open-Meteo](https://open-meteo.com/) (CC BY 4.0), with [CAMS](https://atmosphere.copernicus.eu/) air quality and [GeoNames](https://www.geonames.org/) places |
-| Radar | Through the Dreadcast API: [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) for the US, Puerto Rico and Guam, and [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) for Europe ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), resampled). [RainViewer](https://www.rainviewer.com/) elsewhere |
+| Radar | Through the Dreadcast API: [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) for the US, Puerto Rico and Guam, and [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) for Europe ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), resampled). [NOAA Enterprise Rain Rate](https://www.ospo.noaa.gov/products/atmosphere/err/) satellite estimates elsewhere |
 | Alerts | [National Weather Service](https://www.weather.gov/) |
 | Severe outlook, tropical storms | NOAA SPC and NHC |
 | Wildfires | NIFC |

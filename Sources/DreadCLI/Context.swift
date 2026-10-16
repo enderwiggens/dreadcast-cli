@@ -214,7 +214,7 @@ public final class Context: @unchecked Sendable {
         String(format: "%.2f_%.2f", locale: Locale(identifier: "en_US_POSIX"), place.coordinate.latitude, place.coordinate.longitude)
     }
 
-    /// Why there's no weather when the API is turned off.
+    /// Why `what` is missing when the API is turned off: weather, radar and the rest.
     static func apiOff(_ what: String) -> String { "\(what) comes from the Dreadcast API, which `api-url off` turns off" }
 
     /// Conditions and the forecast from the Dreadcast API. When the API couldn't reach
@@ -250,14 +250,7 @@ public final class Context: @unchecked Sendable {
         }
     }
 
-    public func manifest() async -> Fetched<RadarManifest> {
-        let http = self.http, now = self.now
-        return await load(key: "radar-manifest", maxAge: 300, staleLimit: 3600) {
-            try await RainViewerService(http: http).manifest(now: now)
-        }
-    }
-
-    // MARK: Radar sources
+    // MARK: Radar
 
     /// The Dreadcast API: DREADCAST_API_URL, then `dread config set api-url`, then the
     /// built-in default. "off" turns it off.
@@ -280,12 +273,9 @@ public final class Context: @unchecked Sendable {
         return components.url
     }
 
-    /// The Dreadcast API's radar, unless `radar-source rainviewer` opts out.
-    public var radarAPI: URL? { config.radarSource == "rainviewer" ? nil : dreadcastAPI }
-
     public func dreadcastRadar(_ api: URL) async -> Fetched<DreadcastRadarManifest> {
         let http = self.http, now = self.now
-        return await load(key: "dreadcast-radar-v2-\(api.host ?? "api")", maxAge: 60, staleLimit: 7200) {
+        return await load(key: "dreadcast-radar-v3-\(api.host ?? "api")", maxAge: 60, staleLimit: 7200) {
             try await DreadcastRadarService(http: http, baseURL: api).latest(now: now)
         }
     }
@@ -293,63 +283,97 @@ public final class Context: @unchecked Sendable {
     /// A radar loop and where it came from.
     public struct RadarLoop: Sendable {
         public let fields: [ReflectivityField]
-        /// The radar credit to show, such as "NOAA MRMS" or "RainViewer". It names a
-        /// license that asks for it, as in "EUMETNET OPERA (CC BY 4.0, resampled)".
+        /// Whom to credit, such as "NOAA MRMS". It names a license that asks for it, as
+        /// in "EUMETNET OPERA (CC BY 4.0, resampled)", and the satellite blend's time
+        /// when its estimates fill in beside radar, as in "NOAA Enterprise Rain Rate,
+        /// 11:20 PM".
         public let credit: String
         /// The place's radar is late; show the loop with its age.
         public let delayed: Bool
         /// The newest frame's identity, to notice when another arrives.
         public let newestFrame: String?
-        /// From the Dreadcast API rather than RainViewer.
-        public let fromAPI: Bool
+        /// Radar covers the place itself in the newest frame.
+        public let coversPlace: Bool
     }
 
-    /// The last `count` frames for a place, at least `spacing` seconds apart: from the
-    /// Dreadcast API where it covers the place, and from RainViewer everywhere else or
-    /// when the API can't provide them.
-    public func radarLoop(for place: Place, viewport: RadarViewport, frames count: Int, spacing: TimeInterval = 0) async throws -> RadarLoop {
+    /// The last `count` frames for a place, at least `spacing` seconds apart, from the
+    /// Dreadcast API: each region's radar where it reaches, and with `satellite`, NOAA's
+    /// satellite estimates beyond. The place's region times the loop; elsewhere the
+    /// loop follows the API's frames. A view no region's radar reaches loops the
+    /// satellite blends themselves, at their own times.
+    public func radarLoop(for place: Place, viewport: RadarViewport, frames count: Int, spacing: TimeInterval = 0,
+                          satellite: Bool = true) async throws -> RadarLoop {
+        guard let api = dreadcastAPI else { throw DreadcastError.unavailable(Self.apiOff("Radar")) }
+        let fetched = await dreadcastRadar(api)
+        guard let manifest = fetched.value?.usable(at: now) else {
+            throw DreadcastError.unavailable(fetched.error ?? "Radar is unavailable right now")
+        }
         let loader = RadarLoader(http: http, store: tiles)
-        if let loop = await apiRadarLoop(for: place, viewport: viewport, frames: count, spacing: spacing, loader: loader) {
+        func satelliteLoop() async throws -> RadarLoop? {
+            guard satellite, let estimates = manifest.satellite else { return nil }
+            let snapshots = Self.pick(estimates.snapshots.reversed(), time: \.observedAt, count: count, spacing: spacing)
+            let fields = await loader.fields(satellite: estimates, snapshots: snapshots, api: api, viewport: viewport)
+            guard fields.count >= min(2, count) else {
+                throw DreadcastError.unavailable("Satellite rain estimates are unavailable right now")
+            }
+            return RadarLoop(fields: fields, credit: "\(estimates.source.credit) (satellite estimates)", delayed: false,
+                             newestFrame: Self.identity(manifest), coversPlace: false)
+        }
+        // No region lists a tile in view, so nothing needs loading to know.
+        if let last = manifest.frames.last, !loader.radarReaches(manifest, frame: last, viewport: viewport),
+           let loop = try await satelliteLoop() {
             return loop
         }
-        let manifest = await self.manifest()
-        guard let radar = manifest.value else { throw DreadcastError.unavailable(manifest.error ?? "Radar is unavailable.") }
-        let frames = Self.pick(radar.frames, time: \.time, count: count, spacing: spacing)
-        let fields = await loader.fields(manifest: radar, frames: frames, viewport: viewport)
-        guard !fields.isEmpty else { throw DreadcastError.unavailable("Radar frames are unavailable right now.") }
-        return RadarLoop(fields: fields, credit: Self.rainViewerCredit, delayed: false, newestFrame: radar.frames.last?.path, fromAPI: false)
-    }
-
-    /// The Dreadcast API's loop for a place, or nil when there's no API, no region
-    /// around the place, no coverage at the place itself (as in the parts of Europe
-    /// outside OPERA's composite), or too few frames for a loop.
-    private func apiRadarLoop(for place: Place, viewport: RadarViewport, frames count: Int, spacing: TimeInterval,
-                              loader: RadarLoader) async -> RadarLoop? {
-        guard let api = radarAPI, let manifest = await dreadcastRadar(api).value?.usable(at: now),
-              let region = manifest.region(for: place.coordinate) else { return nil }
-        let timeline = manifest.frames(for: region)
+        let region = manifest.region(for: place.coordinate)
+        let timeline = region.map { manifest.frames(for: $0) } ?? manifest.frames
         let frames = Self.pick(timeline, time: \.observedAt, count: count, spacing: spacing)
-        // The newest frame first: when it has no coverage at the place, the rest needn't load.
+        let center = (x: viewport.width / 2, y: viewport.height / 2)
+        // The newest frame first: without satellite estimates the loop is for rain timing,
+        // which needs radar at the place, and without it the rest needn't load.
         guard let last = frames.last,
-              let newest = try? await loader.field(dreadcast: manifest, frame: last, region: region, viewport: viewport),
-              newest.isCovered(x: viewport.width / 2, y: viewport.height / 2) else { return nil }
-        let fields = await loader.fields(dreadcast: manifest, frames: frames.dropLast(), region: region, viewport: viewport) + [newest]
-        guard fields.count >= min(2, count) else { return nil }
+              let newest = try? await loader.field(dreadcast: manifest, frame: last, viewport: viewport, satellite: satellite ? api : nil) else {
+            throw DreadcastError.unavailable("Radar frames are unavailable right now")
+        }
+        if !satellite, region == nil || !newest.hasRadar(x: center.x, y: center.y) {
+            return RadarLoop(fields: [newest], credit: "No radar here", delayed: false, newestFrame: Self.identity(manifest), coversPlace: false)
+        }
+        let fields = await loader.fields(dreadcast: manifest, frames: frames.dropLast(), viewport: viewport,
+                                         satellite: satellite ? api : nil) + [newest]
+        guard fields.count >= min(2, count) else {
+            throw DreadcastError.unavailable("Radar frames are unavailable right now")
+        }
+        // A region's tiles can be in view while its radars reach none of the view's
+        // pixels, as around Rome; then the blends loop at their own times.
+        if !newest.hasAnyRadar, let loop = try? await satelliteLoop() {
+            return loop
+        }
         let box = viewport.boundingBox
-        let credits = manifest.credits(south: box.south, north: box.north, west: box.west, east: box.east)
-        return RadarLoop(fields: fields, credit: credits.isEmpty ? region.source.credit : credits.joined(separator: " · "),
-                         delayed: region.isDelayed(at: now), newestFrame: timeline.last?.scans[region.id]?.id, fromAPI: true)
+        var credits = manifest.credits(south: box.south, north: box.north, west: box.west, east: box.east)
+        if let estimated = newest.estimatedAt ?? fields.compactMap(\.estimatedAt).last {
+            let zone = timeZone(for: place)
+            let time = Formatter(units: units, timeZone: zone).time(estimated)
+            credits.append("\(manifest.satellite?.source.credit ?? "NOAA"), \(time)")
+        }
+        let covers = region != nil && newest.hasRadar(x: center.x, y: center.y)
+        return RadarLoop(fields: fields, credit: credits.isEmpty ? "No radar here" : credits.joined(separator: " · "),
+                         delayed: region?.isDelayed(at: now) ?? false, newestFrame: Self.identity(manifest),
+                         coversPlace: covers)
     }
 
-    /// The newest frame's identity from the source a loop came from, without loading
-    /// tiles, to compare with the loop's `newestFrame`. When the API stops answering,
-    /// RainViewer's newest frame differs, so the loop reloads from RainViewer.
-    public func newestRadarFrame(for place: Place, fromAPI: Bool) async -> String? {
-        if fromAPI, let api = radarAPI, let manifest = await dreadcastRadar(api).value?.usable(at: now),
-           let region = manifest.region(for: place.coordinate) {
-            return manifest.frames(for: region).last?.scans[region.id]?.id
+    /// The newest frame's identity from the API, without loading tiles, to compare with
+    /// a loop's `newestFrame`.
+    public func newestRadarFrame() async -> String? {
+        guard let api = dreadcastAPI, let manifest = await dreadcastRadar(api).value?.usable(at: now) else { return nil }
+        return Self.identity(manifest)
+    }
+
+    /// The newest frame and satellite blend. A frame can gain a late scan or its blend
+    /// under the same ID, so its scans and blend are part of it.
+    static func identity(_ manifest: DreadcastRadarManifest) -> String? {
+        manifest.frames.last.map { frame in
+            [frame.id, frame.scans.values.map(\.id).sorted().joined(separator: ","), frame.satellite.map(String.init) ?? "",
+             manifest.satellite?.snapshots.first.map { String($0.id) } ?? ""].joined(separator: "|")
         }
-        return await manifest().value?.frames.last?.path
     }
 
     /// Up to `count` items, newest first going back, each at least `spacing` apart;
@@ -364,12 +388,22 @@ public final class Context: @unchecked Sendable {
     }
 
     public static let nowcastViewportSize = 160
-    /// The credit `radarLoop` gives RainViewer, which `Nowcast.radarSourceID` keys on.
-    public static let rainViewerCredit = "RainViewer"
     public static let nowcastRangeMiles = 100.0
+    /// Why there's no rain timing beyond the radar regions.
+    public static let noRadarHere = "No radar reaches this place"
+    /// Where radar reaches, for messages about places it doesn't.
+    public static let radarCoverage = "Radar reaches the US, Puerto Rico, Guam and most of Europe."
 
+    /// Where a place's rain timing is cached. Version 2 is radar-only, so a nowcast from
+    /// RainViewer, which earlier versions used, is never read back.
+    public static func nowcastKey(_ place: Place) -> String { "nowcast-v2-\(placeKey(place))" }
+
+    /// Rain timing from radar motion. It uses radar only: satellite estimates are too
+    /// coarse and too late to time rain by. A place no radar reaches gets
+    /// `outsideCoverage`, which isn't a failure.
     public func nowcast(_ place: Place) async -> Fetched<Nowcast> {
-        let key = "nowcast-\(Self.placeKey(place))"
+        guard dreadcastAPI != nil else { return .failure(Self.apiOff("Radar")) }
+        let key = Self.nowcastKey(place)
         if let cached = cache.read(Nowcast.self, key: key),
            let latest = cached.value.latestFrame,
            now.timeIntervalSince(cached.storedAt) < 300,
@@ -378,19 +412,21 @@ public final class Context: @unchecked Sendable {
         }
         let viewport = RadarViewport(center: place.coordinate, rangeMiles: Self.nowcastRangeMiles,
                                      width: Self.nowcastViewportSize, height: Self.nowcastViewportSize)
-        // Four frames at least five minutes apart give the motion, whichever source:
-        // RainViewer's are ten minutes apart, Europe's five, and the US's about four, so
-        // every other one.
-        let loop = try? await radarLoop(for: place, viewport: viewport, frames: 4, spacing: 300)
-        let fields = loop?.fields ?? []
-        guard fields.count >= 2 else {
+        // Four frames at least five minutes apart give the motion: Europe's are five
+        // minutes apart, and the US's about four, so every other one.
+        let loop: RadarLoop
+        do {
+            loop = try await radarLoop(for: place, viewport: viewport, frames: 4, spacing: 300, satellite: false)
+        } catch {
             if let cached = cache.read(Nowcast.self, key: key) {
                 return Fetched(value: cached.value, storedAt: cached.storedAt, error: "Radar frames are unavailable.", isStale: true)
             }
             return .failure("Radar frames are unavailable.")
         }
-        var result = Nowcaster.forecast(fields: fields, viewport: viewport, now: now)
-        result.source = loop?.credit
+        guard loop.coversPlace else { return .outsideCoverage(Self.noRadarHere) }
+        guard loop.fields.count >= 2 else { return .failure("Radar frames are unavailable.") }
+        var result = Nowcaster.forecast(fields: loop.fields, viewport: viewport, now: now)
+        result.source = loop.credit
         cache.write(result, key: key, at: now)
         return Fetched(value: result, storedAt: now, error: nil, isStale: false)
     }
