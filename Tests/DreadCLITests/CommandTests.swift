@@ -30,7 +30,16 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
+    /// Set once the session stops this request, as when its task is cancelled. After that
+    /// the client mustn't hear from it again: on Linux, FoundationNetworking crashes when a
+    /// cancelled task's protocol reports, and Swift cancels sibling requests when one fails.
+    private let state = NSRecursiveLock()
+    private var stopped = false
+
     override func startLoading() {
+        state.lock()
+        defer { state.unlock() }
+        guard !stopped else { return }
         let url = request.url!
         // A route for the host and path wins over one for the whole host.
         let (route, binary) = Self.lock.withLock { () -> ((status: Int, body: String)?, Data?) in
@@ -50,7 +59,11 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
         client?.urlProtocolDidFinishLoading(self)
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {
+        state.lock()
+        stopped = true
+        state.unlock()
+    }
 }
 
 /// Commands run as a person or script would run them: real argument parsing, config and
