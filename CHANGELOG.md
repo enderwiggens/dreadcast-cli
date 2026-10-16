@@ -34,6 +34,9 @@
 
 - The Systems tab said conditions were loading after they had failed to load; it now
   says they're unavailable.
+- On Linux, a request cancelled because another one failed could crash dread inside
+  FoundationNetworking. Requests there now run to their own end, bounded by their
+  timeouts.
 
 ## 0.3.2 — 2026-10-08
 
