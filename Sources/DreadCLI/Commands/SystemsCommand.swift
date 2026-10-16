@@ -104,7 +104,9 @@ enum SystemsCommand {
         let us = place.isUnitedStates
         add("conditions", ["Open-Meteo"], snapshot.weather)
         if us { add("alerts", ["NWS"], snapshot.alerts) }
-        add("radar", snapshot.nowcast?.value.map { [$0.radarCredit] } ?? [], snapshot.nowcast)
+        if snapshot.nowcast?.outsideCoverage != true {
+            add("radar", snapshot.nowcast?.value.map { [$0.radarCredit] } ?? [], snapshot.nowcast)
+        }
         if snapshot.lightningConfigured { add("lightning", ["Xweather"], snapshot.lightning) }
         if us { add("severe-outlook", ["NOAA SPC"], snapshot.severe) }
         add("tropical-storms", ["NHC"], snapshot.tropical)
@@ -339,6 +341,14 @@ enum SystemsCommand {
                                     priority: 500 + (cell.arrivalMinutes.map { 120 - min(120, $0) } ?? 0) - Int(cell.distanceMiles),
                                     source: n.radarCredit, miles: cell.distanceMiles))
                 }
+            } else if nowcast.outsideCoverage {
+                // Not a failure: say so, with the forecast model's timing.
+                var detail = ["No radar reaches \(place.name). \(Context.radarCoverage)"]
+                if let report = snapshot.weather?.value, let model = ModelRain(report: report, now: ctx.now) {
+                    detail.append(EtaCommand.modelHeadline(model, fmt: fmt, ctx: ctx, styled: false))
+                }
+                rows.append(Row(pid: 8800, kind: .rain, system: "No radar here", state: "NO RADAR", distance: "—", bearing: "—", moving: "—", eta: "—", peak: "—",
+                                color: Theme.mist, stateColor: Theme.mist, detail: detail, priority: 90, source: nil))
             } else {
                 unavailable(8800, .rain, "Radar", nowcast, priority: 300, source: nil)
             }

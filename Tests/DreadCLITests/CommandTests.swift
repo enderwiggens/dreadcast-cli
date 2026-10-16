@@ -14,6 +14,8 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var requests: [URLRequest] = []
     /// Served for routes whose body is empty, such as PNG tiles.
     nonisolated(unsafe) static var tileBody: Data?
+    /// Served instead of `tileBody` for a host and path, as "api.dreadcast.app/v2/radar/satellite.png".
+    nonisolated(unsafe) static var binaries: [String: Data] = [:]
     static let lock = NSLock()
 
     static func reset(_ routes: [String: (Int, String)]) {
@@ -28,11 +30,22 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
+    /// Set once the session stops this request, as when its task is cancelled. After that
+    /// the client mustn't hear from it again: on Linux, FoundationNetworking crashes when a
+    /// cancelled task's protocol reports, and Swift cancels sibling requests when one fails.
+    private let state = NSRecursiveLock()
+    private var stopped = false
+
     override func startLoading() {
+        state.lock()
+        defer { state.unlock() }
+        guard !stopped else { return }
         let url = request.url!
+        // A route for the host and path wins over one for the whole host.
         let (route, binary) = Self.lock.withLock { () -> ((status: Int, body: String)?, Data?) in
             Self.requests.append(request)
-            return (Self.routes[url.host ?? ""], Self.tileBody)
+            let path = (url.host ?? "") + url.path
+            return (Self.routes[path] ?? Self.routes[url.host ?? ""], Self.binaries[path] ?? Self.tileBody)
         }
         guard let route else {
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
@@ -41,11 +54,16 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
         let response = HTTPURLResponse(url: url, statusCode: route.status, httpVersion: "HTTP/1.1",
                                        headerFields: ["Content-Type": "application/json"])!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: route.body.isEmpty ? (binary ?? Data()) : Data(route.body.utf8))
+        let body = route.status == 204 ? Data() : route.body.isEmpty ? (binary ?? Data()) : Data(route.body.utf8)
+        client?.urlProtocol(self, didLoad: body)
         client?.urlProtocolDidFinishLoading(self)
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {
+        state.lock()
+        stopped = true
+        state.unlock()
+    }
 }
 
 /// Commands run as a person or script would run them: real argument parsing, config and

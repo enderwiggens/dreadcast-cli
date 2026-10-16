@@ -18,7 +18,7 @@ public struct Nowcast: Codable, Sendable {
 
     public let generatedAt: Date
     public let frameTimes: [Date]
-    /// Whose radar the nowcast came from, such as NOAA MRMS or RainViewer.
+    /// Whose radar the nowcast came from, such as NOAA MRMS.
     public var source: String?
     public let steps: [Step]
     /// Direction echoes are moving toward, degrees clockwise from north.

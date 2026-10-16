@@ -13,7 +13,7 @@ final class RadarPanel: @unchecked Sendable {
         let frames: [Raster]
         let times: [Date]
         let loadedAt: Date
-        var credit = Context.rainViewerCredit
+        var credit = ""
         var delayed = false
     }
 
@@ -23,8 +23,8 @@ final class RadarPanel: @unchecked Sendable {
         case note(String, failed: Bool)
     }
 
-    /// Reload every few minutes for new frames (the Dreadcast API's come every four
-    /// minutes, RainViewer's every ten); failures wait a minute to retry.
+    /// Reload every few minutes for new frames (the Dreadcast API's come about every
+    /// four minutes); failures wait a minute to retry.
     static let reload: TimeInterval = 180
     static let retry: TimeInterval = 60
 
@@ -108,7 +108,7 @@ final class RadarPanel: @unchecked Sendable {
         return (loop.delayed ? "radar delayed · " : "latest frame ") + Formatter.ago(latest, now: Date())
     }
 
-    /// Whose radar is showing, such as NOAA MRMS or RainViewer; nil until it loads.
+    /// Whose radar is showing, such as NOAA MRMS; nil until it loads.
     var credit: String? { lock.withLock { loop?.credit } }
 
     private func load(_ f: AppFrame, key: String, width: Int, rows: Int) {

@@ -68,10 +68,22 @@ public struct HTTPClient: Sendable {
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         if let accept { request.setValue(accept, forHTTPHeaderField: "Accept") }
         let label = source ?? url.host ?? "The service"
+        #if canImport(FoundationNetworking)
+        // On Linux, cancelling a URLSession task can race its own completion and crash
+        // ("a task that in not in the registry"), and Swift cancels a request whenever a
+        // sibling fails. There each request runs to its end, bounded by its timeout.
+        let session = self.session
+        let (data, status) = try await Task { () async throws -> (Data, Int?) in
+            let (data, response) = try await session.data(for: request)
+            return (data, (response as? HTTPURLResponse)?.statusCode)
+        }.value
+        #else
         let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw DreadcastError.invalidResponse(label) }
-        guard (200...299).contains(http.statusCode) else {
-            throw DreadcastError.httpStatus(http.statusCode, host: url.host ?? label)
+        let status = (response as? HTTPURLResponse)?.statusCode
+        #endif
+        guard let status else { throw DreadcastError.invalidResponse(label) }
+        guard (200...299).contains(status) else {
+            throw DreadcastError.httpStatus(status, host: url.host ?? label)
         }
         guard data.count <= maximumBytes else { throw DreadcastError.oversized(label) }
         return data

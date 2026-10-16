@@ -12,7 +12,7 @@ enum NowCommand {
         async let alertsResult = ctx.alerts(place)
         async let lightningResult = ctx.lightning(place)
         let (weather, alerts, lightning) = await (weatherResult, alertsResult, lightningResult)
-        let nowcast = ctx.cached(Nowcast.self, key: "nowcast-\(Context.placeKey(place))")
+        let nowcast = ctx.cached(Nowcast.self, key: Context.nowcastKey(place))
             .flatMap { ctx.now.timeIntervalSince($0.storedAt) < 600 ? $0.value : nil }
 
         switch ctx.mode {
@@ -40,7 +40,7 @@ enum NowCommand {
                 group.addTask {
                     async let weather = ctx.weather(saved.place)
                     async let alerts = ctx.alerts(saved.place)
-                    let nowcast = ctx.cached(Nowcast.self, key: "nowcast-\(Context.placeKey(saved.place))")
+                    let nowcast = ctx.cached(Nowcast.self, key: Context.nowcastKey(saved.place))
                         .flatMap { ctx.now.timeIntervalSince($0.storedAt) < 600 ? $0.value : nil }
                     return (i, PlaceRows.Reading(saved: saved, weather: await weather, alerts: await alerts, nowcast: nowcast))
                 }
@@ -247,20 +247,23 @@ enum NowCommand {
             let spark = colorSpark(values.map { $0.map { max(0, ($0 - 15) / 40) } }, ctx: ctx)
             return label + spark + "   " + nowcastSummary(nowcast, fmt: fmt, ctx: ctx)
         }
-        let steps = report.minutely.filter { $0.time >= ctx.now.addingTimeInterval(-900) }.prefix(8)
-        guard !steps.isEmpty else { return label + s.paint("no short-range forecast available", Theme.faint) }
+        guard let model = ModelRain(report: report, now: ctx.now) else {
+            return label + s.paint("no short-range forecast available", Theme.faint)
+        }
+        // Thirty marks, four minutes each, as radar's two hours are drawn.
         let scale = report.units == .imperial ? 0.08 : 2.0
-        let fractions = steps.flatMap { step -> [Double?] in
-            let f = (step.precipitation ?? 0) / scale
-            return [f, f, f, f]
+        let spark = colorSpark((0..<30).map { model.precipitation(atMinute: $0 * 4).map { $0 / scale } }, ctx: ctx)
+        return label + spark + "   " + modelSummary(model, fmt: fmt, ctx: ctx) + s.paint(" (forecast)", Theme.faint)
+    }
+
+    static func modelSummary(_ model: ModelRain, fmt: Formatter, ctx: Context) -> String {
+        if model.rainingNow {
+            return model.end.map { "rain now, easing by ~\(fmt.time($0))" } ?? "rain now"
         }
-        let spark = colorSpark(fractions, ctx: ctx)
-        let threshold = report.units == .imperial ? 0.004 : 0.1
-        if let first = steps.first(where: { ($0.precipitation ?? 0) >= threshold }) {
-            let when = first.time <= ctx.now ? "rain now" : "rain from ~\(fmt.time(first.time))"
-            return label + spark + "   " + when + s.paint(" (forecast)", Theme.faint)
-        }
-        return label + spark + "   no rain expected" + s.paint(" (forecast)", Theme.faint)
+        guard let arrival = model.arrival else { return "no rain expected" }
+        var text = "rain from " + ctx.styler.bold("~\(fmt.time(arrival))")
+        if model.heavyMinutes > 0 { text += ", heavy ~\(model.heavyMinutes) min" }
+        return text
     }
 
     static func nowcastSummary(_ nowcast: Nowcast, fmt: Formatter, ctx: Context) -> String {
@@ -368,6 +371,8 @@ enum NowCommand {
         }
         if let nowcast {
             lines.append("Rain: " + TextWidth.strippingANSI(nowcastSummary(nowcast, fmt: fmt, ctx: ctx)) + ".")
+        } else if let report, let model = ModelRain(report: report, now: ctx.now) {
+            lines.append("Rain: " + TextWidth.strippingANSI(modelSummary(model, fmt: fmt, ctx: ctx)) + " (forecast).")
         }
         if let report {
             let days = DayRows.upcoming(report, from: ctx.now, count: 5)
@@ -519,7 +524,7 @@ struct AlertJSON: Encodable {
 }
 
 struct NowcastSummaryJSON: Encodable {
-    /// `dreadcast` (the Dreadcast API) or `rainviewer`.
+    /// `dreadcast`: the Dreadcast API's radar.
     let source: String
     let credit: String
     let latestFrame: Date?

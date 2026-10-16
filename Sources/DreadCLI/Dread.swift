@@ -68,7 +68,7 @@ enum Help {
             \(title) radar — animated radar for your location
 
               --range <15|35|75|150|300>   view radius in miles (default from config, 35)
-              --palette <name>             dreadcast, classic, viridis or rainviewer
+              --palette <name>             dreadcast, classic or viridis
               --renderer <name>            auto, kitty, iterm2, halfblock or 256
               --frames <n>                 frames in the loop, 2–12 (default 8)
               --still                      show the latest frame without animating
@@ -77,6 +77,9 @@ enum Help {
               --location <query>           ZIP code, place name or lat,lon
 
             Keys while animating: space pauses, ←/→ step frames, +/− change range, q quits.
+
+            Radar reaches the US, Puerto Rico, Guam and most of Europe. Beyond it, NOAA's
+            satellite rain estimates fill in, credited with their time.
             """
         case "alerts":
             return """
@@ -107,6 +110,9 @@ enum Help {
 
             Traces echo motion across the last four radar frames. Timing guidance only:
             it can't foresee storms that form or fade along the way.
+
+            Where no radar reaches, the timing comes from the forecast model in
+            15-minute steps, labeled as the model's (JSON source "model").
             """
         case "setup":
             return """
@@ -138,14 +144,14 @@ enum Help {
 
               dread config                 show settings and file locations
               dread config set <key> <value>
-                units imperial|metric · palette dreadcast|classic|viridis|rainviewer
+                units imperial|metric · palette dreadcast|classic|viridis
                 range 15|35|75|150|300 · renderer auto|kitty|iterm2|halfblock|256
                 quips on|off · icons emoji|ascii
                 scene <name>|daily · scene-banner on|off
                 highlight auto|signal-blue|solar-mint|superstorm-lime|fallout-gold|
                           lamp-glow|ember-red|afterglow-pink|ai-violet
                 map theme|graphite · forecast days|hourly|off
-                radar-source auto|rainviewer · api-url <url>|off
+                api-url <url>|off
 
             Each scene brings its own highlight and map colors, as in the Dreadcast app;
             highlight and map can be fixed instead.

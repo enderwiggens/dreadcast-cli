@@ -1,16 +1,17 @@
 import Foundation
 
 /// Radar display palettes. The CLI ships the three general palettes from the
-/// Dreadcast app plus RainViewer's own colors; the app's Pro palettes stay in the app.
+/// Dreadcast app; the app's Pro palettes stay in the app. A saved palette this
+/// version doesn't know, such as the RainViewer one it no longer has, reads as
+/// Dreadcast.
 public enum RadarPalette: String, CaseIterable, Sendable, Codable {
-    case dreadcast, classic, viridis, rainviewer
+    case dreadcast, classic, viridis
 
     public var title: String {
         switch self {
         case .dreadcast: "Dreadcast"
         case .classic: "Classic"
         case .viridis: "Viridis"
-        case .rainviewer: "RainViewer"
         }
     }
 
@@ -28,12 +29,9 @@ public enum RadarPalette: String, CaseIterable, Sendable, Codable {
         (Double($0.offset) * 80 / 255, $0.element)
     }
 
-    /// RGB (0xRRGGBB) for a reflectivity value. Snow uses RainViewer's snow ramp
-    /// only in the RainViewer palette; the others show intensity alone.
+    /// RGB (0xRRGGBB) for a reflectivity value. Every palette shows intensity alone.
     public func rgb(dbz: Double, snow: Bool = false) -> UInt32 {
         switch self {
-        case .rainviewer:
-            return UniversalBlueDecoder.color(dbz: dbz, snow: snow) >> 8
         case .dreadcast:
             return Self.interpolate(Self.dreadcastStops, dbz)
         case .classic:
@@ -69,6 +67,12 @@ public enum RainRate {
     }
 
     public static func inchesPerHour(dbz: Double) -> Double { millimetersPerHour(dbz: dbz) / 25.4 }
+
+    /// The reflectivity that gives a rain rate; 0 when dry, as `millimetersPerHour` reads 0.
+    public static func dbz(millimetersPerHour rate: Double) -> Double {
+        guard rate > 0 else { return 0 }
+        return 10 * log10(200 * pow(rate, 1.6))
+    }
 
     public enum Intensity: Int, Comparable, Sendable, Codable {
         case none, light, moderate, heavy, intense
