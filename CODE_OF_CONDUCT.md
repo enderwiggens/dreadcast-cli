@@ -7,7 +7,7 @@ issues, pull requests, discussions, and anywhere you represent it.
 
 ## Reporting
 
-Email **kevin@dreadcast.app** about anything that breaks this code, including in private
+Email **support@dreadcast.app** about anything that breaks this code, including in private
 messages. Reports are read by the maintainer, kept confidential, and answered. If a
 report concerns the maintainer, say so, and it will be handled with that in mind.
 
