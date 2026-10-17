@@ -274,10 +274,17 @@ enum CreditsCommand {
             ("SunCalc", "Moon phase method. BSD-2-Clause, Vladimir Agafonkin.", "https://github.com/mourner/suncalc")
         ]
         var lines = ["", "  " + s.paint("DATA SOURCES", Theme.porcelain, bold: true), ""]
+        // A name too long for the column, as Copernicus's, takes a line of its own.
+        let column = 27
+        let indent = String(repeating: " ", count: column)
         for (name, detail, urls) in sources {
-            lines.append("  " + s.bold(TextWidth.pad(name, to: 24)) + detail)
+            if TextWidth.of(name) <= column - 2 {
+                lines.append("  " + s.bold(TextWidth.pad(name, to: column)) + detail)
+            } else {
+                lines.append(contentsOf: ["  " + s.bold(name), "  " + indent + detail])
+            }
             for url in urls.split(separator: "\n") {
-                lines.append("  " + String(repeating: " ", count: 24) + s.paint(String(url), Theme.faint))
+                lines.append("  " + indent + s.paint(String(url), Theme.faint))
             }
         }
         lines.append(contentsOf: ["", "  Locations are rounded to two decimals (about 1 km) before they're stored or sent.", ""])

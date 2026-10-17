@@ -56,6 +56,9 @@
 - On Linux, a request cancelled because another one failed could crash dread inside
   FoundationNetworking. Requests there now run to their own end, bounded by their
   timeouts.
+- `dread credits` ran long source names into their descriptions, as in "National
+  Weather ServiceActive alerts". Names now have room, and one too long for the column
+  takes a line of its own.
 
 ## 0.3.2 — 2026-10-08
 
