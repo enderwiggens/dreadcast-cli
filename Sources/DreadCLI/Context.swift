@@ -300,7 +300,8 @@ public final class Context: @unchecked Sendable {
     /// Dreadcast API: each region's radar where it reaches, and with `satellite`, NOAA's
     /// satellite estimates beyond. The place's region times the loop; elsewhere the
     /// loop follows the API's frames. A view no region's radar reaches loops the
-    /// satellite blends themselves, at their own times.
+    /// satellite blends themselves, at their own times, or shows the one there is, as
+    /// right after NOAA's blend comes back from an outage.
     public func radarLoop(for place: Place, viewport: RadarViewport, frames count: Int, spacing: TimeInterval = 0,
                           satellite: Bool = true) async throws -> RadarLoop {
         guard let api = dreadcastAPI else { throw DreadcastError.unavailable(Self.apiOff("Radar")) }
@@ -313,7 +314,7 @@ public final class Context: @unchecked Sendable {
             guard satellite, let estimates = manifest.satellite else { return nil }
             let snapshots = Self.pick(estimates.snapshots.reversed(), time: \.observedAt, count: count, spacing: spacing)
             let fields = await loader.fields(satellite: estimates, snapshots: snapshots, api: api, viewport: viewport)
-            guard fields.count >= min(2, count) else {
+            guard !fields.isEmpty else {
                 throw DreadcastError.unavailable("Satellite rain estimates are unavailable right now")
             }
             return RadarLoop(fields: fields, credit: "\(estimates.source.credit) (satellite estimates)", delayed: false,

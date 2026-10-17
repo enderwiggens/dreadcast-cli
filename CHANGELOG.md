@@ -12,7 +12,8 @@
 - Where no radar reaches, radar views show NOAA's satellite rain estimates from the
   Dreadcast API, credited with the blend's time. They fill only pixels that no radar
   region covers, and a view no radar reaches at all loops the blends themselves, ten
-  minutes apart, at their own times.
+  minutes apart, at their own times. Right after an outage, when the API lists only
+  one blend, it shows that one.
 - Where no radar reaches, `dread eta` times rain from the forecast model's 15-minute
   precipitation and says so. Its `--json` has `source: "model"`, the model's `units`
   and each step's `precipitation`, with no frames, reflectivity, motion, trend or

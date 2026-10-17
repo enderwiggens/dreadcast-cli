@@ -596,6 +596,27 @@ extension CommandTests {
         #expect(StubProvider.seen.contains { $0.url?.host == F.tileHost })
     }
 
+    /// Right after NOAA's blend comes back from an outage the API lists one, and a view
+    /// only the estimates reach shows it rather than failing (October 16, 2026).
+    @Test func oneSatelliteBlendStillShows() async throws {
+        typealias F = RadarAPIFixture
+        let ctx = Self.radarContext(try await Self.home(location: "35.68,139.69"))
+        defer { StubProvider.lock.withLock { StubProvider.tileBody = nil; StubProvider.binaries = [:] } }
+        let viewport = RadarViewport(center: F.tokyo.coordinate, rangeMiles: 35, width: 40, height: 30)
+        let newest = Date()
+        Self.serveRadar(F.json(newest: newest, satellite: true) { object in
+            var block = object["satellite"] as! [String: Any]
+            block["snapshots"] = Array((block["snapshots"] as! [[String: Any]]).prefix(1))
+            object["satellite"] = block
+        }, tile: nil)
+        Self.serveSatellite(F.satelliteTile(dbz: 35))
+
+        let loop = try await ctx.radarLoop(for: F.tokyo, viewport: viewport, frames: 8)
+        #expect(loop.fields.map(\.time) == [Date(timeIntervalSince1970: Double(F.satelliteSnapshots(newest)[0]))])
+        #expect(loop.fields.first?.value(x: 20, y: 15) == 35)
+        #expect(loop.credit == "NOAA Enterprise Rain Rate (satellite estimates)")
+    }
+
     /// Inside a region's bounds but outside its radars, as in Italy for Europe: estimates
     /// fill the place's pixels and nothing the region covers.
     @Test func satelliteEstimatesFillGapsInARegion() async throws {
