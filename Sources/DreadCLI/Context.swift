@@ -491,7 +491,9 @@ public final class Context: @unchecked Sendable {
     public func hazards(_ place: Place) async -> Fetched<HazardSummary> {
         let http = self.http, now = self.now, api = dreadcastAPI
         let key = "hazards-\(Self.placeKey(place))"
-        let partial = cache.read(HazardSummary.self, key: key)?.value.failures.isEmpty == false
+        // With the API off, dust always fails, which doesn't make a summary partial.
+        let partial = cache.read(HazardSummary.self, key: key)?.value.failures.keys
+            .contains { api != nil || $0 != HazardKind.dust.rawValue } == true
         return await load(key: key, maxAge: partial ? 60 : 900) {
             let summary = await HazardService(http: http, api: api).summary(near: place.coordinate, now: now)
             guard summary.failures.count < HazardKind.allCases.count else {
