@@ -22,6 +22,11 @@
 
 ### Changed
 
+- Asking for one of the app's scenes the terminal doesn't draw (Black Hole, Botanical
+  Takeover, Peak Optimism or Volcano Watch) says it's only in the Dreadcast app,
+  rather than calling it Pro and the terminal's eight "free scenes": since October 16
+  the app makes Peak Optimism free and five of those eight Pro. The README says
+  "Eight of Dreadcast's scenes".
 - Weather, air quality, dust and place search come from the Dreadcast API
   (`/v1/weather/current` and `/forecast`, `/v1/air/current`, `/v1/places/search`)
   instead of Open-Meteo's free API, which is for non-commercial use only. The data is
