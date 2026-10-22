@@ -16,7 +16,7 @@ enum PromptCommand {
         guard let place = ctx.config.location else { return .setupRequired }
         let key = Context.placeKey(place)
         let units = ctx.units
-        let weather = ctx.cached(WeatherReport.self, key: "weather-\(key)-\(units.rawValue)")
+        let weather = ctx.cached(WeatherReport.self, key: Context.weatherKey(place, units: units))
         let alerts = ctx.cached([WeatherAlert].self, key: "alerts-\(key)")
         let lightning = ctx.cached(LightningSnapshot.self, key: "lightning-\(key)-\(Int(XweatherLightningService.maximumRadiusMiles))")
 

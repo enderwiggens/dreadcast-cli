@@ -27,8 +27,6 @@ enum DreadcastAPI {
             return try await http.data(url, accept: "application/json", timeout: 20, maximumBytes: maximumBytes, source: source)
         } catch DreadcastError.httpStatus(let status, _) where status == 502 || status == 503 || status == 504 {
             throw DreadcastError.unavailable("\(what) is unavailable right now")
-        } catch DreadcastError.httpStatus(429, _) {
-            throw DreadcastError.unavailable("The Dreadcast API asked for fewer requests; try again in a few minutes")
         }
     }
 

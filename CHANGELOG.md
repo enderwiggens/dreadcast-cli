@@ -22,6 +22,10 @@
 
 ### Changed
 
+- Satellite rain loads from the radar CDN when the API names it there
+  (`satellite.tile_url`, checked against the radar tiles' own origin), so zoomed-out
+  views no longer queue behind the API's per-IP limit. If the CDN fails, the tile
+  comes from the API as before.
 - Weather, air quality, dust and place search come from the Dreadcast API
   (`/v1/weather/current` and `/forecast`, `/v1/air/current`, `/v1/places/search`)
   instead of Open-Meteo's free API, which is for non-commercial use only. The data is
@@ -52,6 +56,10 @@
 
 ### Fixed
 
+- When the Dreadcast API or another provider answers 429, dread waits as long as its
+  `Retry-After` asks (up to an hour, a minute when it doesn't say) before asking that
+  host again, across every shell, prompt and status line, and shows the last reading
+  meanwhile, marked stale.
 - The Systems tab said conditions were loading after they had failed to load; it now
   says they're unavailable.
 - On Linux, a request cancelled because another one failed could crash dread inside

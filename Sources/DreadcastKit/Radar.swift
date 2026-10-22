@@ -173,11 +173,14 @@ public enum RadarTileDecoder {
     }
 
     /// A satellite tile the API answered 204 for: covered, and dry throughout.
-    static let drySatelliteTile: Tile = {
+    static let drySatelliteTile = constantSatelliteTile(ReflectivityField.none)
+    /// A satellite tile where the satellites have no data, as past 70°N and 60°S.
+    static let uncoveredSatelliteTile = constantSatelliteTile(uncovered)
+
+    private static func constantSatelliteTile(_ value: Int8) -> Tile {
         let size = DreadcastRadarManifest.Satellite.tileSize
-        return Tile(size: size, dbz: [Int8](repeating: ReflectivityField.none, count: size * size),
-                    snow: [Bool](repeating: false, count: size * size))
-    }()
+        return Tile(size: size, dbz: [Int8](repeating: value, count: size * size), snow: [Bool](repeating: false, count: size * size))
+    }
 }
 
 // MARK: - Loading
@@ -296,7 +299,8 @@ public struct RadarLoader: Sendable {
         }
     }
 
-    /// A blend of NOAA's satellite estimates over the viewport, from the API's tiles.
+    /// A blend of NOAA's satellite estimates over the viewport, from the radar CDN when the
+    /// API names it there, and from the API itself otherwise or when the CDN fails.
     private func satelliteField(api: URL, satellite: DreadcastRadarManifest.Satellite,
                                 snapshot: DreadcastRadarManifest.Satellite.Snapshot,
                                 viewport: RadarViewport, time: Date) async throws -> ReflectivityField {
@@ -312,11 +316,22 @@ public struct RadarLoader: Sendable {
             let data: Data
             if let cached = store?.tileData(for: cacheKey) {
                 data = cached
+            } else if let cdn = satellite.cdnURL(snapshot: snapshot.id, z: z, x: x, y: y) {
+                // The CDN has no tiles for rows wholly past 70°N or 60°S: no data there.
+                guard DreadcastRadarManifest.Satellite.rowHasData(z: z, y: y) else { return RadarTileDecoder.uncoveredSatelliteTile }
+                if let tile = try? await http.data(cdn, accept: "image/png", timeout: 15, maximumBytes: 1024 * 1024,
+                                                    source: "\(satellite.source.name) tiles") {
+                    data = tile
+                } else {
+                    data = try await http.data(url, accept: "image/png", timeout: 15, maximumBytes: 1024 * 1024, source: "The Dreadcast API")
+                }
+                store?.storeTile(data, for: cacheKey)
             } else {
                 data = try await http.data(url, accept: "image/png", timeout: 15, maximumBytes: 1024 * 1024, source: "The Dreadcast API")
                 store?.storeTile(data, for: cacheKey)
             }
-            // The API answers 204, with no body, for a tile that's dry throughout.
+            // The API answers 204, with no body, for a tile that's dry throughout; the CDN
+            // serves an opaque tile of −20 dBZ instead.
             guard !data.isEmpty else { return RadarTileDecoder.drySatelliteTile }
             let image = try PNGDecoder.decode(data)
             guard image.width == size, image.height == size else { return nil }

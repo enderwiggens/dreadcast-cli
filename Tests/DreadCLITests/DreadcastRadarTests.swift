@@ -565,7 +565,49 @@ extension CommandTests {
         #expect(!StubProvider.seen.contains { $0.url?.host == F.tileHost })
     }
 
-    /// Inside a region's bounds where no radar reaches the whole view, as around Rome,
+    /// With `satellite.tile_url` on the radar tiles' own origin, satellite rain comes from
+    /// the CDN, and rows wholly past 70°N or 60°S, which have no tiles there, aren't asked
+    /// for. A CDN that fails hands the tile back to the API.
+    @Test func satelliteTilesComeFromTheCDNWhenNamed() async throws {
+        typealias F = RadarAPIFixture
+        let cdn = "https://\(F.tileHost)/mrms/satellite/{snapshot}/{z}/{x}/{y}.png"
+        func manifest(_ url: String) -> Data {
+            F.json(newest: Date(), satellite: true) { object in
+                var block = object["satellite"] as! [String: Any]
+                block["tile_url"] = url
+                object["satellite"] = block
+            }
+        }
+        #expect(try DreadcastRadarManifest.decode(manifest(cdn), now: Date()).satellite?.tileURL == cdn)
+        for other in ["https://elsewhere.example/mrms/satellite/{snapshot}/{z}/{x}/{y}.png",
+                      "https://\(F.tileHost)/mrms/satellite/{snapshot}/{z}/{x}/{y}.png?x=1",
+                      "https://\(F.tileHost)/other/satellite/{snapshot}/{z}/{x}/{y}.png"] {
+            let decoded = try DreadcastRadarManifest.decode(manifest(other), now: Date())
+            #expect(decoded.satellite != nil && decoded.satellite?.tileURL == nil)
+        }
+        #expect(DreadcastRadarManifest.Satellite.rowHasData(z: 6, y: 32))
+        #expect(!DreadcastRadarManifest.Satellite.rowHasData(z: 6, y: 0))
+        #expect(!DreadcastRadarManifest.Satellite.rowHasData(z: 6, y: 63))
+
+        defer { StubProvider.lock.withLock { StubProvider.tileBody = nil; StubProvider.binaries = [:] } }
+        let viewport = RadarViewport(center: F.tokyo.coordinate, rangeMiles: 35, width: 40, height: 30)
+        let ctx = Self.radarContext(try await Self.home(location: "35.68,139.69"))
+        Self.serveRadar(manifest(cdn), tile: F.satelliteTile(dbz: 35))
+        let loop = try await ctx.radarLoop(for: F.tokyo, viewport: viewport, frames: 2)
+        #expect(loop.fields.allSatisfy { $0.value(x: 20, y: 15) == 35 })
+        #expect(Self.satelliteRequests.isEmpty)
+        #expect(StubProvider.seen.contains { $0.url?.host == F.tileHost && $0.url?.path.hasPrefix("/mrms/satellite/") == true })
+
+        let fallback = Self.radarContext(try await Self.home(location: "35.68,139.69"))
+        Self.serveRadar(manifest(cdn), tile: nil)
+        StubProvider.lock.withLock { StubProvider.routes[F.tileHost] = (403, "") }
+        Self.serveSatellite(F.satelliteTile(dbz: 35))
+        let recovered = try await fallback.radarLoop(for: F.tokyo, viewport: viewport, frames: 2)
+        #expect(recovered.fields.allSatisfy { $0.value(x: 20, y: 15) == 35 })
+        #expect(!Self.satelliteRequests.isEmpty)
+    }
+
+
     /// the loop is the satellite blends too.
     @Test func satelliteLoopsWhereNoRadarReachesTheView() async throws {
         typealias F = RadarAPIFixture
