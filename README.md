@@ -385,10 +385,10 @@ Reduce Motion, and `--still` stops animation anywhere.
 
 ## Data and privacy
 
-There’s no account and no analytics. Radar comes from the Dreadcast API wherever it
-covers your place, and the API never receives your location; everything else is asked
-of each provider directly. Coordinates are rounded to about 1 km before they’re stored
-or sent. Lightning credentials stay in the macOS Keychain, or in a file only you can
+There’s no account and no analytics. Weather, air quality, place search and radar come
+from the Dreadcast API; everything else is asked of each provider directly. Coordinates
+are rounded to about 1 km before they’re stored or sent, and radar tiles show roughly
+the area you’re viewing. Lightning credentials stay in the macOS Keychain, or in a file only you can
 read on Linux.
 
 Details: [docs/PRIVACY.md](docs/PRIVACY.md) and
@@ -399,8 +399,8 @@ Details: [docs/PRIVACY.md](docs/PRIVACY.md) and
 
 | Data | Provider |
 | --- | --- |
-| Conditions, forecasts, air quality, place search | Through the Dreadcast API: [Open-Meteo](https://open-meteo.com/) (CC BY 4.0), with [CAMS](https://atmosphere.copernicus.eu/) air quality and [GeoNames](https://www.geonames.org/) places |
-| Radar | Through the Dreadcast API: [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) for the US, Puerto Rico and Guam, and [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) for Europe ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), resampled). [NOAA Enterprise Rain Rate](https://www.ospo.noaa.gov/products/atmosphere/err/) satellite estimates elsewhere |
+| Conditions, forecasts, air quality, place search | The Dreadcast API, from [Open-Meteo](https://open-meteo.com/) (CC BY 4.0), with [CAMS](https://atmosphere.copernicus.eu/) air quality and [GeoNames](https://www.geonames.org/) places |
+| Radar | Dreadcast Radar, from the Dreadcast API, built from [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) for the US, Puerto Rico and Guam and [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) for Europe ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), resampled), with [NOAA Enterprise Rain Rate](https://www.ospo.noaa.gov/products/atmosphere/err/) satellite estimates elsewhere |
 | Alerts | [National Weather Service](https://www.weather.gov/) |
 | Severe outlook, tropical storms | NOAA SPC and NHC |
 | Wildfires | NIFC |
