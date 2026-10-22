@@ -286,7 +286,7 @@ enum RadarCommand {
         let nowcast = await ctx.nowcast(place)
         guard let n = nowcast.value else {
             if nowcast.outsideCoverage {
-                return ctx.fail("No radar reaches \(place.name). \(Context.radarCoverage) At a terminal, `dread radar` draws NOAA satellite rain estimates here, and `dread eta` times rain from the forecast model.", code: .unavailable)
+                return ctx.fail("No radar reaches \(place.name). \(Context.radarCoverage) At a terminal, `dread radar` draws satellite rain estimates here, and `dread eta` times rain from the forecast model.", code: .unavailable)
             }
             return ctx.fail("Radar is unavailable: \(nowcast.error ?? "unknown error").", code: .unavailable)
         }

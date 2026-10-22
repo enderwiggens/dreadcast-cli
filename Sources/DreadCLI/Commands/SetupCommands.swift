@@ -192,7 +192,7 @@ enum ConfigCommand {
                 guard let mode = ModelRainMode.named(value) else { return ctx.fail("model-rain: show, striped or off.", code: .usage) }
                 config.modelRain = mode.rawValue
             case "radar-source":
-                return ctx.fail("radar-source is gone: radar always comes from the Dreadcast API, with NOAA satellite estimates where no radar reaches.", code: .usage)
+                return ctx.fail("radar-source is gone: radar always comes from the Dreadcast API, with satellite estimates where no radar reaches.", code: .usage)
             case "api-url":
                 guard value == "off" || Context.apiURL(value) != nil else {
                     return ctx.fail("api-url: an https URL, http://localhost for a development server, or off.", code: .usage)
