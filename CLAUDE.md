@@ -114,7 +114,8 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
   window, panorama and strip composition for each. Larger terminals show more sky;
   very large ones double every pixel. Animate in slow steps (a few per second at most)
   so frames stay small. The scene tests paint every scene in every layout and size.
-- Never print, log or commit credentials. Never put them in fixtures.
+- Never print, log or commit credentials or install tokens. Never put real ones in
+  fixtures. Only the Dreadcast API's own host may receive the install token.
 
 ## Tests
 
@@ -129,7 +130,7 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
 New commands and flags get a `CommandTests` case: `CommandTests.run([...], environment:
 routes:)` returns the exit code, output and errors, with any provider host left out of
 `routes` failing as if offline. Use `DREADCAST_CREDENTIAL_STORE=none` (set by the
-helper) so tests never read real credentials.
+helper) so tests never read real credentials or ask for an install token.
 
 ## Feature board
 

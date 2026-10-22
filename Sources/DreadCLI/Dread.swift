@@ -46,7 +46,7 @@ public enum Dread {
             case "setup": return try await SetupCommand.run(context)
             case "places": return try await PlacesCommand.run(context)
             case "auth": return try AuthCommand.run(context)
-            case "config": return try ConfigCommand.run(context)
+            case "config": return try await ConfigCommand.run(context)
             case "credits": return CreditsCommand.run(context)
             default:
                 return context.fail("Unknown command \(arguments.command).", code: .usage)
@@ -151,7 +151,7 @@ enum Help {
                 highlight auto|signal-blue|solar-mint|superstorm-lime|fallout-gold|
                           lamp-glow|ember-red|afterglow-pink|ai-violet
                 map theme|graphite · forecast days|hourly|off
-                api-url <url>|off
+                api-url <url>|off · install-token on|off
 
             Each scene brings its own highlight and map colors, as in the Dreadcast app;
             highlight and map can be fixed instead.

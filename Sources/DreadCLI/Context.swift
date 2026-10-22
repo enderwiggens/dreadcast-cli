@@ -60,6 +60,10 @@ public final class Context: @unchecked Sendable {
         self.cache = cache
         var http = http
         if http.throttle == nil { http.throttle = DiskThrottle(cache: cache) }
+        if http.credential == nil, let api = Self.dreadcastAPI(environment: environment, config: config),
+           Self.sendsInstallToken(environment: environment, config: config) {
+            http.credential = InstallToken(api: api, paths: paths, cache: cache, http: http)
+        }
         self.http = http
         self.clock = now
     }
@@ -263,11 +267,19 @@ public final class Context: @unchecked Sendable {
 
     /// The Dreadcast API: DREADCAST_API_URL, then `dread config set api-url`, then the
     /// built-in default. "off" turns it off.
-    public var dreadcastAPI: URL? {
+    public var dreadcastAPI: URL? { Self.dreadcastAPI(environment: environment, config: config) }
+
+    static func dreadcastAPI(environment: [String: String], config: Config) -> URL? {
         if let raw = environment["DREADCAST_API_URL"] ?? config.apiURL {
             return Self.apiURL(raw)
         }
         return Dreadcast.apiBaseURL
+    }
+
+    /// Whether requests to the API carry an install token: on unless `install-token off`,
+    /// DREADCAST_INSTALL_TOKEN=off, or DREADCAST_CREDENTIAL_STORE=none (tests and CI).
+    static func sendsInstallToken(environment: [String: String], config: Config) -> Bool {
+        config.installToken && environment["DREADCAST_INSTALL_TOKEN"] != "off" && environment["DREADCAST_CREDENTIAL_STORE"] != "none"
     }
 
     /// An API base URL: HTTPS, or HTTP to a local development server.

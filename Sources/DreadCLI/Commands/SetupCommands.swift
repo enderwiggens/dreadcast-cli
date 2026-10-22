@@ -40,6 +40,17 @@ func radarSummary(_ ctx: Context) -> String {
         + s.paint("  (\(api.host ?? api.absoluteString))", Theme.faint)
 }
 
+/// Whether the CLI sends the API an install token, for `dread config`.
+func installTokenSummary(_ ctx: Context) -> String {
+    let s = ctx.styler
+    guard let api = ctx.dreadcastAPI else { return "off" + s.paint("  (api-url off)", Theme.faint) }
+    guard Context.sendsInstallToken(environment: ctx.environment, config: ctx.config) else {
+        return "off" + s.paint("  (requests count against your network's limits)", Theme.faint)
+    }
+    let saved = InstallToken.saved(InstallToken.file(ctx.paths))[InstallToken.origin(api)] != nil
+    return (saved ? "on" : "on, asked for on next use") + s.paint("  (your own limits; install-token off deletes it)", Theme.faint)
+}
+
 /// `dread setup`: choose a location and units.
 enum SetupCommand {
     /// The first match, or the one the person picks when several match.
@@ -143,7 +154,7 @@ enum AuthCommand {
 
 /// `dread config`: show or change preferences.
 enum ConfigCommand {
-    static func run(_ ctx: Context) throws -> ExitCode {
+    static func run(_ ctx: Context) async throws -> ExitCode {
         let s = ctx.styler
         let parts = ctx.arguments.positionals
         if parts.first == "set" {
@@ -184,6 +195,13 @@ enum ConfigCommand {
                     return ctx.fail("api-url: an https URL, http://localhost for a development server, or off.", code: .usage)
                 }
                 config.apiURL = value == "off" ? "off" : Context.apiURL(value)!.absoluteString
+            case "install-token":
+                guard ["on", "off"].contains(value) else { return ctx.fail("install-token: on or off.", code: .usage) }
+                config.installToken = value == "on"
+                // Off deletes the install from the API too, and forgets its token.
+                if value == "off", let api = ctx.dreadcastAPI {
+                    await InstallToken(api: api, paths: ctx.paths, cache: ctx.cache, http: ctx.http).remove()
+                }
             case "scene":
                 if value == "off" {
                     // Hiding the art is its own setting; accept the obvious phrasing too.
@@ -235,6 +253,7 @@ enum ConfigCommand {
             "  " + s.paint("Map", Theme.mist) + "        " + ((MapChoice.named(c.map) ?? .theme) == .theme ? "theme" + s.paint("  (follows the scene)", Theme.faint) : "graphite"),
             "  " + s.paint("Forecast", Theme.mist) + "   " + (ForecastRow.named(c.forecast) ?? .days).rawValue + s.paint("  (beside the radar's timeline)", Theme.faint),
             "  " + s.paint("Radar", Theme.mist) + "      " + radarSummary(ctx),
+            "  " + s.paint("API token", Theme.mist) + "  " + installTokenSummary(ctx),
             "  " + s.paint("Lightning", Theme.mist) + "  " + (Credentials.source(environment: ctx.environment) ?? "not configured"),
             "",
             "  " + s.paint("Config  " + ctx.paths.configFile.path, Theme.faint),

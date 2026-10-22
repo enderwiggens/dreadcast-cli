@@ -16,6 +16,8 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var tileBody: Data?
     /// Served instead of `tileBody` for a host and path, as "api.dreadcast.app/v2/radar/satellite.png".
     nonisolated(unsafe) static var binaries: [String: Data] = [:]
+    /// Requests carrying this install token answer 401, as the API does for one it doesn't know.
+    nonisolated(unsafe) static var refusedToken: String?
     static let lock = NSLock()
 
     static func reset(_ routes: [String: (Int, String)]) {
@@ -45,6 +47,9 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
         let (route, binary) = Self.lock.withLock { () -> ((status: Int, body: String)?, Data?) in
             Self.requests.append(request)
             let path = (url.host ?? "") + url.path
+            if let refused = Self.refusedToken, request.value(forHTTPHeaderField: "Authorization") == "Bearer " + refused {
+                return ((status: 401, body: #"{"error":{"code":"invalid_token","message":"x"}}"#), nil)
+            }
             return (Self.routes[path] ?? Self.routes[url.host ?? ""], Self.binaries[path] ?? Self.tileBody)
         }
         guard let route else {
