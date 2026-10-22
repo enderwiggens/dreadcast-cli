@@ -65,6 +65,23 @@ private extension JSONEncoder {
     }
 }
 
+/// `Retry-After` waits on disk, one per host, shared by every dreadcast process.
+public struct DiskThrottle: RequestThrottle {
+    let cache: DiskCache
+
+    public init(cache: DiskCache) { self.cache = cache }
+
+    static func key(_ host: String) -> String { "retry-after-" + host }
+
+    public func blockedUntil(host: String) -> Date? {
+        cache.read(Date.self, key: Self.key(host))?.value
+    }
+
+    public func block(host: String, until: Date) {
+        cache.write(until, key: Self.key(host))
+    }
+}
+
 /// Raw radar and satellite tiles on disk, from the Dreadcast API. Frames are immutable, so entries stay
 /// valid until the frame ages out; anything older than three hours is pruned.
 public final class DiskTileStore: RadarTileStore, @unchecked Sendable {

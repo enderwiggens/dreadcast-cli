@@ -51,8 +51,9 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
             return
         }
-        let response = HTTPURLResponse(url: url, statusCode: route.status, httpVersion: "HTTP/1.1",
-                                       headerFields: ["Content-Type": "application/json"])!
+        // A rate limit says how long to wait, as the Dreadcast API does.
+        let headers = ["Content-Type": "application/json"].merging(route.status == 429 ? ["Retry-After": "120"] : [:]) { a, _ in a }
+        let response = HTTPURLResponse(url: url, statusCode: route.status, httpVersion: "HTTP/1.1", headerFields: headers)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         let body = route.status == 204 ? Data() : route.body.isEmpty ? (binary ?? Data()) : Data(route.body.utf8)
         client?.urlProtocol(self, didLoad: body)
@@ -110,6 +111,33 @@ struct CommandTests {
     }
 
     // MARK: The quick look
+
+    /// `dread prompt` reads the conditions `dread now` cached, without the network.
+    @Test func promptReadsTheCachedConditions() async throws {
+        let env = try await Self.home()
+        _ = try await Self.run(["now", "--plain"], environment: env)
+        let prompt = try await Self.run(["prompt"], environment: env, routes: [:])
+        #expect(prompt.code == .ok)
+        #expect(prompt.out.contains("71°"))
+        #expect(StubProvider.seen.isEmpty)
+    }
+
+    /// A 429 is waited out for as long as `Retry-After` asks, across runs, and the last
+    /// reading shows meanwhile, marked stale.
+    @Test func rateLimitsAreWaitedOut() async throws {
+        let env = try await Self.home()
+        _ = try await Self.run(["now", "--plain"], environment: env, at: "2026-10-05T18:30:00Z")
+        var limited = Self.online
+        limited[Self.current] = (429, #"{"error":{"code":"rate_limited","message":"Too many requests."}}"#)
+        limited[Self.forecast] = limited[Self.current]
+        let first = try await Self.run(["forecast", "--json"], environment: env, routes: limited, at: "2026-10-05T19:30:00Z")
+        #expect(StubProvider.seen.contains { $0.url?.path == "/v1/weather/current" })
+        #expect(first.out.contains("71"))
+        // Within the wait, the API isn't asked again, even with it answering.
+        _ = try await Self.run(["forecast", "--json"], environment: env, at: "2026-10-05T19:31:00Z")
+        #expect(!StubProvider.seen.contains { $0.url?.host == "api.dreadcast.app" })
+    }
+
 
     @Test func nowReportsConditionsAndAlerts() async throws {
         let env = try await Self.home()

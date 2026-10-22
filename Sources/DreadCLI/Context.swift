@@ -56,8 +56,11 @@ public final class Context: @unchecked Sendable {
         let available = detected.isOutputTTY ? detected.colorMode : TerminalInfo.colorMode(environment: environment, isTTY: true)
         let colors: ColorMode = (arguments.has("no-color") || mode != .pretty) ? .none : available
         styler = Styler(mode: colors)
+        let cache = DiskCache(directory: paths.cacheDirectory)
+        self.cache = cache
+        var http = http
+        if http.throttle == nil { http.throttle = DiskThrottle(cache: cache) }
         self.http = http
-        cache = DiskCache(directory: paths.cacheDirectory)
         self.clock = now
     }
 
@@ -179,7 +182,7 @@ public final class Context: @unchecked Sendable {
 
     /// The location's own time zone: from the forecast when cached, then the place, then this Mac.
     public func timeZone(for place: Place) -> TimeZone {
-        if let report = cache.read(WeatherReport.self, key: "weather-\(Self.placeKey(place))-\(units.rawValue)")?.value {
+        if let report = cache.read(WeatherReport.self, key: Self.weatherKey(place, units: units))?.value {
             return report.timeZone
         }
         return place.timeZone.flatMap(TimeZone.init(identifier:)) ?? .current
@@ -214,6 +217,12 @@ public final class Context: @unchecked Sendable {
         String(format: "%.2f_%.2f", locale: Locale(identifier: "en_US_POSIX"), place.coordinate.latitude, place.coordinate.longitude)
     }
 
+    /// Where a place's conditions and forecast are cached, in `units`. `dread prompt` and
+    /// the time zone read it back without the network.
+    static func weatherKey(_ place: Place, units: UnitSystem) -> String {
+        "weather-v2-\(placeKey(place))-\(units.rawValue)"
+    }
+
     /// Why `what` is missing when the API is turned off: weather, radar and the rest.
     static func apiOff(_ what: String) -> String { "\(what) comes from the Dreadcast API, which `api-url off` turns off" }
 
@@ -222,7 +231,7 @@ public final class Context: @unchecked Sendable {
     public func weather(_ place: Place) async -> Fetched<WeatherReport> {
         guard let api = dreadcastAPI else { return .failure(Self.apiOff("Weather")) }
         let units = self.units, http = self.http, now = self.now
-        let fetched = await load(key: "weather-v2-\(Self.placeKey(place))-\(units.rawValue)", maxAge: 600) {
+        let fetched = await load(key: Self.weatherKey(place, units: units), maxAge: 600) {
             try await WeatherService(http: http, api: api).report(at: place.coordinate, units: units, now: now)
         }
         guard fetched.value?.stale == true, !fetched.isStale else { return fetched }
