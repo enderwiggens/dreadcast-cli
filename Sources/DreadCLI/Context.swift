@@ -498,10 +498,21 @@ public final class Context: @unchecked Sendable {
         }
     }
 
+    /// Hazards near a place. A summary missing some sources is fetched again after a
+    /// minute rather than kept for fifteen, and one where every source failed is never
+    /// cached: an older summary, marked stale, or the failure shows instead.
     public func hazards(_ place: Place) async -> Fetched<HazardSummary> {
         let http = self.http, now = self.now, api = dreadcastAPI
-        return await load(key: "hazards-\(Self.placeKey(place))", maxAge: 900) {
-            await HazardService(http: http, api: api).summary(near: place.coordinate, now: now)
+        let key = "hazards-\(Self.placeKey(place))"
+        // With the API off, dust always fails, which doesn't make a summary partial.
+        let partial = cache.read(HazardSummary.self, key: key)?.value.failures.keys
+            .contains { api != nil || $0 != HazardKind.dust.rawValue } == true
+        return await load(key: key, maxAge: partial ? 60 : 900) {
+            let summary = await HazardService(http: http, api: api).summary(near: place.coordinate, now: now)
+            guard summary.failures.count < HazardKind.allCases.count else {
+                throw DreadcastError.unavailable("Hazard sources couldn’t be reached.")
+            }
+            return summary
         }
     }
 }

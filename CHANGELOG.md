@@ -66,6 +66,11 @@
 - `dread credits` ran long source names into their descriptions, as in "National
   Weather ServiceActive alerts". Names now have room, and one too long for the column
   takes a line of its own.
+- After a network blip, `dread outlook` and `dread systems` kept calling tsunamis,
+  volcanoes, smoke and dust unavailable for up to 15 minutes. Hazards where every
+  source failed are no longer cached, so the next run tries again or shows the last
+  summary, marked stale, and a summary missing some sources is fetched again after a
+  minute.
 
 ## 0.3.2 — 2026-10-08
 
