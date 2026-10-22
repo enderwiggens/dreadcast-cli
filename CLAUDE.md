@@ -77,7 +77,11 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
   `docs/API.md`), drawn together in the manifest's order, and NOAA's satellite
   estimates (from the CDN at `satellite.tile_url`, else `/v2/radar/satellite.png`)
   only in pixels no region covers. The place's region times the loop and decides
-  "delayed"; the credit names each source in view and the satellite blend's time.
+  "delayed". The credit is the API's `brand` ("Dreadcast Radar"), then only the
+  credits the API marks `required` for sources in view (OPERA's), then "model rain, a
+  forecast" when any shows, then the satellite blend's time; never NOAA's name for
+  NOAA's public domain data. Model rain (`satellite.model_rain`) follows the
+  `model-rain` setting, show by default as in the app.
   A view with no radar pixels loops the blends themselves at their own times, so its age is never a radar frame's. Rain timing (`Context.nowcast`) reads radar alone:
   where the place's own pixel has no radar it reports `outsideCoverage`, which is not
   a failure, and `dread eta` falls back to the model's 15-minute precipitation

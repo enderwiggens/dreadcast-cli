@@ -215,7 +215,7 @@ struct EtaJSON: Encodable {
     /// `dreadcast` (the Dreadcast API's radar) or `model` (the forecast, where no radar
     /// reaches). The model has no frames, reflectivity, motion, trend or cells.
     let source: String
-    /// Whom to credit, such as "NOAA MRMS" or "EUMETNET OPERA (CC BY 4.0, resampled)".
+    /// Whom to credit, such as "Dreadcast Radar" or "Dreadcast Radar · EUMETNET OPERA (CC BY 4.0), modified".
     let credit: String
     let method: String
     /// The model's precipitation units, `imperial` (inches) or `metric` (millimeters).

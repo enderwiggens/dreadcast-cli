@@ -70,6 +70,8 @@ public struct ReflectivityField: Sendable {
     public var estimatedAt: Date?
     /// Which pixels hold satellite estimates rather than radar; nil when none do.
     public var estimated: [Bool]?
+    /// Which pixels hold model rain, a forecast rather than an observation; nil when none do.
+    public var modeled: [Bool]?
 
     public init(width: Int, height: Int, time: Date, dbz: [Int8], snow: [Bool], covered: [Bool]? = nil, estimatedAt: Date? = nil) {
         self.width = width
@@ -88,17 +90,29 @@ public struct ReflectivityField: Sendable {
     public mutating func fill(from other: ReflectivityField) -> Bool {
         guard var covered, let theirs = other.covered, other.width == width, other.height == height else { return false }
         var estimated = self.estimated ?? [Bool](repeating: false, count: covered.count)
-        var filled = false
+        var modeled = self.modeled ?? [Bool](repeating: false, count: covered.count)
+        var filled = false, anyModel = self.modeled != nil
         for i in covered.indices where !covered[i] && theirs[i] {
             covered[i] = true
             estimated[i] = true
             dbz[i] = other.dbz[i]
             snow[i] = other.snow[i]
+            if other.modeled?[i] == true {
+                modeled[i] = true
+                anyModel = true
+            }
             filled = true
         }
         self.covered = covered
         if filled { self.estimated = estimated }
+        if anyModel { self.modeled = modeled }
         return filled
+    }
+
+    /// Some pixel with an echo shows model rain.
+    public var hasModelRain: Bool {
+        guard let modeled else { return false }
+        return modeled.indices.contains { modeled[$0] && dbz[$0] != Self.none }
     }
 
     /// Some pixel has radar rather than a satellite estimate.
@@ -151,25 +165,34 @@ public enum RadarTileDecoder {
         let size: Int
         let dbz: [Int8]
         let snow: [Bool]
+        /// Pixels of model rain, in satellite tiles asked for with it.
+        var model: [Bool]? = nil
     }
 
     /// dbz_u8's code for dry ground, −20 dBZ: the satellite blend's "no echo".
     static let dryCode: UInt8 = 12
 
     /// A satellite estimate tile in dbz_u8: red holds (R & 127) − 32 dBZ and R & 128
-    /// marks snow. Alpha 0 is no data, which counts as no coverage.
-    static func decodeSatelliteTile(_ image: RGBAImage) -> Tile {
+    /// marks snow. Alpha 0 is no data, which counts as no coverage. In a tile asked for
+    /// with model rain, a covered pixel whose blue is 0 is rain only the model shows.
+    static func decodeSatelliteTile(_ image: RGBAImage, modelRain: Bool = false) -> Tile {
         let count = image.width * image.height
         var dbz = [Int8](repeating: uncovered, count: count)
         var snow = [Bool](repeating: false, count: count)
+        var model = [Bool](repeating: false, count: modelRain ? count : 0)
+        var anyModel = false
         image.pixels.withUnsafeBufferPointer { p in
             for i in 0..<count where p[i * 4 + 3] != 0 {
                 let code = p[i * 4] & 127
                 dbz[i] = code <= dryCode ? ReflectivityField.none : Int8(Int(code) - 32)
                 snow[i] = p[i * 4] & 128 != 0
+                if modelRain, p[i * 4 + 3] == 255, p[i * 4 + 2] == 0, code > dryCode {
+                    model[i] = true
+                    anyModel = true
+                }
             }
         }
-        return Tile(size: image.width, dbz: dbz, snow: snow)
+        return Tile(size: image.width, dbz: dbz, snow: snow, model: anyModel ? model : nil)
     }
 
     /// A satellite tile the API answered 204 for: covered, and dry throughout.
@@ -246,14 +269,16 @@ public struct RadarLoader: Sendable {
     /// Only stored (`t`) tiles are requested; listed tiles with no echo or no coverage are
     /// filled in without a request. With `satellite`, the API's base URL, NOAA's
     /// satellite estimates fill the pixels no region covers, from the frame's blend; if
-    /// they can't load, the regions are drawn alone.
+    /// they can't load, the regions are drawn alone. With `modelRain`, a blend the API
+    /// has model rain for adds it where the satellites see none.
     public func field(dreadcast manifest: DreadcastRadarManifest, frame: DreadcastRadarManifest.Frame,
-                      viewport: RadarViewport, satellite api: URL? = nil) async throws -> ReflectivityField {
+                      viewport: RadarViewport, satellite api: URL? = nil, modelRain: Bool = false) async throws -> ReflectivityField {
         var field = try await regionField(manifest, frame: frame, viewport: viewport)
         guard let api, let satellite = manifest.satellite, let snapshot = manifest.satelliteSnapshot(for: frame),
               field.covered?.contains(false) == true,
               let estimates = try? await satelliteField(api: api, satellite: satellite, snapshot: snapshot,
-                                                        viewport: viewport, time: frame.observedAt) else { return field }
+                                                        viewport: viewport, time: frame.observedAt,
+                                                        modelRain: modelRain) else { return field }
         if field.fill(from: estimates) { field.estimatedAt = snapshot.observedAt }
         return field
     }
@@ -300,23 +325,28 @@ public struct RadarLoader: Sendable {
     }
 
     /// A blend of NOAA's satellite estimates over the viewport, from the radar CDN when the
-    /// API names it there, and from the API itself otherwise or when the CDN fails.
+    /// API names it there, and from the API itself otherwise or when the CDN fails. With
+    /// `modelRain`, a blend the API has model rain for comes from its second set of tiles.
     private func satelliteField(api: URL, satellite: DreadcastRadarManifest.Satellite,
                                 snapshot: DreadcastRadarManifest.Satellite.Snapshot,
-                                viewport: RadarViewport, time: Date) async throws -> ReflectivityField {
+                                viewport: RadarViewport, time: Date, modelRain: Bool = false) async throws -> ReflectivityField {
         let http = self.http, store = self.store, size = DreadcastRadarManifest.Satellite.tileSize
         let zoom = Self.zoom(for: viewport, tileSize: size, maximum: satellite.maximumZoom)
         let endpoint = api.appendingPathComponent("v2/radar/satellite.png")
+        let model = modelRain && satellite.hasModelRain(snapshot.id)
         return try await sample(viewport: viewport, zoom: zoom, time: time, coverage: true, tileSize: size) { z, x, y in
             var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
             components?.queryItems = [("snapshot", snapshot.id), ("z", z), ("x", x), ("y", y)].map { URLQueryItem(name: $0.0, value: String($0.1)) }
+                + (model ? [URLQueryItem(name: "model", value: "gfs")] : [])
             guard let url = components?.url else { return nil }
-            // A blend's tiles never change.
-            let cacheKey = "satellite-\(snapshot.id)-\(z)-\(x)-\(y)"
+            // A blend's tiles never change; its model rain tiles are a set of their own.
+            let cacheKey = "satellite-\(model ? "gfs-" : "")\(snapshot.id)-\(z)-\(x)-\(y)"
+            let cdnURL = model ? satellite.modelCDNURL(snapshot: snapshot.id, z: z, x: x, y: y)
+                : satellite.cdnURL(snapshot: snapshot.id, z: z, x: x, y: y)
             let data: Data
             if let cached = store?.tileData(for: cacheKey) {
                 data = cached
-            } else if let cdn = satellite.cdnURL(snapshot: snapshot.id, z: z, x: x, y: y) {
+            } else if let cdn = cdnURL {
                 // The CDN has no tiles for rows wholly past 70°N or 60°S: no data there.
                 guard DreadcastRadarManifest.Satellite.rowHasData(z: z, y: y) else { return RadarTileDecoder.uncoveredSatelliteTile }
                 if let tile = try? await http.data(cdn, accept: "image/png", timeout: 15, maximumBytes: 1024 * 1024,
@@ -335,19 +365,20 @@ public struct RadarLoader: Sendable {
             guard !data.isEmpty else { return RadarTileDecoder.drySatelliteTile }
             let image = try PNGDecoder.decode(data)
             guard image.width == size, image.height == size else { return nil }
-            return RadarTileDecoder.decodeSatelliteTile(image)
+            return RadarTileDecoder.decodeSatelliteTile(image, modelRain: model)
         }
     }
 
     /// Satellite estimates alone, one field per blend at the blend's own time, oldest
     /// first, for views no region reaches. Blends that fail are skipped.
     public func fields(satellite: DreadcastRadarManifest.Satellite, snapshots: [DreadcastRadarManifest.Satellite.Snapshot],
-                       api: URL, viewport: RadarViewport) async -> [ReflectivityField] {
+                       api: URL, viewport: RadarViewport, modelRain: Bool = false) async -> [ReflectivityField] {
         await withTaskGroup(of: ReflectivityField?.self) { group in
             for snapshot in snapshots {
                 group.addTask {
                     guard var field = try? await satelliteField(api: api, satellite: satellite, snapshot: snapshot,
-                                                                viewport: viewport, time: snapshot.observedAt) else { return nil }
+                                                                viewport: viewport, time: snapshot.observedAt,
+                                                                modelRain: modelRain) else { return nil }
                     field.estimatedAt = snapshot.observedAt
                     field.estimated = field.covered
                     return field
@@ -361,10 +392,10 @@ public struct RadarLoader: Sendable {
 
     /// Several frames from the Dreadcast API, oldest first. Frames that fail are skipped.
     public func fields(dreadcast manifest: DreadcastRadarManifest, frames: some Sequence<DreadcastRadarManifest.Frame> & Sendable,
-                       viewport: RadarViewport, satellite api: URL? = nil) async -> [ReflectivityField] {
+                       viewport: RadarViewport, satellite api: URL? = nil, modelRain: Bool = false) async -> [ReflectivityField] {
         await withTaskGroup(of: ReflectivityField?.self) { group in
             for frame in frames {
-                group.addTask { try? await field(dreadcast: manifest, frame: frame, viewport: viewport, satellite: api) }
+                group.addTask { try? await field(dreadcast: manifest, frame: frame, viewport: viewport, satellite: api, modelRain: modelRain) }
             }
             var result: [ReflectivityField] = []
             for await field in group { if let field { result.append(field) } }
@@ -414,6 +445,8 @@ public struct RadarLoader: Sendable {
         var dbz = [Int8](repeating: ReflectivityField.none, count: viewport.width * viewport.height)
         var snow = [Bool](repeating: false, count: viewport.width * viewport.height)
         var covered = [Bool](repeating: false, count: coverage ? viewport.width * viewport.height : 0)
+        let anyModel = decoded.values.contains { $0.model != nil }
+        var modeled = [Bool](repeating: false, count: anyModel ? viewport.width * viewport.height : 0)
         let columnTile = columnPixel.map { Int(floor($0 / Double(tileSize))) }
         let columnOffset = columnPixel.map { min(tileSize - 1, max(0, Int($0) - Int(floor($0 / Double(tileSize))) * tileSize)) }
         for y in 0..<viewport.height {
@@ -430,9 +463,12 @@ public struct RadarLoader: Sendable {
                 }
                 dbz[target] = value
                 snow[target] = tile.snow[source]
+                if let model = tile.model, model[source] { modeled[target] = true }
             }
         }
-        return ReflectivityField(width: viewport.width, height: viewport.height, time: time, dbz: dbz, snow: snow,
-                                 covered: coverage ? covered : nil)
+        var field = ReflectivityField(width: viewport.width, height: viewport.height, time: time, dbz: dbz, snow: snow,
+                                      covered: coverage ? covered : nil)
+        if anyModel { field.modeled = modeled }
+        return field
     }
 }

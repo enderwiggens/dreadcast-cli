@@ -513,7 +513,7 @@ struct CommandTests {
     @Test func creditsKeepNamesApartFromTheirDetails() async throws {
         let env = try await Self.home(location: nil)
         let lines = try await Self.run(["credits", "--plain"], environment: env).out.split(separator: "\n").map(String.init)
-        for name in ["Open-Meteo", "NOAA Enterprise Rain Rate", "National Weather Service", "American Meteor Society"] {
+        for name in ["Open-Meteo", "Dreadcast Radar", "EUMETSAT", "National Weather Service", "American Meteor Society"] {
             let line = try #require(lines.first { $0.hasPrefix("  " + name) }, "\(name) is listed")
             #expect(line.dropFirst(2 + name.count).hasPrefix("  "), "\(name) has room before its details")
         }

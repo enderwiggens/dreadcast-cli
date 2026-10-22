@@ -78,8 +78,10 @@ enum Help {
 
             Keys while animating: space pauses, ←/→ step frames, +/− change range, q quits.
 
-            Radar reaches the US, Puerto Rico, Guam and most of Europe. Beyond it, NOAA's
-            satellite rain estimates fill in, credited with their time.
+            Radar reaches the US, Puerto Rico, Guam and most of Europe. Beyond it, satellite
+            rain estimates fill in, labeled with their time. Where the satellites see no
+            rain, 28° or more from the equator, model rain can fill in too, labeled as a
+            forecast: `dread config set model-rain show|striped|off`.
             """
         case "alerts":
             return """
@@ -151,6 +153,7 @@ enum Help {
                 highlight auto|signal-blue|solar-mint|superstorm-lime|fallout-gold|
                           lamp-glow|ember-red|afterglow-pink|ai-violet
                 map theme|graphite · forecast days|hourly|off
+                model-rain show|striped|off
                 api-url <url>|off · install-token on|off
 
             Each scene brings its own highlight and map colors, as in the Dreadcast app;

@@ -11,7 +11,11 @@ struct RadarScene {
     /// The basemap's colors and the marker's, from the theme.
     var style: MapStyle = .theme(.asteroid)
     var highlight: RGB = Theme.lamp
+    /// Striped draws model rain in diagonal bands, as the app's Show Striped does.
+    var modelRain: ModelRainMode = .show
     static let opacity = 0.78
+    /// Model rain's faint bands, at this fraction of the radar's opacity, as in the app.
+    static let modelStripeOpacity = 0.4
 
     /// Continuous raster coordinates (pixel centers sit at index + 0.5).
     func project(_ coordinate: GeoCoordinate) -> (x: Double, y: Double) {
@@ -70,11 +74,20 @@ struct RadarScene {
     func compose(base: Raster, field: ReflectivityField?) -> Raster {
         var raster = base
         guard let field, field.width == raster.width, field.height == raster.height else { return raster }
+        // Bands about a tenth of the view's width apart, two fifths of each faint, running
+        // the other way from the app's hatching of missing coverage.
+        let period = max(6, field.width / 10), faint = max(2, period * 2 / 5)
+        let striped = modelRain == .striped ? field.modeled : nil
         for i in 0..<(field.width * field.height) {
             let value = field.dbz[i]
             guard value != ReflectivityField.none, Double(value) >= minimumDBZ else { continue }
             let color = palette.rgb(dbz: Double(value), snow: field.snow[i])
-            raster.pixels[i] = Raster.mix(raster.pixels[i], color, Self.opacity)
+            var opacity = Self.opacity
+            if let striped, striped[i] {
+                let x = i % field.width, y = i / field.width
+                if (x - y + field.height * period) % period < faint { opacity *= Self.modelStripeOpacity }
+            }
+            raster.pixels[i] = Raster.mix(raster.pixels[i], color, opacity)
         }
         return raster
     }

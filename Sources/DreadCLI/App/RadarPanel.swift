@@ -122,7 +122,7 @@ final class RadarPanel: @unchecked Sendable {
                 // Eight frames across the API's hour, every other one.
                 let loop = try await ctx.radarLoop(for: place, viewport: viewport, frames: 8, spread: true)
                 let scene = RadarScene(viewport: viewport, palette: palette, minimumDBZ: 15, units: ctx.units,
-                                       style: ctx.mapStyle, highlight: ctx.highlight)
+                                       style: ctx.mapStyle, highlight: ctx.highlight, modelRain: ctx.modelRain)
                 let base = scene.base()
                 result = Loop(place: placeKey, key: key, scene: scene, frames: loop.fields.map { scene.compose(base: base, field: $0) },
                               times: loop.fields.map(\.time), loadedAt: Date(), credit: loop.credit, delayed: loop.delayed)

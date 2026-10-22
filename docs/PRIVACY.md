@@ -25,7 +25,7 @@ place you're viewing, and rain timing also for the row highlighted on the Places
 | --- | --- |
 | Zippopotam.us | A five-digit ZIP code, when you set up with one |
 | National Weather Service | Rounded coordinates |
-| Dreadcast API (unless turned off) | Rounded coordinates and unit choices for weather, air quality and dust, and place-name text when you search during setup. The radar loop is the same for every client; where satellite estimates fill in beyond the radar and the API doesn't name the CDN for them, the API also receives their map tile coordinates, so roughly the area you're looking at. It sees your IP address, and the install token while it's on. It asks Open-Meteo for the same rounded coordinates and search text, so Open-Meteo sees the API's address, not yours |
+| Dreadcast API (unless turned off) | Rounded coordinates and unit choices for weather, air quality and dust, and place-name text when you search during setup. The radar loop is the same for every client; where satellite estimates or model rain fill in beyond the radar and the API doesn't name the CDN for them, the API also receives their map tile coordinates, so roughly the area you're looking at. It sees your IP address, and the install token while it's on. It asks Open-Meteo for the same rounded coordinates and search text, so Open-Meteo sees the API's address, not yours |
 | DigitalOcean Spaces CDN (with the Dreadcast API) | Map tile coordinates around your location, so roughly the area you're looking at, and your IP address |
 | NIFC | A bounding box around your location |
 | NOAA SPC, NHC, SWPC, HMS; USGS; NTWC/PTWC | Nothing location-specific; the same public files for everyone |
