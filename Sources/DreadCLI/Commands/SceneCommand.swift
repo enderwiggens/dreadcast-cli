@@ -16,8 +16,8 @@ enum SceneCommand {
         if let name = ctx.arguments.positionals.first {
             switch SceneID.lookup(name) {
             case .scene(let scene): chosen = scene
-            case .pro(let title):
-                return ctx.fail("\(title) is a Pro scene in the Dreadcast app. Free scenes: \(SceneID.names).", code: .usage)
+            case .appOnly(let title):
+                return ctx.fail("\(title) is only in the Dreadcast app. Scenes here: \(SceneID.names).", code: .usage)
             case .unknown:
                 return ctx.fail("Unknown scene \(name). Choose \(SceneID.names).", code: .usage)
             }

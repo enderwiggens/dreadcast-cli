@@ -22,6 +22,11 @@
 
 ### Changed
 
+- Asking for one of the app's scenes the terminal doesn't draw (Black Hole, Botanical
+  Takeover, Peak Optimism or Volcano Watch) says it's only in the Dreadcast app,
+  rather than calling it Pro and the terminal's eight "free scenes": since October 16
+  the app makes Peak Optimism free and five of those eight Pro. The README says
+  "Eight of Dreadcast's scenes".
 - `dread radar` and the Radar tab reach back an hour, as the Mac and iPhone apps now do
   for everyone, instead of half an hour. The CLI asks the API for its hour
   (`/v2/radar/latest?minutes=60`, up to 15 frames, one per four-minute window) and

@@ -255,7 +255,7 @@ else too, from radar to wildfires, so switching shows it in full within moments.
 
 ![The eight scenes at dusk](docs/images/scenes.png)
 
-Dreadcast’s free scenes, redrawn for the terminal. They’re made for a dark screen, so
+Eight of Dreadcast’s scenes, redrawn for the terminal. They’re made for a dark screen, so
 each shows its sunset through the day and its night version from 8 PM, when the full
 situation arrives. Your scene fills the Scene tab (7) and `dread scene`, and heads the
 `dread now` printout whenever no alert is active; when one is, it steps aside.

@@ -195,8 +195,8 @@ enum ConfigCommand {
                     config.scene = value
                 } else if case .scene(let scene) = SceneID.lookup(value) {
                     config.scene = scene.rawValue
-                } else if case .pro(let title) = SceneID.lookup(value) {
-                    return ctx.fail("\(title) is a Pro scene in the Dreadcast app. Free scenes: \(SceneID.names).", code: .usage)
+                } else if case .appOnly(let title) = SceneID.lookup(value) {
+                    return ctx.fail("\(title) is only in the Dreadcast app. Scenes here: \(SceneID.names).", code: .usage)
                 } else {
                     return ctx.fail("scene: daily, or one of \(SceneID.names).", code: .usage)
                 }
