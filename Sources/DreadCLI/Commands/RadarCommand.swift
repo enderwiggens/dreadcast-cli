@@ -23,7 +23,7 @@ enum RadarCommand {
         guard (5...500).contains(range) else { return ctx.fail("--range must be between 5 and 500 miles.", code: .usage) }
         let palette = try palette(ctx)
         let renderer = renderer(ctx)
-        let frameCount = max(2, min(12, ctx.arguments.integer("frames") ?? 8))
+        let frameCount = max(2, min(15, ctx.arguments.integer("frames") ?? 8))
         let minimumDBZ = ctx.arguments.double("min-dbz") ?? 15
         let still = ctx.arguments.has("still") || ctx.terminal.reduceMotion || !ctx.terminal.isInputTTY
         let once = ctx.arguments.has("once")
@@ -49,7 +49,7 @@ enum RadarCommand {
                                    style: ctx.mapStyle, highlight: ctx.highlight)
             let base = scene.base()
             do {
-                let loop = try await ctx.radarLoop(for: place, viewport: viewport, frames: frameCount)
+                let loop = try await ctx.radarLoop(for: place, viewport: viewport, frames: frameCount, spread: true)
                 credit = loop.credit
                 delayed = loop.delayed
                 newest = loop.newestFrame
@@ -167,7 +167,8 @@ enum RadarCommand {
             redraw(mapChanged: true)
         }
         while true {
-            let delay = state.frameIndex == state.frames.count - 1 ? 1.7 : 0.65
+            // Longer loops step faster, as in the app, so 15 frames play in about 8 seconds.
+            let delay = state.frameIndex == state.frames.count - 1 ? 1.7 : state.frames.count > 8 ? 0.45 : 0.65
             let key = raw?.readKey(timeout: 0.1) ?? { Thread.sleep(forTimeInterval: 0.1); return nil }()
             switch key {
             case .character("q"), .character("Q"), .escape, .interrupt:

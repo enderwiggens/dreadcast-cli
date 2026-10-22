@@ -205,7 +205,7 @@ Every command accepts `--location` (or `-l`), `--units imperial|metric`, `--json
 <summary><b>Radar options</b></summary>
 
 ```sh
-dread radar                    # animate the last eight frames
+dread radar                    # animate the last hour
 dread radar --range 150        # 15, 35, 75, 150 or 300 miles
 dread radar --palette viridis  # dreadcast, classic or viridis
 dread radar --still            # just the latest frame

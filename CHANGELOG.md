@@ -22,6 +22,12 @@
 
 ### Changed
 
+- `dread radar` and the Radar tab reach back an hour, as the Mac and iPhone apps now do
+  for everyone, instead of half an hour. The CLI asks the API for its hour
+  (`/v2/radar/latest?minutes=60`, up to 15 frames, one per four-minute window) and
+  draws 8 frames spread across it, every other one, so a loop costs what it did.
+  `--frames` takes 2 to 15, always from the oldest to the newest; loops longer than 8
+  frames step faster, 0.45 s a frame. Manifests may now have up to 16 frames.
 - Weather, air quality, dust and place search come from the Dreadcast API
   (`/v1/weather/current` and `/forecast`, `/v1/air/current`, `/v1/places/search`)
   instead of Open-Meteo's free API, which is for non-commercial use only. The data is
