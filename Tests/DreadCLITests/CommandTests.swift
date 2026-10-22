@@ -275,6 +275,48 @@ struct CommandTests {
         #expect(!requests.isEmpty && requests.allSatisfy { $0.query == "lat=27.95&lon=-82.46" })
     }
 
+    /// Hazards where every source failed aren't cached, and a partial summary is
+    /// fetched again after a minute, so a network blip doesn't stick for fifteen.
+    @Test func failedHazardsAreNotCachedAsFresh() async throws {
+        let env = try await Self.home()
+        let air = #"{"location":{"latitude":27.95,"longitude":-82.46,"timezone":"America/New_York","utc_offset_seconds":-14400},"current":{"time":"2026-10-05T18:00:00Z","interval_seconds":3600,"us_aqi":61,"pm2_5":17.2,"pm10":30.1,"ozone":80.0,"dust":142.5},"source":{"name":"Open-Meteo, with Copernicus Atmosphere Monitoring Service data","fetched_at":"2026-10-05T18:05:00Z","stale":false}}"#
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubProvider.self]
+        let http = HTTPClient(session: URLSession(configuration: configuration))
+        let start = ISODate.parse("2026-10-05T18:30:00Z")!
+        func context(after seconds: TimeInterval) -> Context {
+            Context(arguments: Arguments(command: "outlook"), environment: env,
+                    terminal: TerminalInfo(isOutputTTY: false, isInputTTY: false, columns: 100, rows: 40, colorMode: .none,
+                                           graphics: .none, program: nil, insideMultiplexer: false, reduceMotion: false),
+                    http: http, now: start.addingTimeInterval(seconds))
+        }
+        func dustRequests() -> Int { StubProvider.seen.compactMap(\.url).filter { $0.path == "/v1/air/current" }.count }
+
+        // Every source fails: a failure, and nothing cached.
+        StubProvider.reset(Self.online)
+        let ctx = context(after: 0)
+        let place = try await ctx.resolveLocation()
+        let failed = await ctx.hazards(place)
+        #expect(failed.value == nil && failed.error != nil)
+        #expect(ctx.cached(HazardSummary.self, key: "hazards-\(Context.placeKey(place))") == nil)
+
+        // Only dust answers: a partial summary, kept for a minute.
+        var routes = Self.online
+        routes["api.dreadcast.app/v1/air/current"] = (200, air)
+        StubProvider.reset(routes)
+        let partial = try #require(await context(after: 10).hazards(place).value)
+        #expect(partial.dust == 142.5 && partial.failures["tsunamis"] != nil)
+        _ = await context(after: 40).hazards(place)
+        #expect(dustRequests() == 1)
+        _ = await context(after: 80).hazards(place)
+        #expect(dustRequests() == 2)
+
+        // Every source fails again: the partial summary shows, marked stale.
+        StubProvider.reset(Self.online)
+        let stale = await context(after: 200).hazards(place)
+        #expect(stale.value?.dust == 142.5 && stale.isStale && stale.error != nil)
+    }
+
     // MARK: Alerts and exit codes
 
     @Test func failOnSetsTheExitCode() async throws {

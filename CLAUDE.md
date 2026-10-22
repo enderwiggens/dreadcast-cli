@@ -5,8 +5,9 @@ This guide is for Claude, Codex and other AI-assisted tools, and for people.
 ## What this is
 
 `dread` is an open-source Swift command-line tool that shows weather and radar in the
-terminal. It is a standalone companion to Dreadcast: Weather Radar & Forecasts, the Mac app: a
-separate project that shares no code with the app at build time and never requires it.
+terminal. It is a standalone companion to Dreadcast: Weather Radar & Forecasts, the
+iPhone, iPad and Mac app: a separate project that shares no code with the app at
+build time and never requires it.
 
 ## Principles
 

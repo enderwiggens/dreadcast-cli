@@ -26,6 +26,17 @@
   (`satellite.tile_url`, checked against the radar tiles' own origin), so zoomed-out
   views no longer queue behind the API's per-IP limit. If the CDN fails, the tile
   comes from the API as before.
+- Asking for one of the app's scenes the terminal doesn't draw (Black Hole, Botanical
+  Takeover, Peak Optimism or Volcano Watch) says it's only in the Dreadcast app,
+  rather than calling it Pro and the terminal's eight "free scenes": since October 16
+  the app makes Peak Optimism free and five of those eight Pro. The README says
+  "Eight of Dreadcast's scenes".
+- `dread radar` and the Radar tab reach back an hour, as the Mac and iPhone apps now do
+  for everyone, instead of half an hour. The CLI asks the API for its hour
+  (`/v2/radar/latest?minutes=60`, up to 15 frames, one per four-minute window) and
+  draws 8 frames spread across it, every other one, so a loop costs what it did.
+  `--frames` takes 2 to 15, always from the oldest to the newest; loops longer than 8
+  frames step faster, 0.45 s a frame. Manifests may now have up to 16 frames.
 - Weather, air quality, dust and place search come from the Dreadcast API
   (`/v1/weather/current` and `/forecast`, `/v1/air/current`, `/v1/places/search`)
   instead of Open-Meteo's free API, which is for non-commercial use only. The data is
@@ -68,6 +79,11 @@
 - `dread credits` ran long source names into their descriptions, as in "National
   Weather ServiceActive alerts". Names now have room, and one too long for the column
   takes a line of its own.
+- After a network blip, `dread outlook` and `dread systems` kept calling tsunamis,
+  volcanoes, smoke and dust unavailable for up to 15 minutes. Hazards where every
+  source failed are no longer cached, so the next run tries again or shows the last
+  summary, marked stale, and a summary missing some sources is fetched again after a
+  minute.
 
 ## 0.3.2 — 2026-10-08
 
