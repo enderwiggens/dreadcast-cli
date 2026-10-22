@@ -386,7 +386,8 @@ public struct DreadcastRadarManifest: Codable, Sendable {
                                   source: region.source.map { Source(name: $0.name, license: $0.license) } ?? Source(name: "Dreadcast", license: nil)))
         }
 
-        try check((1...8).contains(wire.frames.count), "frames")
+        // An hour is 15 frames; the app's longest loops are 16.
+        try check((1...16).contains(wire.frames.count), "frames")
         var frames: [Frame] = []
         var origin: String?
         for frame in wire.frames {
@@ -447,8 +448,16 @@ public struct DreadcastRadarService: Sendable {
     /// Loopback base URLs are a local development server, whose tiles are local too.
     public var allowsLoopback: Bool { ["127.0.0.1", "localhost"].contains(baseURL.host?.lowercased() ?? "") }
 
+    /// How far back the loop reaches, in minutes: the hour the app shows everyone, up to
+    /// 15 frames four minutes apart (dreadcast-server `docs/API.md#longer-loops`). Without
+    /// `minutes` the API serves half an hour.
+    public static let loopMinutes = 60
+
     public func latest(now: Date = Date()) async throws -> DreadcastRadarManifest {
-        let url = baseURL.appendingPathComponent("v2/radar/latest")
+        let path = baseURL.appendingPathComponent("v2/radar/latest")
+        var components = URLComponents(url: path, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "minutes", value: String(Self.loopMinutes))]
+        let url = components?.url ?? path
         let data: Data
         do {
             data = try await http.data(url, accept: "application/json", timeout: 15, maximumBytes: 1024 * 1024, source: "The Dreadcast API")

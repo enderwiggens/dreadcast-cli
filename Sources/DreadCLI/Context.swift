@@ -296,14 +296,15 @@ public final class Context: @unchecked Sendable {
         public let coversPlace: Bool
     }
 
-    /// The last `count` frames for a place, at least `spacing` seconds apart, from the
-    /// Dreadcast API: each region's radar where it reaches, and with `satellite`, NOAA's
-    /// satellite estimates beyond. The place's region times the loop; elsewhere the
+    /// The last `count` frames for a place, at least `spacing` seconds apart, or with
+    /// `spread` spread across the API's whole loop, from the Dreadcast API: each region's
+    /// radar where it reaches, and with `satellite`, NOAA's satellite estimates beyond.
+    /// The place's region times the loop; elsewhere the
     /// loop follows the API's frames. A view no region's radar reaches loops the
     /// satellite blends themselves, at their own times, or shows the one there is, as
     /// right after NOAA's blend comes back from an outage.
     public func radarLoop(for place: Place, viewport: RadarViewport, frames count: Int, spacing: TimeInterval = 0,
-                          satellite: Bool = true) async throws -> RadarLoop {
+                          spread: Bool = false, satellite: Bool = true) async throws -> RadarLoop {
         guard let api = dreadcastAPI else { throw DreadcastError.unavailable(Self.apiOff("Radar")) }
         let fetched = await dreadcastRadar(api)
         guard let manifest = fetched.value?.usable(at: now) else {
@@ -327,7 +328,7 @@ public final class Context: @unchecked Sendable {
         }
         let region = manifest.region(for: place.coordinate)
         let timeline = region.map { manifest.frames(for: $0) } ?? manifest.frames
-        let frames = Self.pick(timeline, time: \.observedAt, count: count, spacing: spacing)
+        let frames = spread ? Self.spread(timeline, count: count) : Self.pick(timeline, time: \.observedAt, count: count, spacing: spacing)
         let center = (x: viewport.width / 2, y: viewport.height / 2)
         // The newest frame first: without satellite estimates the loop is for rain timing,
         // which needs radar at the place, and without it the rest needn't load.
@@ -374,6 +375,18 @@ public final class Context: @unchecked Sendable {
         manifest.frames.last.map { frame in
             [frame.id, frame.scans.values.map(\.id).sorted().joined(separator: ","), frame.satellite.map(String.init) ?? "",
              manifest.satellite?.snapshots.first.map { String($0.id) } ?? ""].joined(separator: "|")
+        }
+    }
+
+    /// `count` items spread evenly across `items` by position, from the oldest to the
+    /// newest, or all of them when there are no more; oldest first. Across the API's hour,
+    /// one frame per four-minute window, 8 are every other frame. By position, not time:
+    /// scans land anywhere in their window, so frames are two to six minutes apart.
+    static func spread<T>(_ items: [T], count: Int) -> [T] {
+        guard count > 1, items.count > count else { return Array(items.suffix(max(1, count))) }
+        let last = items.count - 1
+        return (0..<count).reversed().map { step in
+            items[last - Int((Double(step) * Double(last) / Double(count - 1)).rounded())]
         }
     }
 
@@ -485,10 +498,21 @@ public final class Context: @unchecked Sendable {
         }
     }
 
+    /// Hazards near a place. A summary missing some sources is fetched again after a
+    /// minute rather than kept for fifteen, and one where every source failed is never
+    /// cached: an older summary, marked stale, or the failure shows instead.
     public func hazards(_ place: Place) async -> Fetched<HazardSummary> {
         let http = self.http, now = self.now, api = dreadcastAPI
-        return await load(key: "hazards-\(Self.placeKey(place))", maxAge: 900) {
-            await HazardService(http: http, api: api).summary(near: place.coordinate, now: now)
+        let key = "hazards-\(Self.placeKey(place))"
+        // With the API off, dust always fails, which doesn't make a summary partial.
+        let partial = cache.read(HazardSummary.self, key: key)?.value.failures.keys
+            .contains { api != nil || $0 != HazardKind.dust.rawValue } == true
+        return await load(key: key, maxAge: partial ? 60 : 900) {
+            let summary = await HazardService(http: http, api: api).summary(near: place.coordinate, now: now)
+            guard summary.failures.count < HazardKind.allCases.count else {
+                throw DreadcastError.unavailable("Hazard sources couldn’t be reached.")
+            }
+            return summary
         }
     }
 }

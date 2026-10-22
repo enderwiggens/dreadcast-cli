@@ -119,7 +119,8 @@ final class RadarPanel: @unchecked Sendable {
             var problem = "unknown error"
             let viewport = RadarViewport(center: place.coordinate, rangeMiles: range, width: width, height: rows * 2)
             do {
-                let loop = try await ctx.radarLoop(for: place, viewport: viewport, frames: 8)
+                // Eight frames across the API's hour, every other one.
+                let loop = try await ctx.radarLoop(for: place, viewport: viewport, frames: 8, spread: true)
                 let scene = RadarScene(viewport: viewport, palette: palette, minimumDBZ: 15, units: ctx.units,
                                        style: ctx.mapStyle, highlight: ctx.highlight)
                 let base = scene.base()
