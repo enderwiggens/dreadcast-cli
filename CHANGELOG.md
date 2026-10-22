@@ -4,6 +4,14 @@
 
 ### Added
 
+- Model rain, as the Mac and iPhone apps show it: where NOAA's satellites see no rain,
+  28° or more from the equator, the radar adds the Dreadcast API's model rain
+  (`satellite.model_rain`: NOAA GFS and HRRR with GOES lightning), from its CDN when
+  named. It is a forecast, so whenever it's in view the radar's line says "model rain,
+  a forecast". `dread config set model-rain show|striped|off` matches the app's Model
+  Rain setting: show (the default), striped in faint diagonal bands, or off. Rain timing
+  still reads radar alone.
+
 - The first time it uses the Dreadcast API, the CLI asks it for an install token and
   sends it with each request to the API, so the API counts this install's requests
   apart from others on the network, with limits of its own. Nothing secret ships in
@@ -33,6 +41,16 @@
 
 ### Changed
 
+- The radar is credited as Dreadcast Radar, as the apps credit it (dreadcast-server
+  `docs/API.md#credits`, server #41). A source's own credit shows beside it only where
+  the API marks it required, today EUMETNET OPERA's "(CC BY 4.0), modified" while
+  Europe's radar is in view; NOAA's public domain radar, satellite rain and models are
+  no longer named on the map as NOAA's, and satellite estimates are labeled with their
+  time. `dread credits` lists NOAA's data as public domain, modified by Dreadcast, and
+  EUMETSAT's notice for the Meteosat data in satellite rain. On a narrow terminal the
+  radar's own name gives way first, so a required credit stays. A server without the
+  new fields gets the credits it had before. Rain timing, `dread eta` and `--json`
+  credit "Dreadcast Radar".
 - Satellite rain loads from the radar CDN when the API names it there
   (`satellite.tile_url`, checked against the radar tiles' own origin), so zoomed-out
   views no longer queue behind the API's per-IP limit. If the CDN fails, the tile

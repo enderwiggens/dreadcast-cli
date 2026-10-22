@@ -12,9 +12,10 @@ never polls a source faster than this table allows.
 | Place search | [Open-Meteo geocoding](https://open-meteo.com/en/docs/geocoding-api) (GeoNames) through the Dreadcast API (`/v1/places/search`) | On setup; the API keeps answers a day | Worldwide | CC BY 4.0 |
 | Air quality and dust | [Open-Meteo air quality](https://open-meteo.com/en/docs/air-quality-api) (CAMS) through the Dreadcast API (`/v1/air/current`) | 30 min (dust 15 min); the API refreshes hourly | Worldwide, at the place itself | CC BY 4.0; generated using Copernicus Atmosphere Monitoring Service information |
 | ZIP lookup | [Zippopotam.us](https://zippopotam.us/) | Cached 30 days | United States | Free API |
-| Radar (US) | [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) base reflectivity through the Dreadcast API (`/v2/radar/latest`) | Manifest 1 min; tiles are immutable and cached until they age out | Contiguous US, Alaska, Hawaii, Puerto Rico and the Caribbean, Guam | Public domain (U.S. Government data); numeric tiles, zoom 0–8 |
-| Radar (Europe) | [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) maximum reflectivity composite through the Dreadcast API | As above; OPERA publishes every 5 min | The OPERA radars from Iceland to Romania. Italy, Austria and Greece aren't in the composite, so places there get satellite estimates unless a neighbor's radar reaches them | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): credited with its license wherever it's shown, and noted as resampled. No precipitation type, so no snow colors |
-| Satellite rain (where no radar reaches) | [NOAA Enterprise Rain Rate](https://www.ospo.noaa.gov/products/atmosphere/err/) blend from five geostationary satellites, through the Dreadcast API, from the radar CDN when the API names it (`satellite.tile_url`) and from `/v2/radar/satellite.png` otherwise | A blend every 10 min, 15 to 21 min after its scan; tiles are immutable and cached until they age out | 70° N to 60° S | Public domain (U.S. Government data), credited to NOAA with the blend's time; about 2 km, zoom 0–6. Not used for rain timing |
+| Radar (US) | [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) base reflectivity through the Dreadcast API (`/v2/radar/latest`) | Manifest 1 min; tiles are immutable and cached until they age out | Contiguous US, Alaska, Hawaii, Puerto Rico and the Caribbean, Guam | Public domain (U.S. Government data); numeric tiles, zoom 0–8. Credited as Dreadcast Radar, never as NOAA's own data, and listed in `dread credits` |
+| Radar (Europe) | [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) maximum reflectivity composite through the Dreadcast API | As above; OPERA publishes every 5 min | The OPERA radars from Iceland to Romania. Italy, Austria and Greece aren't in the composite, so places there get satellite estimates unless a neighbor's radar reaches them | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): the API marks its credit `required`, so it's shown as the API gives it ("EUMETNET OPERA (CC BY 4.0), modified") wherever Europe's radar is in view. No precipitation type, so no snow colors |
+| Satellite rain (where no radar reaches) | [NOAA Enterprise Rain Rate](https://www.ospo.noaa.gov/products/atmosphere/err/) blend from five geostationary satellites, through the Dreadcast API, from the radar CDN when the API names it (`satellite.tile_url`) and from `/v2/radar/satellite.png` otherwise | A blend every 10 min, 15 to 21 min after its scan; tiles are immutable and cached until they age out | 70° N to 60° S | Public domain (U.S. Government data); labeled "satellite estimates" with the blend's time, and listed in `dread credits` with EUMETSAT's notice for its Meteosat data; about 2 km, zoom 0–6. Not used for rain timing |
+| Model rain (where the satellites see none) | Dreadcast's blend of NOAA GFS and HRRR models and GOES lightning, through the Dreadcast API: the satellite tiles' second set (`satellite.model_rain`, `model=gfs`, or its `gfs/` path on the CDN), its pixels marked with blue 0 | With the satellite blend it belongs to | 28° or more from the equator, wherever the satellites see no rain | Public domain (U.S. Government data). A forecast, not an observation: whenever it's in view the radar's line says "model rain, a forecast". `model-rain show` (the default, as in the app), `striped` or `off`. Not used for rain timing |
 | Active alerts | [National Weather Service](https://www.weather.gov/documentation/services-web-api) | 2 min | US and territories | Public domain; identifying User-Agent required |
 | Day 1 convective outlook | [NOAA SPC](https://www.spc.noaa.gov/products/outlook/) | 15 min | Contiguous US | Public domain |
 | Tropical cyclones | [NOAA NHC](https://www.nhc.noaa.gov/) | 15 min | Atlantic and eastern Pacific | Public domain |
@@ -49,8 +50,16 @@ Radar comes from the Dreadcast API at `https://api.dreadcast.app`. Each pixel sh
 first region whose radars reach it, and NOAA's satellite estimates fill the pixels no
 region reaches, as in most of Italy (inside Europe's bounds but not in OPERA's
 composite) or Japan. Beside radar, the estimates hold the newest blend until NOAA
-publishes one for the frame, and the credit gives its time. A view no radar reaches at
-all loops the blends themselves, ten minutes apart, each at its own time.
+publishes one for the frame, and the radar's line gives its time. A view no radar
+reaches at all loops the blends themselves, ten minutes apart, each at its own time.
+Where the satellites see no rain, 28° or more from the equator, model rain fills in
+unless `model-rain off`.
+
+The radar is credited as the API's `brand`, "Dreadcast Radar": the API changes its
+sources' data, resampling radar and blending satellite rain with models. A source's
+own credit shows beside it only where the API marks it `required` (dreadcast-server
+`docs/API.md#credits`), today Europe's OPERA. A server older than these fields gets
+the credits it had before: OPERA by its license, NOAA's public domain radar by none.
 
 Rain timing uses radar only. Where no radar reaches the place itself, `dread eta`,
 `dread now` and the Systems tab use the forecast model's 15-minute precipitation,

@@ -214,7 +214,9 @@ dread radar --still            # just the latest frame
 Radar comes from the Dreadcast API as measurements: NOAA MRMS and EUMETNET OPERA scans
 at about 1 km, stored as reflectivity values rather than colors, for the US, Puerto
 Rico, Guam and most of Europe. Beyond them, NOAA’s satellite rain estimates fill in at
-about 2 km, credited with their time. Working with measured values is what lets
+about 2 km, labeled with their time, and where the satellites see no rain, 28° or more
+from the equator, model rain fills in too, labeled as a forecast (`dread config set
+model-rain show|striped|off`, as in the app). Working with measured values is what lets
 Dreadcast CLI redraw the radar in other palettes and measure storm motion for
 `dread eta`. The basemap is Natural Earth data built into the binary.
 
@@ -404,7 +406,7 @@ Details: [docs/PRIVACY.md](docs/PRIVACY.md) and
 | Data | Provider |
 | --- | --- |
 | Conditions, forecasts, air quality, place search | The Dreadcast API, from [Open-Meteo](https://open-meteo.com/) (CC BY 4.0), with [CAMS](https://atmosphere.copernicus.eu/) air quality and [GeoNames](https://www.geonames.org/) places |
-| Radar | Dreadcast Radar, from the Dreadcast API, built from [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) for the US, Puerto Rico and Guam and [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) for Europe ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), resampled), with [NOAA Enterprise Rain Rate](https://www.ospo.noaa.gov/products/atmosphere/err/) satellite estimates elsewhere |
+| Radar | Dreadcast Radar, from the Dreadcast API, built from [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) for the US, Puerto Rico and Guam and [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) for Europe ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), modified), with [NOAA Enterprise Rain Rate](https://www.ospo.noaa.gov/products/atmosphere/err/) satellite estimates elsewhere (containing modified EUMETSAT Meteosat data) and NOAA GFS and HRRR model rain where the satellites see none |
 | Alerts | [National Weather Service](https://www.weather.gov/) |
 | Severe outlook, tropical storms | NOAA SPC and NHC |
 | Wildfires | NIFC |

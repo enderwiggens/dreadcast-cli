@@ -25,6 +25,8 @@ public struct Config: Codable, Sendable {
     public var map: String = "theme"
     /// Beside the radar's timeline on the Radar tab: days, hourly or off.
     public var forecast: String = "days"
+    /// Model rain where the satellites see none: show, striped or off, as in the app.
+    public var modelRain: String = "show"
     /// A Dreadcast API base URL, overriding the built-in one; "off" turns it off.
     public var apiURL: String?
     /// Send the Dreadcast API an install token, so its limits count this install apart
@@ -51,7 +53,7 @@ public struct Config: Codable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case version, location, places, units, palette, radarRange, renderer, quips, icons, scene, sceneBanner, highlight, map, forecast, apiURL, installToken
+        case version, location, places, units, palette, radarRange, renderer, quips, icons, scene, sceneBanner, highlight, map, forecast, modelRain, apiURL, installToken
     }
 
     public init() {}
@@ -76,6 +78,7 @@ public struct Config: Codable, Sendable {
         highlight = (try? c.decode(String.self, forKey: .highlight)) ?? "auto"
         map = (try? c.decode(String.self, forKey: .map)) ?? "theme"
         forecast = (try? c.decode(String.self, forKey: .forecast)) ?? "days"
+        modelRain = (try? c.decode(String.self, forKey: .modelRain)) ?? "show"
         apiURL = try? c.decode(String.self, forKey: .apiURL)
         installToken = (try? c.decode(Bool.self, forKey: .installToken)) ?? true
         // Early builds saved `scene: off` to hide the banner.
@@ -101,6 +104,7 @@ public struct Config: Codable, Sendable {
         try c.encode(highlight, forKey: .highlight)
         try c.encode(map, forKey: .map)
         try c.encode(forecast, forKey: .forecast)
+        try c.encode(modelRain, forKey: .modelRain)
         try c.encodeIfPresent(apiURL, forKey: .apiURL)
         try c.encode(installToken, forKey: .installToken)
     }

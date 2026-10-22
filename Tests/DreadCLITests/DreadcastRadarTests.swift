@@ -22,10 +22,14 @@ enum RadarAPIFixture {
 
     static let conus = RegionSpec(id: "conus", name: "Contiguous U.S.", bounds: [-130, 20, -60, 55],
                                   source: ["name": "NOAA MRMS", "url": "https://www.nssl.noaa.gov/projects/mrms/",
-                                           "license": "Public domain (U.S. Government data)"], delayedAfter: 600)
+                                           "license": "Public domain (U.S. Government data)", "attribution": "courtesy"], delayedAfter: 600)
     static let europe = RegionSpec(id: "europe", name: "Europe", bounds: [-25, 34, 33, 72.5],
                                    source: ["name": "EUMETNET OPERA", "url": "https://www.eumetnet.eu/observations/weather-radar-network/",
-                                            "license": "CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)"], delayedAfter: 1200)
+                                            "license": "CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)", "attribution": "required",
+                                            "credit": "EUMETNET OPERA (CC BY 4.0), modified", "license_name": "CC BY 4.0",
+                                            "license_url": "https://creativecommons.org/licenses/by/4.0/"], delayedAfter: 1200)
+    /// The credit Europe's radar requires.
+    static let operaCredit = "EUMETNET OPERA (CC BY 4.0), modified"
     static let tileHost = "tiles.dreadcast.app"
     static let zooms = 3...8
 
@@ -66,7 +70,7 @@ enum RadarAPIFixture {
 
     static func json(newest: Date, frames count: Int = 3, regions: [RegionSpec] = [conus, europe], stored: Set<String> = [],
                      missing: Set<String> = [], status: String = "live", host: String = tileHost, scheme: String = "https",
-                     satellite: Bool = false, tamper: (inout [String: Any]) -> Void = { _ in }) -> Data {
+                     satellite: Bool = false, modelRain: Bool = false, tamper: (inout [String: Any]) -> Void = { _ in }) -> Data {
         let times = (0..<count).map { newest.addingTimeInterval(Double($0 - count + 1) * 240) }
         // Europe's scan for a frame: the newest on its eight-minute schedule.
         func europeScan(_ time: Date) -> Date { times.last { $0 <= time && Int(newest.timeIntervalSince($0) / 240) % 2 == 0 } ?? times[0] }
@@ -96,10 +100,11 @@ enum RadarAPIFixture {
                 let frameTime = regions.map { scanTime($0, time) }.max()!
                 return ["id": id("radar", frameTime), "observed_at": iso(frameTime), "regions": scans]
             },
-            "source": ["name": "NOAA MRMS", "provider": "noaa-mrms"],
+            "brand": ["name": "Dreadcast Radar", "url": "https://dreadcast.app/data.html#weather"],
+            "source": ["name": "NOAA MRMS", "provider": "noaa-mrms", "attribution": "courtesy"],
             "a_future_field": true,
         ]
-        if satellite { object["satellite"] = satelliteBlock(newest) }
+        if satellite || modelRain { object["satellite"] = satelliteBlock(newest, modelRain: modelRain) }
         tamper(&object)
         return try! JSONSerialization.data(withJSONObject: object)
     }
@@ -129,14 +134,35 @@ enum RadarAPIFixture {
         return [base - 1200, base - 1800]
     }
 
-    /// The API's `satellite` block (dreadcast-server `docs/API.md#global-satellite-rain`).
-    static func satelliteBlock(_ newest: Date) -> [String: Any] {
-        ["provider": "noaa", "description": "Rain-rate estimates from geostationary satellites",
-         "source": ["name": "NOAA Enterprise Rain Rate", "url": "https://www.ospo.noaa.gov/products/atmosphere/err/",
-                    "license": "Public domain (U.S. Government data); credit NOAA"],
-         "encoding": "rainbow-dbz-u8", "tile_size": 256, "max_zoom": 6,
-         "tile_path": "v2/radar/satellite.png?snapshot={snapshot}&z={z}&x={x}&y={y}",
-         "snapshots": satelliteSnapshots(newest).map { ["id": $0, "observed_at": iso(Date(timeIntervalSince1970: Double($0)))] }]
+    /// The API's `satellite` block (dreadcast-server `docs/API.md#global-satellite-rain`),
+    /// with `model_rain` for the newest snapshot when asked (`#model-rain`).
+    static func satelliteBlock(_ newest: Date, modelRain: Bool = false) -> [String: Any] {
+        var block: [String: Any] = [
+            "provider": "noaa", "description": "Rain-rate estimates from geostationary satellites",
+            "source": ["name": "NOAA Enterprise Rain Rate", "url": "https://www.ospo.noaa.gov/products/atmosphere/err/",
+                       "license": "Public domain (U.S. Government data)", "attribution": "courtesy",
+                       "notice": "Contains modified EUMETSAT Meteosat data"],
+            "encoding": "rainbow-dbz-u8", "tile_size": 256, "max_zoom": 6,
+            "tile_path": "v2/radar/satellite.png?snapshot={snapshot}&z={z}&x={x}&y={y}",
+            "snapshots": satelliteSnapshots(newest).map { ["id": $0, "observed_at": iso(Date(timeIntervalSince1970: Double($0)))] }]
+        if modelRain { block["model_rain"] = modelRainBlock(newest) }
+        return block
+    }
+
+    static func modelRainBlock(_ newest: Date) -> [String: Any] {
+        ["provider": "noaa-gfs", "description": "Model rain where the satellites see none",
+         "source": ["name": "NOAA GFS and HRRR models, NOAA GOES lightning", "url": "https://www.ncei.noaa.gov/products/weather-climate-models/global-forecast",
+                    "license": "Public domain (U.S. Government data)", "attribution": "courtesy"],
+         "tile_path": "v2/radar/satellite.png?snapshot={snapshot}&z={z}&x={x}&y={y}&model=gfs",
+         "mark": ["channel": "blue", "value": 0],
+         "snapshots": [satelliteSnapshots(newest)[0]]]
+    }
+
+    /// A 256-pixel satellite tile from a model rain set: one reflectivity everywhere, with
+    /// blue 0 marking model rain, or repeating red elsewhere.
+    static func modelRainTile(dbz: Int, model: Bool) -> Data {
+        let red = UInt32(dbz + 32)
+        return PNGEncoder.encode(Raster(width: 256, height: 256, fill: red << 16 | red << 8 | (model ? 0 : red)))!
     }
 
     /// A 256-pixel satellite tile with one reflectivity everywhere: red is dBZ + 32.
@@ -189,10 +215,39 @@ struct DreadcastRadarTests {
         let delayed = try DreadcastRadarManifest.decode(F.json(newest: F.now, status: "delayed"), now: F.now)
         #expect(delayed.regions.allSatisfy { $0.isDelayed(at: F.now) })
 
-        // Credits follow the regions in view, and name a license that asks for it.
-        #expect(manifest.credits(south: 27, north: 29, west: -83, east: -82) == ["NOAA MRMS"])
-        #expect(manifest.credits(south: 51, north: 52, west: -1, east: 1) == ["EUMETNET OPERA (CC BY 4.0, resampled)"])
+        // The radar is Dreadcast's: a region's own credit shows only where its source
+        // requires one, as Europe's OPERA does, and NOAA's public domain radar doesn't.
+        #expect(manifest.brand == "Dreadcast Radar")
+        #expect(manifest.credits(south: 27, north: 29, west: -83, east: -82).isEmpty)
+        #expect(manifest.credits(south: 51, north: 52, west: -1, east: 1) == [F.operaCredit])
         #expect(manifest.credits(south: 35, north: 36, west: 139, east: 140).isEmpty)
+        #expect(manifest.credits(south: 20, north: 60, west: -90, east: 10) == [F.operaCredit])
+
+        // A server older than credits: a license other than the public domain is named, as
+        // before, and the radar keeps Dreadcast's name.
+        let older = try DreadcastRadarManifest.decode(F.json(newest: F.now) { object in
+            object["brand"] = nil
+            object["regions"] = (object["regions"] as! [[String: Any]]).map { region in
+                var region = region, source = region["source"] as! [String: Any]
+                for key in ["attribution", "credit", "license_name", "license_url"] { source[key] = nil }
+                region["source"] = source
+                return region
+            }
+        }, now: F.now)
+        #expect(older.brand == "Dreadcast Radar")
+        #expect(older.credits(south: 27, north: 29, west: -83, east: -82).isEmpty)
+        #expect(older.credits(south: 51, north: 52, west: -1, east: 1) == ["EUMETNET OPERA (CC BY 4.0, resampled)"])
+        // A credit or brand the terminal can't show safely fails the source or falls back.
+        #expect(try DreadcastRadarManifest.decode(F.json(newest: F.now) { $0["brand"] = ["name": "Radar\u{1B}[2J"] }, now: F.now).brand
+            == "Dreadcast Radar")
+        #expect(throws: (any Error).self) {
+            try DreadcastRadarManifest.decode(F.json(newest: F.now) { object in
+                var regions = object["regions"] as! [[String: Any]], source = regions[1]["source"] as! [String: Any]
+                source["credit"] = "OPERA\u{1B}]8;;https://evil.example\u{7}"
+                regions[1]["source"] = source
+                object["regions"] = regions
+            }, now: F.now)
+        }
     }
 
     /// A region more than three hours behind is dropped, and the frames only it moved on
@@ -367,7 +422,9 @@ struct DreadcastRadarTests {
         let satellite = try #require(manifest.satellite)
         let ids = F.satelliteSnapshots(F.now)
         #expect(satellite.snapshots.map(\.id) == ids)
-        #expect(satellite.maximumZoom == 6 && satellite.source.credit == "NOAA Enterprise Rain Rate")
+        #expect(satellite.maximumZoom == 6 && satellite.source.name == "NOAA Enterprise Rain Rate")
+        #expect(satellite.source.requiredCredit == nil && satellite.source.notice == "Contains modified EUMETSAT Meteosat data")
+        #expect(satellite.modelRain == nil)
         // Frames NOAA hasn't covered yet hold the newest blend up to their time.
         let newest = try #require(manifest.frames.last)
         #expect(newest.satellite == nil && manifest.satelliteSnapshot(for: newest)?.id == ids[0])
@@ -397,8 +454,9 @@ struct DreadcastRadarTests {
         #expect(try block { $0["snapshots"] = Array(($0["snapshots"] as! [[String: Any]]).reversed()) }.satellite == nil)
         #expect(try block { $0["snapshots"] = [["id": ids[0], "observed_at": F.iso(F.now)]] }.satellite == nil)
         #expect(try block { $0["snapshots"] = [] }.satellite == nil)
-        // A source that can't be shown is credited by name instead.
-        #expect(try block { $0["source"] = ["name": "NOAA\u{1B}[2J"] }.satellite?.source.credit == "NOAA Enterprise Rain Rate")
+        // A source that can't be shown is named by default instead, and needs no credit.
+        let unshown = try block { $0["source"] = ["name": "NOAA\u{1B}[2J"] }.satellite?.source
+        #expect(unshown?.name == "NOAA Enterprise Rain Rate" && unshown?.requiredCredit == nil)
         let broken = try DreadcastRadarManifest.decode(F.json(newest: F.now) { $0["satellite"] = "soon" }, now: F.now)
         #expect(broken.satellite == nil && broken.frames.count == 3)
     }
@@ -443,15 +501,18 @@ struct DreadcastRadarTests {
     /// The animation redraws a fixed number of lines, so the footer never wraps, and the
     /// frame's age always shows.
     @Test func theFooterFitsOneLine() {
-        let credit = "EUMETNET OPERA (CC BY 4.0, resampled) · NOAA Enterprise Rain Rate, 11:20 PM"
-        #expect(RadarCommand.footer(credit: "NOAA MRMS", ago: "5 min ago", delayed: false, width: 97)
-            == "NOAA MRMS · Natural Earth · latest frame 5 min ago")
+        let credit = "Dreadcast Radar · EUMETNET OPERA (CC BY 4.0), modified · satellite estimates, 11:20 PM"
+        #expect(RadarCommand.footer(credit: "Dreadcast Radar", ago: "5 min ago", delayed: false, width: 97)
+            == "Dreadcast Radar · Natural Earth · latest frame 5 min ago")
         // At 100 columns, "latest frame" goes so the satellite blend's time stays.
-        #expect(RadarCommand.footer(credit: credit, ago: "5 min ago", delayed: false, width: 97) == credit + " · 5 min ago")
-        #expect(RadarCommand.footer(credit: credit, ago: "25 min ago", delayed: true, width: 110) == credit + " · radar delayed · 25 min ago")
+        #expect(RadarCommand.footer(credit: credit, ago: "5 min ago", delayed: false, width: 100) == credit + " · 5 min ago")
+        #expect(RadarCommand.footer(credit: credit, ago: "25 min ago", delayed: true, width: 120) == credit + " · radar delayed · 25 min ago")
         let tight = RadarCommand.footer(credit: credit, ago: "25 min ago", delayed: true, width: 80)
-        #expect(TextWidth.of(tight) <= 80 && tight.hasPrefix("EUMETNET OPERA (CC BY 4.0, resampled)")
+        // Tighter still, the radar's own name goes first, so the credit OPERA requires stays.
+        #expect(TextWidth.of(tight) <= 80 && tight.hasPrefix("EUMETNET OPERA (CC BY 4.0), modified")
             && tight.hasSuffix(" · radar delayed · 25 min ago"))
+        let model = "Dreadcast Radar · model rain, a forecast · satellite estimates, 11:20 PM"
+        #expect(RadarCommand.footer(credit: model, ago: "25 min ago", delayed: true, width: 70).hasPrefix("model rain, a forecast · "))
     }
 
     @Test func framesSpreadAcrossTheHour() {
@@ -521,7 +582,7 @@ extension CommandTests {
         let loop = try await ctx.radarLoop(for: F.tampa, viewport: viewport, frames: 2)
         let manifests = StubProvider.seen.compactMap(\.url).filter { $0.path == "/v2/radar/latest" }
         #expect(!manifests.isEmpty && manifests.allSatisfy { $0.query == "minutes=60" }, "the last hour, as the app shows")
-        #expect(loop.credit == "NOAA MRMS")
+        #expect(loop.credit == "Dreadcast Radar")
         #expect(loop.coversPlace && !loop.delayed)
         #expect(loop.fields.count == 2)
         let center = try #require(loop.fields.last?.value(x: 40, y: 30))
@@ -546,7 +607,7 @@ extension CommandTests {
                         tile: F.tile(red: F.red(dbz: 30), green: 255))
 
         let loop = try await ctx.radarLoop(for: F.london, viewport: viewport, frames: 8)
-        #expect(loop.credit == "EUMETNET OPERA (CC BY 4.0, resampled)")
+        #expect(loop.credit == "Dreadcast Radar · " + F.operaCredit)
         // Europe scanned twice in the three frames, so the loop has its two scans.
         #expect(loop.fields.map(\.time) == [newest.addingTimeInterval(-480), newest].map { ISODate.parse(F.iso($0))! })
         #expect(loop.fields.last?.value(x: 40, y: 30) == 30)
@@ -580,7 +641,7 @@ extension CommandTests {
         #expect(loop.fields.map(\.time) == ids.reversed().map { Date(timeIntervalSince1970: Double($0)) })
         #expect(loop.fields.allSatisfy { $0.value(x: 20, y: 15) == 35 && !$0.hasRadar(x: 20, y: 15) })
         #expect(!loop.coversPlace && !loop.delayed)
-        #expect(loop.credit == "NOAA Enterprise Rain Rate (satellite estimates)")
+        #expect(loop.credit == "Dreadcast Radar · satellite estimates")
         #expect(await ctx.newestRadarFrame() == loop.newestFrame)
         // From the API at the satellite's own zoom; never the regions' tiles.
         let requests = Self.satelliteRequests
@@ -634,6 +695,149 @@ extension CommandTests {
     }
 
 
+    /// Model rain is checked as the Mac app checks it: anything off leaves it out and
+    /// satellite rain keeps its plain tiles. Only listed blends can have it.
+    @Test func modelRainIsListedAndChecked() throws {
+        typealias F = RadarAPIFixture
+        let ids = F.satelliteSnapshots(F.now)
+        let manifest = try DreadcastRadarManifest.decode(F.json(newest: F.now, modelRain: true), now: F.now)
+        let satellite = try #require(manifest.satellite)
+        let model = try #require(satellite.modelRain)
+        #expect(model.snapshots == [ids[0]] && model.tileURL == nil && model.source.requiredCredit == nil)
+        #expect(satellite.hasModelRain(ids[0]) && !satellite.hasModelRain(ids[1]))
+
+        func block(_ change: @escaping (inout [String: Any]) -> Void) throws -> DreadcastRadarManifest.Satellite? {
+            try DreadcastRadarManifest.decode(F.json(newest: F.now, modelRain: true) { object in
+                var satellite = object["satellite"] as! [String: Any], model = satellite["model_rain"] as! [String: Any]
+                change(&model)
+                satellite["model_rain"] = model
+                object["satellite"] = satellite
+            }, now: F.now).satellite
+        }
+        for change: (inout [String: Any]) -> Void in [
+            { $0["provider"] = "ecmwf" },
+            { $0["tile_path"] = "v2/radar/satellite.png?snapshot={snapshot}&z={z}&x={x}&y={y}&model=other" },
+            { $0["mark"] = ["channel": "green", "value": 0] },
+            { $0["snapshots"] = [ids[0] + 600] },
+            { $0["snapshots"] = "soon" },
+        ] {
+            let satellite = try block(change)
+            #expect(satellite != nil && satellite?.modelRain == nil)
+        }
+        // A blend the satellite block doesn't list is never asked for.
+        #expect(try block { $0["snapshots"] = [ids[0], ids[0] + 600] }?.modelRain?.snapshots == [ids[0]])
+        // On the CDN only beside the plain set, at its own gfs path.
+        let origin = "https://\(F.tileHost)/mrms/"
+        func cdn(_ plain: String?, _ model: String) throws -> String? {
+            try DreadcastRadarManifest.decode(F.json(newest: F.now, modelRain: true) { object in
+                var satellite = object["satellite"] as! [String: Any], block = satellite["model_rain"] as! [String: Any]
+                satellite["tile_url"] = plain
+                block["tile_url"] = model
+                satellite["model_rain"] = block
+                object["satellite"] = satellite
+            }, now: F.now).satellite?.modelRain?.tileURL
+        }
+        let gfs = origin + "satellite/{snapshot}/gfs/{z}/{x}/{y}.png"
+        #expect(try cdn(origin + "satellite/{snapshot}/{z}/{x}/{y}.png", gfs) == gfs)
+        #expect(try cdn(nil, gfs) == nil)
+        #expect(try cdn(origin + "satellite/{snapshot}/{z}/{x}/{y}.png", "https://elsewhere.example/mrms/satellite/{snapshot}/gfs/{z}/{x}/{y}.png") == nil)
+    }
+
+    /// In a model rain tile, a covered pixel whose blue is 0 is the model's; every other
+    /// one repeats red. Plain tiles are never read for the mark.
+    @Test func modelRainTilesMarkTheirPixels() {
+        let pixels: [UInt8] = [67, 67, 0, 255, 67, 67, 67, 255, 12, 12, 0, 255, 70, 70, 0, 0]
+        let image = RGBAImage(width: 2, height: 2, pixels: pixels)
+        let marked = RadarTileDecoder.decodeSatelliteTile(image, modelRain: true)
+        #expect(marked.dbz == [35, 35, ReflectivityField.none, RadarTileDecoder.uncovered])
+        #expect(marked.model == [true, false, false, false])
+        #expect(RadarTileDecoder.decodeSatelliteTile(image).model == nil)
+    }
+
+    /// Where the API has model rain, the radar shows it as the app does by default, asks
+    /// for it only for the blends that have it, and calls it a forecast. `model-rain off`
+    /// keeps the plain tiles.
+    @Test func modelRainShowsAsAForecast() async throws {
+        typealias F = RadarAPIFixture
+        let env = try await Self.home(location: "35.68,139.69")
+        defer { StubProvider.lock.withLock { StubProvider.tileBody = nil; StubProvider.binaries = [:] } }
+        let newest = Date()
+        let ids = F.satelliteSnapshots(newest)
+        let viewport = RadarViewport(center: F.tokyo.coordinate, rangeMiles: 35, width: 40, height: 30)
+        Self.serveRadar(F.json(newest: newest, modelRain: true), tile: nil)
+        Self.serveSatellite(F.modelRainTile(dbz: 35, model: true))
+
+        let loop = try await Self.radarContext(env).radarLoop(for: F.tokyo, viewport: viewport, frames: 2)
+        #expect(loop.credit == "Dreadcast Radar · model rain, a forecast · satellite estimates")
+        let shown = try #require(loop.fields.last)
+        #expect(shown.value(x: 20, y: 15) == 35 && shown.hasModelRain && shown.modeled?[15 * 40 + 20] == true)
+        // The older blend has none, so it keeps its plain tiles and isn't read for the mark.
+        #expect(loop.fields.first?.hasModelRain == false)
+        let queries = Self.satelliteRequests.compactMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems }
+        let model = queries.filter { $0.contains(URLQueryItem(name: "model", value: "gfs")) }
+        #expect(!model.isEmpty && model.allSatisfy { $0.first { $0.name == "snapshot" }?.value == String(ids[0]) })
+        #expect(queries.contains { $0.first { $0.name == "snapshot" }?.value == String(ids[1]) && !$0.contains { $0.name == "model" } })
+
+        // Off: no model rain tiles, and the plain tiles' blue isn't read as a mark.
+        let fresh = try await Self.home(location: "35.68,139.69")
+        #expect(try await Self.run(["config", "set", "model-rain", "off", "--plain"], environment: fresh).code == .ok)
+        Self.serveRadar(F.json(newest: newest, modelRain: true), tile: nil)
+        Self.serveSatellite(F.modelRainTile(dbz: 35, model: true))
+        let plain = try await Self.radarContext(fresh).radarLoop(for: F.tokyo, viewport: viewport, frames: 2)
+        #expect(plain.credit == "Dreadcast Radar · satellite estimates")
+        #expect(plain.fields.allSatisfy { !$0.hasModelRain && $0.value(x: 20, y: 15) == 35 })
+        #expect(!Self.satelliteRequests.isEmpty && !Self.satelliteRequests.contains { $0.query?.contains("model=") == true })
+
+        // Rain timing reads radar alone, so model rain never times rain.
+        #expect(await Self.radarContext(env).nowcast(F.tokyo).outsideCoverage)
+    }
+
+    /// With the CDN named for both sets, model rain comes from its gfs path.
+    @Test func modelRainComesFromTheCDNBesideThePlainSet() async throws {
+        typealias F = RadarAPIFixture
+        let ctx = Self.radarContext(try await Self.home(location: "35.68,139.69"))
+        defer { StubProvider.lock.withLock { StubProvider.tileBody = nil; StubProvider.binaries = [:] } }
+        let newest = Date()
+        let origin = "https://\(F.tileHost)/mrms/"
+        Self.serveRadar(F.json(newest: newest, modelRain: true) { object in
+            var satellite = object["satellite"] as! [String: Any], block = satellite["model_rain"] as! [String: Any]
+            satellite["tile_url"] = origin + "satellite/{snapshot}/{z}/{x}/{y}.png"
+            block["tile_url"] = origin + "satellite/{snapshot}/gfs/{z}/{x}/{y}.png"
+            satellite["model_rain"] = block
+            object["satellite"] = satellite
+        }, tile: F.modelRainTile(dbz: 35, model: true))
+        let viewport = RadarViewport(center: F.tokyo.coordinate, rangeMiles: 35, width: 40, height: 30)
+        let loop = try await ctx.radarLoop(for: F.tokyo, viewport: viewport, frames: 2)
+        #expect(loop.fields.last?.hasModelRain == true)
+        let paths = StubProvider.seen.compactMap(\.url).filter { $0.host == F.tileHost }.map(\.path)
+        let id = F.satelliteSnapshots(newest)[0]
+        #expect(paths.contains { $0.hasPrefix("/mrms/satellite/\(id)/gfs/") })
+        #expect(!paths.contains { $0.hasPrefix("/mrms/satellite/\(id)/6/") })
+        #expect(Self.satelliteRequests.isEmpty)
+    }
+
+    /// Striped draws model rain in faint diagonal bands, as the app's Show Striped does;
+    /// show draws it as satellite rain; radar and satellite rain never stripe.
+    @Test func stripedModelRainDrawsBands() {
+        typealias F = RadarAPIFixture
+        let viewport = RadarViewport(center: F.tokyo.coordinate, rangeMiles: 35, width: 40, height: 30)
+        let count = viewport.width * viewport.height
+        var field = ReflectivityField(width: viewport.width, height: viewport.height, time: F.now,
+                                      dbz: [Int8](repeating: 40, count: count), snow: [Bool](repeating: false, count: count))
+        field.modeled = (0..<count).map { $0 % viewport.width < viewport.width / 2 }
+        let show = RadarScene(viewport: viewport, palette: .dreadcast, minimumDBZ: 15, units: .imperial)
+        var striped = show
+        striped.modelRain = .striped
+        let base = show.base()
+        let plain = show.compose(base: base, field: field), banded = striped.compose(base: base, field: field)
+        let changed = (0..<count).filter { plain.pixels[$0] != banded.pixels[$0] }
+        #expect(!changed.isEmpty && changed.count < count / 2)
+        #expect(changed.allSatisfy { field.modeled![$0] })
+        var radar = field
+        radar.modeled = nil
+        #expect(striped.compose(base: base, field: radar).pixels == show.compose(base: base, field: radar).pixels)
+    }
+
     /// the loop is the satellite blends too.
     @Test func satelliteLoopsWhereNoRadarReachesTheView() async throws {
         typealias F = RadarAPIFixture
@@ -650,7 +854,7 @@ extension CommandTests {
 
         let loop = try await ctx.radarLoop(for: rome, viewport: viewport, frames: 2)
         #expect(loop.fields.map(\.time) == F.satelliteSnapshots(newest).reversed().map { Date(timeIntervalSince1970: Double($0)) })
-        #expect(loop.credit == "NOAA Enterprise Rain Rate (satellite estimates)")
+        #expect(loop.credit == "Dreadcast Radar · satellite estimates")
         #expect(!loop.coversPlace && !loop.delayed)
         #expect(!StubProvider.seen.contains { $0.url?.host == F.tileHost })
 
@@ -660,7 +864,7 @@ extension CommandTests {
         Self.serveRadar(F.json(newest: newest, stored: [F.tileKey(rome, viewport: viewport)], satellite: true), tile: F.tile(red: 0, green: 0))
         Self.serveSatellite(F.satelliteTile(dbz: 35))
         let gap = try await stored.radarLoop(for: rome, viewport: viewport, frames: 2)
-        #expect(gap.credit == "NOAA Enterprise Rain Rate (satellite estimates)")
+        #expect(gap.credit == "Dreadcast Radar · satellite estimates")
         #expect(StubProvider.seen.contains { $0.url?.host == F.tileHost })
     }
 
@@ -682,7 +886,7 @@ extension CommandTests {
         let loop = try await ctx.radarLoop(for: F.tokyo, viewport: viewport, frames: 8)
         #expect(loop.fields.map(\.time) == [Date(timeIntervalSince1970: Double(F.satelliteSnapshots(newest)[0]))])
         #expect(loop.fields.first?.value(x: 20, y: 15) == 35)
-        #expect(loop.credit == "NOAA Enterprise Rain Rate (satellite estimates)")
+        #expect(loop.credit == "Dreadcast Radar · satellite estimates")
     }
 
     /// Inside a region's bounds but outside its radars, as in Italy for Europe: estimates
@@ -702,7 +906,7 @@ extension CommandTests {
         // The region's covered tiles keep their radar, here no echo.
         let radar = (0..<newest.height).flatMap { y in (0..<newest.width).map { (x: $0, y: y) } }.filter { newest.hasRadar(x: $0.x, y: $0.y) }
         #expect(!radar.isEmpty && radar.allSatisfy { newest.value(x: $0.x, y: $0.y) == nil })
-        #expect(loop.credit.hasPrefix("EUMETNET OPERA (CC BY 4.0, resampled) · NOAA Enterprise Rain Rate, "))
+        #expect(loop.credit.hasPrefix("Dreadcast Radar · \(F.operaCredit) · satellite estimates, "))
         // Rain timing uses radar only, so it doesn't time London's rain from the estimates.
         let nowcast = await ctx.nowcast(F.london)
         #expect(nowcast.outsideCoverage && nowcast.value == nil)
@@ -719,7 +923,7 @@ extension CommandTests {
         Self.serveSatellite(nil, status: 204)
         let dry = try await ctx.radarLoop(for: F.tokyo, viewport: viewport, frames: 2)
         #expect(dry.fields.last?.isCovered(x: 20, y: 15) == true && dry.fields.last?.value(x: 20, y: 15) == nil)
-        #expect(dry.credit == "NOAA Enterprise Rain Rate (satellite estimates)")
+        #expect(dry.credit == "Dreadcast Radar · satellite estimates")
 
         // Fresh caches, since the dry tiles and the manifest are kept.
         let fresh = Self.radarContext(try await Self.home(location: "35.68,139.69"))
@@ -733,7 +937,7 @@ extension CommandTests {
         Self.serveSatellite(nil, status: 500)
         let alone = try await london.radarLoop(for: F.london, viewport: view, frames: 2)
         #expect(alone.fields.last?.isCovered(x: 20, y: 15) == false)
-        #expect(alone.credit == "EUMETNET OPERA (CC BY 4.0, resampled)")
+        #expect(alone.credit == "Dreadcast Radar · " + F.operaCredit)
     }
 
     /// Rain timing names the radar it came from everywhere it's shown: the eta header and
@@ -754,19 +958,19 @@ extension CommandTests {
 
         let pretty = try await Self.run(["eta", "--pretty"], environment: env, routes: routes)
         #expect(pretty.code == .ok)
-        #expect(pretty.out.contains("NOAA MRMS"))
+        #expect(pretty.out.contains("Dreadcast Radar") && !pretty.out.contains("NOAA MRMS"))
         #expect(!pretty.out.uppercased().contains("RAINVIEWER"))
         let eta = try Self.json(try await Self.run(["eta", "--json"], environment: env, routes: routes).out)
         #expect(eta["source"] as? String == "dreadcast")
-        #expect(eta["credit"] as? String == "NOAA MRMS")
+        #expect(eta["credit"] as? String == "Dreadcast Radar")
 
         let quick = try await Self.run(["now", "--pretty"], environment: env, routes: routes)
-        #expect(quick.out.contains("NOAA MRMS"))
+        #expect(quick.out.contains("DREADCAST RADAR") && !quick.out.contains("NOAA MRMS"))
         #expect(!quick.out.uppercased().contains("RAINVIEWER"))
         let now_ = try Self.json(try await Self.run(["now", "--json"], environment: env, routes: routes).out)
         let nowcast = try #require(now_["nowcast"] as? [String: Any])
         #expect(nowcast["source"] as? String == "dreadcast")
-        #expect(nowcast["credit"] as? String == "NOAA MRMS")
+        #expect(nowcast["credit"] as? String == "Dreadcast Radar")
         // Timing reads radar alone, never satellite estimates.
         #expect(Self.satelliteRequests.isEmpty)
     }
@@ -841,8 +1045,17 @@ extension CommandTests {
         let config = try Self.json(try await Self.run(["config", "--json"], environment: env).out)
         #expect(config["apiURL"] as? String == "https://api.dreadcast.app")
         #expect(config["radarSource"] == nil)
+        // Model rain shows by default, as in the app, and can be striped or turned off.
+        #expect(config["modelRain"] as? String == "show")
+        #expect(try await Self.run(["config", "set", "model-rain", "striped", "--plain"], environment: env).code == .ok)
+        #expect(try Self.json(try await Self.run(["config", "--json"], environment: env).out)["modelRain"] as? String == "striped")
+        #expect(try await Self.run(["config", "--plain"], environment: env).out.contains("Model rain striped"))
+        let wrong = try await Self.run(["config", "set", "model-rain", "maybe", "--plain"], environment: env)
+        #expect(wrong.code == .usage && wrong.err.contains("show, striped or off"))
         let credits = try await Self.run(["credits", "--plain"], environment: env).out
-        #expect(credits.contains("NOAA MRMS") && credits.contains("NOAA Enterprise Rain Rate"))
+        // As the app's Data Credits: NOAA's data is public domain and modified, never
+        // presented as NOAA's own, and satellite rain carries EUMETSAT's notice.
+        #expect(credits.contains("Public domain, modified by Dreadcast") && credits.contains("modified EUMETSAT Meteosat data"))
         #expect(credits.contains("EUMETNET OPERA") && credits.contains("creativecommons.org/licenses/by/4.0"))
         #expect(!credits.uppercased().contains("RAINVIEWER"))
     }

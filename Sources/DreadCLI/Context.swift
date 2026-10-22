@@ -296,7 +296,8 @@ public final class Context: @unchecked Sendable {
 
     public func dreadcastRadar(_ api: URL) async -> Fetched<DreadcastRadarManifest> {
         let http = self.http, now = self.now
-        return await load(key: "dreadcast-radar-v3-\(api.host ?? "api")", maxAge: 60, staleLimit: 7200) {
+        // Version 4 keeps each source's credit and the model rain block.
+        return await load(key: "dreadcast-radar-v4-\(api.host ?? "api")", maxAge: 60, staleLimit: 7200) {
             try await DreadcastRadarService(http: http, baseURL: api).latest(now: now)
         }
     }
@@ -304,10 +305,11 @@ public final class Context: @unchecked Sendable {
     /// A radar loop and where it came from.
     public struct RadarLoop: Sendable {
         public let fields: [ReflectivityField]
-        /// Whom to credit, such as "NOAA MRMS". It names a license that asks for it, as
-        /// in "EUMETNET OPERA (CC BY 4.0, resampled)", and the satellite blend's time
-        /// when its estimates fill in beside radar, as in "NOAA Enterprise Rain Rate,
-        /// 11:20 PM".
+        /// Whom to credit: "Dreadcast Radar", then any credit a source in view requires,
+        /// as in "Dreadcast Radar · EUMETNET OPERA (CC BY 4.0), modified". It says when
+        /// satellite estimates fill in beside radar, with the blend's time, as in
+        /// "satellite estimates, 11:20 PM", and calls model rain in view "model rain, a
+        /// forecast".
         public let credit: String
         /// The place's radar is late; show the loop with its age.
         public let delayed: Bool
@@ -332,14 +334,29 @@ public final class Context: @unchecked Sendable {
             throw DreadcastError.unavailable(fetched.error ?? "Radar is unavailable right now")
         }
         let loader = RadarLoader(http: http, store: tiles)
+        let modelRain = satellite && self.modelRain != .off
+        // The radar is Dreadcast's: its sources are credited beside it only where their
+        // terms require it, and model rain is always called a forecast. What matters most
+        // comes first, as a narrow footer cuts from the end.
+        func credit(_ required: [String], fields: [ReflectivityField], estimates: String) -> String {
+            var parts = [manifest.brand] + required
+            if fields.contains(where: { $0.estimatedAt != nil }) {
+                for extra in [manifest.satellite?.source.requiredCredit, manifest.satellite?.modelRain?.source.requiredCredit] {
+                    if let extra, !parts.contains(extra) { parts.append(extra) }
+                }
+            }
+            if fields.contains(where: \.hasModelRain) { parts.append(Self.modelRainLabel) }
+            if !estimates.isEmpty { parts.append(estimates) }
+            return parts.joined(separator: " · ")
+        }
         func satelliteLoop() async throws -> RadarLoop? {
             guard satellite, let estimates = manifest.satellite else { return nil }
             let snapshots = Self.pick(estimates.snapshots.reversed(), time: \.observedAt, count: count, spacing: spacing)
-            let fields = await loader.fields(satellite: estimates, snapshots: snapshots, api: api, viewport: viewport)
+            let fields = await loader.fields(satellite: estimates, snapshots: snapshots, api: api, viewport: viewport, modelRain: modelRain)
             guard !fields.isEmpty else {
                 throw DreadcastError.unavailable("Satellite rain estimates are unavailable right now")
             }
-            return RadarLoop(fields: fields, credit: "\(estimates.source.credit) (satellite estimates)", delayed: false,
+            return RadarLoop(fields: fields, credit: credit([], fields: fields, estimates: "satellite estimates"), delayed: false,
                              newestFrame: Self.identity(manifest), coversPlace: false)
         }
         // No region lists a tile in view, so nothing needs loading to know.
@@ -354,14 +371,15 @@ public final class Context: @unchecked Sendable {
         // The newest frame first: without satellite estimates the loop is for rain timing,
         // which needs radar at the place, and without it the rest needn't load.
         guard let last = frames.last,
-              let newest = try? await loader.field(dreadcast: manifest, frame: last, viewport: viewport, satellite: satellite ? api : nil) else {
+              let newest = try? await loader.field(dreadcast: manifest, frame: last, viewport: viewport, satellite: satellite ? api : nil,
+                                                   modelRain: modelRain) else {
             throw DreadcastError.unavailable("Radar frames are unavailable right now")
         }
         if !satellite, region == nil || !newest.hasRadar(x: center.x, y: center.y) {
             return RadarLoop(fields: [newest], credit: "No radar here", delayed: false, newestFrame: Self.identity(manifest), coversPlace: false)
         }
         let fields = await loader.fields(dreadcast: manifest, frames: frames.dropLast(), viewport: viewport,
-                                         satellite: satellite ? api : nil) + [newest]
+                                         satellite: satellite ? api : nil, modelRain: modelRain) + [newest]
         guard fields.count >= min(2, count) else {
             throw DreadcastError.unavailable("Radar frames are unavailable right now")
         }
@@ -371,14 +389,15 @@ public final class Context: @unchecked Sendable {
             return loop
         }
         let box = viewport.boundingBox
-        var credits = manifest.credits(south: box.south, north: box.north, west: box.west, east: box.east)
+        let credits = manifest.credits(south: box.south, north: box.north, west: box.west, east: box.east)
+        var estimates = ""
         if let estimated = newest.estimatedAt ?? fields.compactMap(\.estimatedAt).last {
             let zone = timeZone(for: place)
-            let time = Formatter(units: units, timeZone: zone).time(estimated)
-            credits.append("\(manifest.satellite?.source.credit ?? "NOAA"), \(time)")
+            estimates = "satellite estimates, " + Formatter(units: units, timeZone: zone).time(estimated)
         }
         let covers = region != nil && newest.hasRadar(x: center.x, y: center.y)
-        return RadarLoop(fields: fields, credit: credits.isEmpty ? "No radar here" : credits.joined(separator: " · "),
+        let shown = fields.contains { $0.hasAnyRadar || $0.estimatedAt != nil }
+        return RadarLoop(fields: fields, credit: shown ? credit(credits, fields: fields, estimates: estimates) : "No radar here",
                          delayed: region?.isDelayed(at: now) ?? false, newestFrame: Self.identity(manifest),
                          coversPlace: covers)
     }
@@ -421,6 +440,10 @@ public final class Context: @unchecked Sendable {
         }
         return chosen.reversed()
     }
+
+    /// What the radar's line calls model rain wherever it shows: a forecast, not an
+    /// observation (dreadcast-server `docs/API.md#model-rain`).
+    public static let modelRainLabel = "model rain, a forecast"
 
     public static let nowcastViewportSize = 160
     public static let nowcastRangeMiles = 100.0

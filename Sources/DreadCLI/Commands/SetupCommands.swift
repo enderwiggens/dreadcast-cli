@@ -36,7 +36,7 @@ func radarSummary(_ ctx: Context) -> String {
     guard let api = ctx.dreadcastAPI else {
         return "None" + s.paint("  (api-url off)", Theme.faint)
     }
-    return "The Dreadcast API: radar in the US and Europe, NOAA satellite estimates elsewhere"
+    return "Dreadcast Radar: radar in the US and Europe, satellite estimates elsewhere"
         + s.paint("  (\(api.host ?? api.absoluteString))", Theme.faint)
 }
 
@@ -188,6 +188,9 @@ enum ConfigCommand {
             case "forecast":
                 guard let row = ForecastRow.named(value) else { return ctx.fail("forecast: days, hourly or off.", code: .usage) }
                 config.forecast = row.rawValue
+            case "model-rain":
+                guard let mode = ModelRainMode.named(value) else { return ctx.fail("model-rain: show, striped or off.", code: .usage) }
+                config.modelRain = mode.rawValue
             case "radar-source":
                 return ctx.fail("radar-source is gone: radar always comes from the Dreadcast API, with NOAA satellite estimates where no radar reaches.", code: .usage)
             case "api-url":
@@ -253,6 +256,7 @@ enum ConfigCommand {
             "  " + s.paint("Map", Theme.mist) + "        " + ((MapChoice.named(c.map) ?? .theme) == .theme ? "theme" + s.paint("  (follows the scene)", Theme.faint) : "graphite"),
             "  " + s.paint("Forecast", Theme.mist) + "   " + (ForecastRow.named(c.forecast) ?? .days).rawValue + s.paint("  (beside the radar's timeline)", Theme.faint),
             "  " + s.paint("Radar", Theme.mist) + "      " + radarSummary(ctx),
+            "  " + s.paint("Model rain", Theme.mist) + " " + ctx.modelRain.rawValue + s.paint("  (where the satellites see no rain; a forecast)", Theme.faint),
             "  " + s.paint("API token", Theme.mist) + "  " + installTokenSummary(ctx),
             "  " + s.paint("Lightning", Theme.mist) + "  " + (Credentials.source(environment: ctx.environment) ?? "not configured"),
             "",
@@ -274,11 +278,13 @@ enum CreditsCommand {
             ("Dreadcast API", "Dreadcast’s own weather service, for weather, air quality, place search and radar.",
              "https://dreadcast.app/data.html#delivery"),
             ("Dreadcast Radar", "The Dreadcast API’s radar, built from the radar and satellite sources below.", "https://dreadcast.app/data.html#weather"),
-            ("EUMETNET OPERA", "Radar for Europe, through the Dreadcast API, which resamples it into tiles. CC BY 4.0.",
+            ("EUMETNET OPERA", "Radar for Europe, through the Dreadcast API. CC BY 4.0, modified by Dreadcast.",
              "https://www.eumetnet.eu/observations/weather-radar-network/\nhttps://creativecommons.org/licenses/by/4.0/"),
-            ("NOAA MRMS", "Radar for the US, Puerto Rico and Guam, through the Dreadcast API. Public domain.", "https://www.nssl.noaa.gov/projects/mrms/"),
-            ("NOAA Enterprise Rain Rate", "Satellite rain estimates where no radar reaches, through the Dreadcast API. Public domain.",
-             "https://www.ospo.noaa.gov/products/atmosphere/err/"),
+            // Public domain, but never presented as NOAA's own unaltered data.
+            ("NOAA", "Radar, satellite rain and model data, through the Dreadcast API. Public domain, modified by Dreadcast.",
+             "https://www.noaa.gov/"),
+            ("EUMETSAT", "Satellite rain contains modified EUMETSAT Meteosat data.",
+             "https://user.eumetsat.int/resources/user-guides/data-registration-and-licensing"),
             ("Open-Meteo", "Weather, air quality and place search, through the Dreadcast API. CC BY 4.0.", "https://open-meteo.com/"),
             ("Copernicus Atmosphere Monitoring Service", "Air quality and dust, through Open-Meteo. Generated using CAMS information.",
              "https://atmosphere.copernicus.eu/"),

@@ -97,8 +97,9 @@ more than one certificate has that name. Then, with the notarization key’s val
       `dread radar`
 - [ ] Manual check on a Linux machine: `dread`, `dread now`, `dread radar --still`
 - [ ] Radar from the Dreadcast API: `curl -fsS https://api.dreadcast.app/v2/radar/latest`
-      answers, `dread radar` at a US location credits NOAA MRMS, and in London credits
-      EUMETNET OPERA with its license
+      answers, `dread radar` at a US location credits Dreadcast Radar alone, in London
+      adds EUMETNET OPERA's credit, and far from radar (Tokyo, Buenos Aires) labels model
+      rain "a forecast" when it shows
 - [ ] The repository URL in the User-Agent resolves
 - [ ] Release has six files and notes; the formula is updated and `brew test` passes
 - [ ] The macOS binary is notarized:

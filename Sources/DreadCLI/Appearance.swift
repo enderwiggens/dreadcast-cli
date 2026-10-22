@@ -106,6 +106,19 @@ enum MapChoice: String, CaseIterable, Sendable {
 }
 
 /// What sits beside the radar's timeline on the Radar tab, like the app's header forecast.
+/// Where NOAA's satellites see no rain, 28 degrees and more from the equator, the radar
+/// can add model rain (dreadcast-server `docs/API.md#model-rain`): drawn like satellite
+/// rain, striped so it stands apart, or not at all, as the app's Settings → Radar →
+/// Model Rain offers. Wherever it shows, the radar's line calls it model rain, a forecast.
+enum ModelRainMode: String, CaseIterable, Sendable {
+    case show, striped, off
+
+    static func named(_ name: String) -> ModelRainMode? {
+        let key = name.lowercased()
+        return ModelRainMode(rawValue: key) ?? (["stripes", "show-striped"].contains(key) ? .striped : ["on"].contains(key) ? .show : nil)
+    }
+}
+
 enum ForecastRow: String, CaseIterable, Sendable {
     case days, hourly, off
 
@@ -124,4 +137,7 @@ extension Context {
 
     /// The radar's basemap colors.
     var mapStyle: MapStyle { MapChoice.named(config.map) == .graphite ? .graphite : .theme(themeScene) }
+
+    /// Whether and how the radar shows model rain.
+    var modelRain: ModelRainMode { ModelRainMode.named(config.modelRain) ?? .show }
 }

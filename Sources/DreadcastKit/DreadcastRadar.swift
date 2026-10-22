@@ -14,17 +14,32 @@ public struct DreadcastRadarManifest: Codable, Sendable {
         public var tileCount: Int { (xMax - xMin + 1) * (yMax - yMin + 1) }
     }
 
-    /// Who to credit for a region's radar.
+    /// Where a region's radar, or satellite rain, comes from, and whether its credit is
+    /// required (dreadcast-server `docs/API.md#credits`).
     public struct Source: Codable, Sendable, Equatable {
         public let name: String
         /// Such as "CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)".
         public let license: String?
+        /// `required` or `courtesy`; nil from a server older than credits.
+        public var attribution: String? = nil
+        /// The credit a required source asks for, such as "EUMETNET OPERA (CC BY 4.0), modified".
+        public var credit: String? = nil
+        /// A statement the source's terms ask for, such as "Contains modified EUMETSAT
+        /// Meteosat data".
+        public var notice: String? = nil
 
-        /// The credit to show with the radar. A license other than the public domain is
-        /// named, with a note that the data was changed: Dreadcast resamples it into tiles.
-        public var credit: String {
-            guard let license, !license.lowercased().hasPrefix("public domain") else { return name }
-            return "\(name) (\(license.components(separatedBy: " (")[0]), resampled)"
+        /// The source's own credit beside the radar's, or nil when it needs none. The radar
+        /// is Dreadcast's, so NOAA's public domain data (`courtesy`) is never credited as
+        /// NOAA's on the map. A server older than `attribution` is credited as before: a
+        /// license other than the public domain is named, with a note that the data changed.
+        public var requiredCredit: String? {
+            switch attribution {
+            case "required": return credit ?? name
+            case "courtesy": return nil
+            default:
+                guard let license, !license.lowercased().hasPrefix("public domain") else { return nil }
+                return "\(name) (\(license.components(separatedBy: " (")[0]), resampled)"
+            }
         }
     }
 
@@ -126,6 +141,32 @@ public struct DreadcastRadarManifest: Codable, Sendable {
         /// The CDN has tiles only for rows that reach between 70°N and 60°S.
         public static let northernmost = 70.0, southernmost = -60.0
 
+        /// Model rain where the satellites see none, 28 degrees and more from the equator
+        /// (`satellite.model_rain`; dreadcast-server `docs/API.md#model-rain`): a second set
+        /// of tiles for the snapshots it lists, its own pixels marked with blue 0. It is a
+        /// forecast, not an observation, so wherever it shows it is called model rain.
+        public var modelRain: ModelRain? = nil
+
+        public struct ModelRain: Codable, Sendable, Equatable {
+            public static let tilePath = Satellite.tilePath + "&model=gfs"
+            /// The snapshots whose tiles have model rain; the others have only their plain ones.
+            public let snapshots: Set<Int>
+            public let source: Source
+            /// The second set on the radar CDN, beside the plain set's; nil keeps the API.
+            public var tileURL: String? = nil
+        }
+
+        /// The CDN's model rain tile, or nil to ask the API.
+        func modelCDNURL(snapshot: Int, z: Int, x: Int, y: Int) -> URL? {
+            guard let template = modelRain?.tileURL else { return nil }
+            return URL(string: template.replacingOccurrences(of: "{snapshot}", with: "\(snapshot)")
+                .replacingOccurrences(of: "{z}", with: "\(z)").replacingOccurrences(of: "{x}", with: "\(x)")
+                .replacingOccurrences(of: "{y}", with: "\(y)"))
+        }
+
+        /// Whether a snapshot's tiles have model rain to ask for.
+        public func hasModelRain(_ snapshot: Int) -> Bool { modelRain?.snapshots.contains(snapshot) ?? false }
+
         /// The CDN's tile, or nil to ask the API.
         func cdnURL(snapshot: Int, z: Int, x: Int, y: Int) -> URL? {
             guard let tileURL else { return nil }
@@ -157,6 +198,10 @@ public struct DreadcastRadarManifest: Codable, Sendable {
     public let fetchedAt: Date
     /// Satellite rain where no region reaches; nil when the API has none to offer.
     public let satellite: Satellite?
+    /// What to call the radar: "Dreadcast Radar" (`brand.name`). It is built from the
+    /// sources and changes their data, so it is credited as Dreadcast's.
+    public let brand: String
+    public static let defaultBrand = "Dreadcast Radar"
 
     /// The satellite blend a frame shows: the one the server pairs with it, or for the
     /// newest frames, which NOAA hasn't covered yet, the newest blend up to the frame's
@@ -184,7 +229,7 @@ public struct DreadcastRadarManifest: Codable, Sendable {
             guard let newest = scans.values.map(\.observedAt).max(), newest > frames.last?.observedAt ?? .distantPast else { continue }
             frames.append(Frame(id: Self.frameID(prefix: "radar", for: newest), observedAt: newest, scans: scans, satellite: frame.satellite))
         }
-        return frames.isEmpty ? nil : DreadcastRadarManifest(regions: kept, frames: frames, fetchedAt: fetchedAt, satellite: satellite)
+        return frames.isEmpty ? nil : DreadcastRadarManifest(regions: kept, frames: frames, fetchedAt: fetchedAt, satellite: satellite, brand: brand)
     }
 
     /// The region a place's radar is timed by: the first around it, in drawing order,
@@ -207,16 +252,18 @@ public struct DreadcastRadarManifest: Codable, Sendable {
         return result
     }
 
-    /// Whom to credit for a view: the sources of the regions with radar in the newest
-    /// frame whose bounds meet the box, in drawing order, once each.
+    /// The credits a view needs beside the radar's own: those the sources of the regions
+    /// with radar in the newest frame whose bounds meet the box require, in drawing order,
+    /// once each. Europe's OPERA asks for one; NOAA's public domain radar doesn't.
     public func credits(south: Double, north: Double, west: Double, east: Double) -> [String] {
         guard let newest = frames.last else { return [] }
         var credits: [String] = []
         for region in regions where newest.scans[region.id] != nil {
             let b = region.bounds
             let longitudes = west <= east ? (b[0] <= east && b[2] >= west) : (b[2] >= west || b[0] <= east)
-            guard longitudes, b[1] <= north, b[3] >= south, !credits.contains(region.source.credit) else { continue }
-            credits.append(region.source.credit)
+            guard longitudes, b[1] <= north, b[3] >= south, let credit = region.source.requiredCredit,
+                  !credits.contains(credit) else { continue }
+            credits.append(credit)
         }
         return credits
     }
@@ -284,7 +331,14 @@ public struct DreadcastRadarManifest: Codable, Sendable {
 
     private struct Wire: Decodable {
         struct Level: Decodable { let z: Int; let x: [Int]; let y: [Int] }
-        struct Source: Decodable { let name: String; let license: String? }
+        struct Source: Decodable {
+            let name: String
+            let license: String?
+            let attribution: String?
+            let credit: String?
+            let notice: String?
+        }
+        struct Brand: Decodable { let name: String }
         struct Region: Decodable {
             let id: String
             let name: String
@@ -320,6 +374,16 @@ public struct DreadcastRadarManifest: Codable, Sendable {
             let tilePath: String
             let tileUrl: String?
             let snapshots: [Snapshot]
+            let modelRain: Lenient<ModelRain>?
+        }
+        struct ModelRain: Decodable {
+            struct Mark: Decodable { let channel: String; let value: Int }
+            let provider: String
+            let source: Source?
+            let tilePath: String
+            let tileUrl: String?
+            let mark: Mark
+            let snapshots: [Int]
         }
         let status: String
         let newestObservedAt: String
@@ -328,13 +392,23 @@ public struct DreadcastRadarManifest: Codable, Sendable {
         let regions: [Region]
         let frames: [Frame]
         let satellite: Lenient<Satellite>?
+        let brand: Lenient<Brand>?
     }
 
-    private init(regions: [Region], frames: [Frame], fetchedAt: Date, satellite: Satellite?) {
+    private init(regions: [Region], frames: [Frame], fetchedAt: Date, satellite: Satellite?, brand: String) {
         self.regions = regions
         self.frames = frames
         self.fetchedAt = fetchedAt
         self.satellite = satellite
+        self.brand = brand
+    }
+
+    /// A source as the terminal may show it, or nil when any of its text doesn't fit.
+    private static func source(_ wire: Wire.Source) -> Source? {
+        guard isDisplayable(wire.name, limit: 64), wire.license.map({ isDisplayable($0, limit: 200) }) ?? true,
+              wire.credit.map({ isDisplayable($0, limit: 160) }) ?? true,
+              wire.notice.map({ isDisplayable($0, limit: 160) }) ?? true else { return nil }
+        return Source(name: wire.name, license: wire.license, attribution: wire.attribution, credit: wire.credit, notice: wire.notice)
     }
 
     /// The satellite block, checked as the Mac app checks it, or nil when anything about
@@ -350,17 +424,33 @@ public struct DreadcastRadarManifest: Codable, Sendable {
                   snapshots.last.map({ $0.id > snapshot.id }) ?? true else { return nil }
             snapshots.append(Satellite.Snapshot(id: snapshot.id, observedAt: observed))
         }
-        let source = wire.source.flatMap { source -> Source? in
-            guard isDisplayable(source.name, limit: 64), source.license.map({ isDisplayable($0, limit: 200) }) ?? true else { return nil }
-            return Source(name: source.name, license: source.license)
-        } ?? Source(name: "NOAA Enterprise Rain Rate", license: nil)
+        let source = wire.source.flatMap(Self.source) ?? Source(name: "NOAA Enterprise Rain Rate", license: nil, attribution: "courtesy")
         var satellite = Satellite(snapshots: snapshots, maximumZoom: wire.maxZoom, source: source)
         // As the Mac app takes it: exactly this path under the radar tiles' origin, which
         // has already passed the host checks. Anything else keeps the API.
         if let origin, let cdn = wire.tileUrl, cdn == origin + "satellite/{snapshot}/{z}/{x}/{y}.png" {
             satellite.tileURL = cdn
         }
+        satellite.modelRain = modelRain(wire.modelRain?.value, satellite: satellite, origin: origin)
         return satellite
+    }
+
+    /// The model rain block, checked as the Mac app checks it, or nil when anything about
+    /// it doesn't: satellite rain then keeps its plain tiles.
+    private static func modelRain(_ wire: Wire.ModelRain?, satellite: Satellite, origin: String?) -> Satellite.ModelRain? {
+        guard let wire, wire.provider == "noaa-gfs", wire.tilePath == Satellite.ModelRain.tilePath,
+              wire.mark.channel == "blue", wire.mark.value == 0 else { return nil }
+        // Only snapshots the satellite block lists can be asked for.
+        let listed = Set(satellite.snapshots.map(\.id))
+        let snapshots = Set(wire.snapshots).intersection(listed)
+        guard !snapshots.isEmpty else { return nil }
+        let source = wire.source.flatMap(Self.source) ?? Source(name: "NOAA GFS", license: nil, attribution: "courtesy")
+        var model = Satellite.ModelRain(snapshots: snapshots, source: source)
+        // On the CDN only beside the plain set, at exactly its `gfs` path.
+        if satellite.tileURL != nil, let origin, let cdn = wire.tileUrl, cdn == origin + "satellite/{snapshot}/gfs/{z}/{x}/{y}.png" {
+            model.tileURL = cdn
+        }
+        return model
     }
 
     public static func decode(_ data: Data, now: Date, allowLoopback: Bool = false) throws -> DreadcastRadarManifest {
@@ -396,7 +486,7 @@ public struct DreadcastRadarManifest: Codable, Sendable {
                 try check(60 <= delay && TimeInterval(delay) < unusableAfter, "delay")
             }
             if let source = region.source {
-                try check(isDisplayable(source.name, limit: 64) && source.license.map { isDisplayable($0, limit: 200) } ?? true, "source")
+                try check(Self.source(source) != nil, "source")
             }
             try check((0...maximumZoom).contains(region.minZoom) && region.maxZoom == maximumZoom, "zoom range")
             var levels: [Level] = []
@@ -413,7 +503,7 @@ public struct DreadcastRadarManifest: Codable, Sendable {
                                   newestObservedAt: try date(region.newestObservedAt, "region time"),
                                   delayedAfter: region.delayedAfterSeconds.map(TimeInterval.init) ?? delayedAfter,
                                   delayedByServer: region.status == "delayed",
-                                  source: region.source.map { Source(name: $0.name, license: $0.license) } ?? Source(name: "Dreadcast", license: nil)))
+                                  source: region.source.flatMap(Self.source) ?? Source(name: "Dreadcast", license: nil)))
         }
 
         // An hour is 15 frames; the app's longest loops are 16.
@@ -461,7 +551,8 @@ public struct DreadcastRadarManifest: Codable, Sendable {
             if let id = frame.satellite, !listed.contains(id) { frame.satellite = nil }
             return frame
         }
-        return DreadcastRadarManifest(regions: regions, frames: frames, fetchedAt: now, satellite: satellite)
+        let brand = wire.brand?.value.map(\.name).flatMap { isDisplayable($0, limit: 64) ? $0 : nil } ?? defaultBrand
+        return DreadcastRadarManifest(regions: regions, frames: frames, fetchedAt: now, satellite: satellite, brand: brand)
     }
 }
 

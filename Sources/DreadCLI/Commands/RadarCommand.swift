@@ -46,7 +46,7 @@ enum RadarCommand {
         func load(range: Double) async -> (RadarScene, Raster, [Raster], [Date]) {
             let viewport = RadarViewport(center: place.coordinate, rangeMiles: range, width: layout.pixelWidth, height: layout.pixelHeight)
             let scene = RadarScene(viewport: viewport, palette: palette, minimumDBZ: minimumDBZ, units: ctx.units,
-                                   style: ctx.mapStyle, highlight: ctx.highlight)
+                                   style: ctx.mapStyle, highlight: ctx.highlight, modelRain: ctx.modelRain)
             let base = scene.base()
             do {
                 let loop = try await ctx.radarLoop(for: place, viewport: viewport, frames: frameCount, spread: true)
@@ -243,7 +243,11 @@ enum RadarCommand {
         for line in ["\(credit) · Natural Earth · \(age)", "\(credit) · \(age)", "\(credit) · \(short)"] where TextWidth.of(line) <= width {
             return line
         }
-        return TextWidth.truncate(credit, to: max(1, width - TextWidth.of(short) - 3)) + " · " + short
+        // The radar's own name, first, goes before any credit a source requires, or the
+        // label that calls model rain a forecast.
+        let parts = credit.components(separatedBy: " · ")
+        let rest = parts.count > 1 ? parts.dropFirst().joined(separator: " · ") : credit
+        return TextWidth.truncate(rest, to: max(1, width - TextWidth.of(short) - 3)) + " · " + short
     }
 
     struct LoopState {
@@ -313,7 +317,8 @@ struct RadarJSON: Encodable {
     let location: LocationJSON
     /// `dreadcast`: radar comes from the Dreadcast API.
     let source: String
-    /// Whom to credit, such as "NOAA MRMS" or "EUMETNET OPERA (CC BY 4.0, resampled)".
+    /// Whom to credit: "Dreadcast Radar", with any credit a source requires, as in
+    /// "Dreadcast Radar · EUMETNET OPERA (CC BY 4.0), modified".
     let credit: String
     let frames: [Date]
     let raining: Bool
@@ -366,13 +371,14 @@ struct StormCellJSON: Encodable {
 }
 
 extension Nowcast {
-    /// Whom to credit for the radar behind it, such as "NOAA MRMS" or "EUMETNET OPERA
-    /// (CC BY 4.0, resampled)". Every place that names the source uses this.
-    var radarCredit: String { source ?? "Dreadcast radar" }
+    /// Whom to credit for the radar behind it: "Dreadcast Radar", with any credit a
+    /// source requires, as in "Dreadcast Radar · EUMETNET OPERA (CC BY 4.0), modified".
+    /// Every place that names the source uses this.
+    var radarCredit: String { source ?? DreadcastRadarManifest.defaultBrand }
 
-    /// The credit without its license note, for headers short on room: "EUMETNET OPERA".
-    /// The full credit still appears with the output.
-    var radarName: String { radarCredit.components(separatedBy: " (")[0] }
+    /// The radar's name alone, for headers short on room: "Dreadcast Radar". The full
+    /// credit still appears with the output.
+    var radarName: String { radarCredit.components(separatedBy: " · ")[0] }
 
     /// `dreadcast`, for JSON: rain timing comes from the Dreadcast API's radar.
     var radarSourceID: String { "dreadcast" }
