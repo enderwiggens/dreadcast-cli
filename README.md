@@ -23,9 +23,9 @@ dread           # live radar and conditions
 `dread` puts live radar in your terminal, with the weather around it: animated radar
 centered on you, current conditions and the next two hours above it, every active
 warning in full, and a window that keeps itself up to date. It’s the open-source
-companion to **Dreadcast: Weather Radar & Forecasts** for Mac and is laid out the same way, a
-calm instrument panel with the radar first. It doesn’t need the app or an account, and
-it runs on macOS and Linux.
+companion to **Dreadcast: Weather Radar & Forecasts**, the app for iPhone, iPad and
+Mac, and is laid out the same way, a calm instrument panel with the radar first. It
+doesn’t need the app or an account, and it runs on macOS and Linux.
 
 ## Highlights
 
@@ -260,7 +260,7 @@ each shows its sunset through the day and its night version from 8 PM, when the 
 situation arrives. Your scene fills the Scene tab (7) and `dread scene`, and heads the
 `dread now` printout whenever no alert is active; when one is, it steps aside.
 
-As in the Mac app, a scene is a whole theme: it brings its own highlight color and its
+As in the app, a scene is a whole theme: it brings its own highlight color and its
 own map colors under the radar. Asteroid Watch glows amber over a dusky purple map; UAP
 Invasion is violet over blue slate. Either can be fixed instead.
 
@@ -425,7 +425,7 @@ alerts, the severe outlook and wildfires come from US agencies, so they cover th
 United States, and the app says so instead of showing an empty list.
 
 **Do I need the Dreadcast app?**
-No. This is a separate project that shares no code with the Mac app and never needs it.
+No. This is a separate project that shares no code with the app and never needs it.
 
 **Why does the radar look blocky?**
 Terminals draw two pixels per character cell, so the app’s radar is pixel art. In Kitty,
