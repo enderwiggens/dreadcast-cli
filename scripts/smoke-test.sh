@@ -39,8 +39,9 @@ done
 [ "$(head -c 8 "$WORK/scene.png" | od -An -tx1 | tr -d ' \n')" = "89504e470d0a1a0a" ] || fail "scene --png wrote no PNG"
 "$BIN" scene uap --still --plain > /dev/null || fail "scene --still"
 
-"$BIN" credits --plain | grep -q 'NOAA MRMS' || fail "credits"
-"$BIN" credits --plain | grep -q 'NOAA Enterprise Rain Rate' || fail "credits: satellite rain"
+"$BIN" credits --plain | grep -q 'Dreadcast Radar' || fail "credits"
+"$BIN" credits --plain | grep -q 'Public domain, modified by Dreadcast' || fail "credits: NOAA"
+"$BIN" credits --plain | grep -q 'modified EUMETSAT Meteosat data' || fail "credits: satellite rain"
 
 # RainViewer is gone, and so is the setting that chose it.
 [ "$(exit_code "$BIN" config set radar-source rainviewer --plain)" -eq 2 ] || fail "radar-source should be gone"
