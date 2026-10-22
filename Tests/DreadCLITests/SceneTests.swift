@@ -187,21 +187,21 @@ struct SceneTests {
         #expect(SceneCommand.configuredScene(ctx, timeZone: .current) == .asteroid)
     }
 
-    @Test func configSetsTheSceneAndTheBanner() throws {
-        func run(_ words: [String]) throws -> (ExitCode, Config) {
+    @Test func configSetsTheSceneAndTheBanner() async throws {
+        func run(_ words: [String]) async throws -> (ExitCode, Config) {
             let ctx = try Self.context(arguments: try Arguments.parse(["config", "set"] + words))
-            let code = try ConfigCommand.run(ctx)
+            let code = try await ConfigCommand.run(ctx)
             return (code, ConfigStore.load(from: ctx.paths))
         }
-        let picked = try run(["scene", "UAP"])
+        let picked = try await run(["scene", "UAP"])
         #expect(picked.0 == .ok && picked.1.scene == "uap")
-        let daily = try run(["scene", "daily"])
+        let daily = try await run(["scene", "daily"])
         #expect(daily.1.scene == "daily")
-        let hidden = try run(["scene-banner", "off"])
+        let hidden = try await run(["scene-banner", "off"])
         #expect(hidden.0 == .ok && !hidden.1.sceneBanner)
-        let alias = try run(["scene", "off"])
+        let alias = try await run(["scene", "off"])
         #expect(alias.0 == .ok && !alias.1.sceneBanner && alias.1.scene == "asteroid")
-        #expect(try run(["scene", "volcano"]).0 == .usage)
-        #expect(try run(["scene-banner", "maybe"]).0 == .usage)
+        #expect(try await run(["scene", "volcano"]).0 == .usage)
+        #expect(try await run(["scene-banner", "maybe"]).0 == .usage)
     }
 }

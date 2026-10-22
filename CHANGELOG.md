@@ -4,6 +4,16 @@
 
 ### Added
 
+- The first time it uses the Dreadcast API, the CLI asks it for an install token and
+  sends it with each request to the API, so the API counts this install's requests
+  apart from others on the network, with limits of its own. Nothing secret ships in
+  the source: the token is random, made by the API, kept in `install-token.json` in the
+  config directory, readable only by you, and sent to no other host. A token the API
+  turns down is dropped and the request retried without one. `dread config` shows
+  whether it's on; `dread config set install-token off` deletes it from the API and
+  this machine, and `DREADCAST_INSTALL_TOKEN=off` skips it for a run. Needs
+  dreadcast-server #49; an older server is simply asked again a day later.
+
 - `dread systems` opens the app on its Systems tab: storm cells, alerts, fires, tropical
   storms and more near you, sorted by threat. Piped, or with `--plain`, `--json` or
   `--pretty`, it lists every system once with its details, names the sources it read

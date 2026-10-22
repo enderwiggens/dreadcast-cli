@@ -37,10 +37,22 @@ public enum DreadcastError: LocalizedError, Equatable, Sendable {
     }
 }
 
+/// The Dreadcast API's install token (dreadcast-server `docs/API.md#install-tokens`):
+/// which requests carry it, and what happens when the API turns it down.
+public protocol APICredential: Sendable {
+    /// The token for a request to `url`, or nil to send none. Only the API's own host
+    /// gets one, never a tile CDN or another provider.
+    func token(for url: URL) async -> String?
+    /// The API answered 401 to `token`: forget it.
+    func refused(_ token: String) async
+}
+
 /// A small URLSession wrapper with an identifying User-Agent, timeouts and size limits.
 public struct HTTPClient: Sendable {
     public let session: URLSession
     public let userAgent: String
+    /// When set, requests it names carry `Authorization: Bearer <token>`.
+    public var credential: (any APICredential)?
 
     public init(session: URLSession? = nil, userAgent: String = Dreadcast.userAgent) {
         if let session {
@@ -59,14 +71,18 @@ public struct HTTPClient: Sendable {
 
     public func data(
         _ url: URL,
+        method: String = "GET",
         accept: String? = nil,
         timeout: TimeInterval = 15,
         maximumBytes: Int = 8 * 1024 * 1024,
         source: String? = nil
     ) async throws -> Data {
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: timeout)
+        request.httpMethod = method
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         if let accept { request.setValue(accept, forHTTPHeaderField: "Accept") }
+        let token = await credential?.token(for: url)
+        if let token { request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization") }
         let label = source ?? url.host ?? "The service"
         #if canImport(FoundationNetworking)
         // On Linux, cancelling a URLSession task can race its own completion and crash
@@ -82,6 +98,15 @@ public struct HTTPClient: Sendable {
         let status = (response as? HTTPURLResponse)?.statusCode
         #endif
         guard let status else { throw DreadcastError.invalidResponse(label) }
+        if status == 401, let token, let credential {
+            // A token the API no longer knows: drop it and ask again without one, which the
+            // API always serves.
+            await credential.refused(token)
+            var anonymous = self
+            anonymous.credential = nil
+            return try await anonymous.data(url, method: method, accept: accept, timeout: timeout,
+                                            maximumBytes: maximumBytes, source: source)
+        }
         guard (200...299).contains(status) else {
             throw DreadcastError.httpStatus(status, host: url.host ?? label)
         }

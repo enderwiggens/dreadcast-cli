@@ -349,6 +349,7 @@ dread systems --json | jq -r '.systems[] | select(.kind == "storm-cell") | "\(.n
 | `map` | `theme` (the scene’s map colors) or `graphite` |
 | `forecast` | `days`, `hourly` or `off`, beside the radar’s timeline |
 | `api-url` | the Dreadcast API (`https://api.dreadcast.app` unless set), for weather, air quality, place search and radar; `off` turns them off |
+| `install-token` | `on` or `off`: send the API this install's own token, for limits of its own; `off` deletes it ([privacy](docs/PRIVACY.md#the-install-token)) |
 | `quips` | `on` or `off` (one dry line under the quick look, never during alerts) |
 | `icons` | `emoji` or `ascii` |
 
@@ -361,7 +362,8 @@ dread systems --json | jq -r '.systems[] | select(.kind == "storm-cell") | "\(.n
 | `DREADCAST_API_URL` | A Dreadcast API base URL for this run, overriding `api-url` |
 | `DREADCAST_CONFIG_DIR`, `DREADCAST_CACHE_DIR` | Where settings and the cache live. Otherwise `XDG_CONFIG_HOME` and `XDG_CACHE_HOME`, then the platform defaults |
 | `DREADCAST_XWEATHER_CLIENT_ID`, `DREADCAST_XWEATHER_CLIENT_SECRET` | Lightning credentials instead of saved ones |
-| `DREADCAST_CREDENTIAL_STORE=none` | Ignore saved credentials, for CI |
+| `DREADCAST_CREDENTIAL_STORE=none` | Ignore saved credentials and send no install token, for CI |
+| `DREADCAST_INSTALL_TOKEN=off` | Send the Dreadcast API no install token for this run |
 | `NO_COLOR` | Turn color off. `FORCE_COLOR` or `CLICOLOR_FORCE` keep it when piped |
 | `DREAD_GRAPHICS` | Force a radar graphics protocol: `kitty`, `iterm2` or `none` |
 | `DREAD_REDUCE_MOTION=1` | Still frames instead of animation (macOS also follows Reduce Motion) |
@@ -385,7 +387,9 @@ Reduce Motion, and `--still` stops animation anywhere.
 
 ## Data and privacy
 
-There’s no account and no analytics. Radar comes from the Dreadcast API wherever it
+There’s no account and no analytics. The CLI sends the Dreadcast API a random install
+token so the API can give it limits of its own; `dread config set install-token off`
+deletes it. Radar comes from the Dreadcast API wherever it
 covers your place, and the API never receives your location; everything else is asked
 of each provider directly. Coordinates are rounded to about 1 km before they’re stored
 or sent. Lightning credentials stay in the macOS Keychain, or in a file only you can
