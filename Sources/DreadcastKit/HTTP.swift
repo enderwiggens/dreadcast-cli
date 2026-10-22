@@ -15,6 +15,8 @@ public enum Dreadcast {
 
 public enum DreadcastError: LocalizedError, Equatable, Sendable {
     case httpStatus(Int, host: String)
+    /// The host answered 429, or did recently and asked to wait until `until`.
+    case rateLimited(host: String, until: Date)
     case invalidResponse(String)
     case oversized(String)
     case unavailable(String)
@@ -26,6 +28,9 @@ public enum DreadcastError: LocalizedError, Equatable, Sendable {
     public var errorDescription: String? {
         switch self {
         case .httpStatus(let status, let host): return "\(host) returned HTTP \(status)."
+        case .rateLimited(let host, let until):
+            let minutes = max(1, Int((until.timeIntervalSinceNow / 60).rounded(.up)))
+            return "\(host) asked for fewer requests; dreadcast will try again in \(minutes) min."
         case .invalidResponse(let source): return "\(source) returned a response dreadcast couldn’t read."
         case .oversized(let source): return "\(source) returned more data than expected."
         case .unavailable(let message): return message
@@ -47,12 +52,26 @@ public protocol APICredential: Sendable {
     func refused(_ token: String) async
 }
 
+/// Remembers a host's `Retry-After` between runs, so a shell prompt, a tmux status line
+/// and the app all wait it out instead of each asking again.
+public protocol RequestThrottle: Sendable {
+    func blockedUntil(host: String) -> Date?
+    func block(host: String, until: Date)
+}
+
 /// A small URLSession wrapper with an identifying User-Agent, timeouts and size limits.
 public struct HTTPClient: Sendable {
     public let session: URLSession
     public let userAgent: String
     /// When set, requests it names carry `Authorization: Bearer <token>`.
     public var credential: (any APICredential)?
+    /// When set, a host that answered 429 isn't asked again until its `Retry-After` passes.
+    public var throttle: (any RequestThrottle)?
+
+    /// The longest wait a `Retry-After` can ask for, so a bad header can't stop a host for good.
+    public static let longestRetryAfter: TimeInterval = 3600
+    /// The wait after a 429 without `Retry-After`.
+    public static let defaultRetryAfter: TimeInterval = 60
 
     public init(session: URLSession? = nil, userAgent: String = Dreadcast.userAgent) {
         if let session {
@@ -81,21 +100,30 @@ public struct HTTPClient: Sendable {
         request.httpMethod = method
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         if let accept { request.setValue(accept, forHTTPHeaderField: "Accept") }
+        let label = source ?? url.host ?? "The service"
+        let host = url.host?.lowercased() ?? label
+        // The Dreadcast API limits its tile endpoints apart from the rest, so a wait for
+        // satellite tiles doesn't hold up the weather.
+        let scope = url.path.hasPrefix("/v2/") && url.path.hasSuffix(".png") ? host + url.path : host
+        if let throttle, let until = throttle.blockedUntil(host: scope), until > Date() {
+            throw DreadcastError.rateLimited(host: host, until: until)
+        }
         let token = await credential?.token(for: url)
         if let token { request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization") }
-        let label = source ?? url.host ?? "The service"
         #if canImport(FoundationNetworking)
         // On Linux, cancelling a URLSession task can race its own completion and crash
         // ("a task that in not in the registry"), and Swift cancels a request whenever a
         // sibling fails. There each request runs to its end, bounded by its timeout.
         let session = self.session
-        let (data, status) = try await Task { () async throws -> (Data, Int?) in
+        let (data, status, retryAfter) = try await Task { () async throws -> (Data, Int?, String?) in
             let (data, response) = try await session.data(for: request)
-            return (data, (response as? HTTPURLResponse)?.statusCode)
+            let http = response as? HTTPURLResponse
+            return (data, http?.statusCode, http?.value(forHTTPHeaderField: "Retry-After"))
         }.value
         #else
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode
+        let retryAfter = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Retry-After")
         #endif
         guard let status else { throw DreadcastError.invalidResponse(label) }
         if status == 401, let token, let credential {
@@ -107,11 +135,28 @@ public struct HTTPClient: Sendable {
             return try await anonymous.data(url, method: method, accept: accept, timeout: timeout,
                                             maximumBytes: maximumBytes, source: source)
         }
+        if status == 429 {
+            let wait = Self.retryAfter(retryAfter, now: Date()) ?? Self.defaultRetryAfter
+            let until = Date().addingTimeInterval(min(Self.longestRetryAfter, max(1, wait)))
+            throttle?.block(host: scope, until: until)
+            throw DreadcastError.rateLimited(host: host, until: until)
+        }
         guard (200...299).contains(status) else {
             throw DreadcastError.httpStatus(status, host: url.host ?? label)
         }
         guard data.count <= maximumBytes else { throw DreadcastError.oversized(label) }
         return data
+    }
+
+    /// A `Retry-After` value in seconds: delay-seconds or an HTTP date.
+    static func retryAfter(_ value: String?, now: Date) -> TimeInterval? {
+        guard let value = value?.trimmingCharacters(in: .whitespaces), !value.isEmpty else { return nil }
+        if let seconds = Int(value), seconds >= 0 { return TimeInterval(seconds) }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "GMT")
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        return formatter.date(from: value).map { max(0, $0.timeIntervalSince(now)) }
     }
 
     public func json<T: Decodable>(

@@ -100,8 +100,9 @@ public struct DreadcastRadarManifest: Codable, Sendable {
 
     /// NOAA's satellite rain estimates for where no region reaches (`satellite` in the
     /// API's manifest): 256-pixel tiles in Rainbow.ai's dbz_u8 encoding at zooms 0 to
-    /// `maximumZoom`, from the API itself. A blend arrives 15 to 21 minutes after its
-    /// scan, so the newest frames have none of their own.
+    /// `maximumZoom`, from the radar CDN when the API names it there, else from the API
+    /// itself. A blend arrives 15 to 21 minutes after its scan, so the newest frames have
+    /// none of their own.
     public struct Satellite: Codable, Sendable, Equatable {
         public struct Snapshot: Codable, Sendable, Equatable {
             /// The scan's start in epoch seconds.
@@ -117,6 +118,28 @@ public struct DreadcastRadarManifest: Codable, Sendable {
         public let snapshots: [Snapshot]
         public let maximumZoom: Int
         public let source: Source
+        /// The same tiles on the radar CDN, with `{snapshot}`, `{z}`, `{x}` and `{y}`: only
+        /// ever `satellite/{snapshot}/{z}/{x}/{y}.png` under the radar tiles' own checked
+        /// origin. Nil keeps the API's `tilePath`.
+        public var tileURL: String? = nil
+
+        /// The CDN has tiles only for rows that reach between 70°N and 60°S.
+        public static let northernmost = 70.0, southernmost = -60.0
+
+        /// The CDN's tile, or nil to ask the API.
+        func cdnURL(snapshot: Int, z: Int, x: Int, y: Int) -> URL? {
+            guard let tileURL else { return nil }
+            return URL(string: tileURL.replacingOccurrences(of: "{snapshot}", with: "\(snapshot)")
+                .replacingOccurrences(of: "{z}", with: "\(z)").replacingOccurrences(of: "{x}", with: "\(x)")
+                .replacingOccurrences(of: "{y}", with: "\(y)"))
+        }
+
+        /// Whether tile row `y` at zoom `z` reaches the satellites' latitudes at all.
+        static func rowHasData(z: Int, y: Int) -> Bool {
+            let n = Double(1 << z)
+            func latitude(_ row: Double) -> Double { atan(sinh(.pi * (1 - 2 * row / n))) * 180 / .pi }
+            return latitude(Double(y)) > southernmost && latitude(Double(y + 1)) < northernmost
+        }
     }
 
     public static let encoding = "mrms-rg8-v1"
@@ -295,6 +318,7 @@ public struct DreadcastRadarManifest: Codable, Sendable {
             let tileSize: Int
             let maxZoom: Int
             let tilePath: String
+            let tileUrl: String?
             let snapshots: [Snapshot]
         }
         let status: String
@@ -315,7 +339,7 @@ public struct DreadcastRadarManifest: Codable, Sendable {
 
     /// The satellite block, checked as the Mac app checks it, or nil when anything about
     /// it doesn't: satellite rain is left out rather than failing the radar.
-    private static func satellite(_ wire: Wire.Satellite?) -> Satellite? {
+    private static func satellite(_ wire: Wire.Satellite?, origin: String?) -> Satellite? {
         guard let wire, wire.encoding == Satellite.encoding, wire.tileSize == Satellite.tileSize,
               (0...8).contains(wire.maxZoom), wire.tilePath == Satellite.tilePath,
               (1...24).contains(wire.snapshots.count) else { return nil }
@@ -330,7 +354,13 @@ public struct DreadcastRadarManifest: Codable, Sendable {
             guard isDisplayable(source.name, limit: 64), source.license.map({ isDisplayable($0, limit: 200) }) ?? true else { return nil }
             return Source(name: source.name, license: source.license)
         } ?? Source(name: "NOAA Enterprise Rain Rate", license: nil)
-        return Satellite(snapshots: snapshots, maximumZoom: wire.maxZoom, source: source)
+        var satellite = Satellite(snapshots: snapshots, maximumZoom: wire.maxZoom, source: source)
+        // As the Mac app takes it: exactly this path under the radar tiles' origin, which
+        // has already passed the host checks. Anything else keeps the API.
+        if let origin, let cdn = wire.tileUrl, cdn == origin + "satellite/{snapshot}/{z}/{x}/{y}.png" {
+            satellite.tileURL = cdn
+        }
+        return satellite
     }
 
     public static func decode(_ data: Data, now: Date, allowLoopback: Bool = false) throws -> DreadcastRadarManifest {
@@ -386,7 +416,8 @@ public struct DreadcastRadarManifest: Codable, Sendable {
                                   source: region.source.map { Source(name: $0.name, license: $0.license) } ?? Source(name: "Dreadcast", license: nil)))
         }
 
-        try check((1...8).contains(wire.frames.count), "frames")
+        // An hour is 15 frames; the app's longest loops are 16.
+        try check((1...16).contains(wire.frames.count), "frames")
         var frames: [Frame] = []
         var origin: String?
         for frame in wire.frames {
@@ -423,7 +454,7 @@ public struct DreadcastRadarManifest: Codable, Sendable {
         try check(ISODate.parse(wire.newestObservedAt) == newest && frames.last?.observedAt == newest, "newest observation")
 
         // A frame names only blends the block lists; without the block, none.
-        let satellite = Self.satellite(wire.satellite?.value)
+        let satellite = Self.satellite(wire.satellite?.value, origin: origin)
         let listed = Set(satellite?.snapshots.map(\.id) ?? [])
         frames = frames.map { frame in
             var frame = frame
@@ -447,8 +478,16 @@ public struct DreadcastRadarService: Sendable {
     /// Loopback base URLs are a local development server, whose tiles are local too.
     public var allowsLoopback: Bool { ["127.0.0.1", "localhost"].contains(baseURL.host?.lowercased() ?? "") }
 
+    /// How far back the loop reaches, in minutes: the hour the app shows everyone, up to
+    /// 15 frames four minutes apart (dreadcast-server `docs/API.md#longer-loops`). Without
+    /// `minutes` the API serves half an hour.
+    public static let loopMinutes = 60
+
     public func latest(now: Date = Date()) async throws -> DreadcastRadarManifest {
-        let url = baseURL.appendingPathComponent("v2/radar/latest")
+        let path = baseURL.appendingPathComponent("v2/radar/latest")
+        var components = URLComponents(url: path, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "minutes", value: String(Self.loopMinutes))]
+        let url = components?.url ?? path
         let data: Data
         do {
             data = try await http.data(url, accept: "application/json", timeout: 15, maximumBytes: 1024 * 1024, source: "The Dreadcast API")

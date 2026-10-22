@@ -213,8 +213,8 @@ enum ConfigCommand {
                     config.scene = value
                 } else if case .scene(let scene) = SceneID.lookup(value) {
                     config.scene = scene.rawValue
-                } else if case .pro(let title) = SceneID.lookup(value) {
-                    return ctx.fail("\(title) is a Pro scene in the Dreadcast app. Free scenes: \(SceneID.names).", code: .usage)
+                } else if case .appOnly(let title) = SceneID.lookup(value) {
+                    return ctx.fail("\(title) is only in the Dreadcast app. Scenes here: \(SceneID.names).", code: .usage)
                 } else {
                     return ctx.fail("scene: daily, or one of \(SceneID.names).", code: .usage)
                 }
@@ -268,16 +268,21 @@ enum ConfigCommand {
 enum CreditsCommand {
     static func run(_ ctx: Context) -> ExitCode {
         let s = ctx.styler
+        // Weather, air quality, place search and radar come from Dreadcast's own
+        // service, so it and its radar lead, followed by the sources behind them.
         let sources: [(String, String, String)] = [
+            ("Dreadcast API", "Dreadcast’s own weather service, for weather, air quality, place search and radar.",
+             "https://dreadcast.app/data.html#delivery"),
+            ("Dreadcast Radar", "The Dreadcast API’s radar, built from the radar and satellite sources below.", "https://dreadcast.app/data.html#weather"),
+            ("EUMETNET OPERA", "Radar for Europe, through the Dreadcast API, which resamples it into tiles. CC BY 4.0.",
+             "https://www.eumetnet.eu/observations/weather-radar-network/\nhttps://creativecommons.org/licenses/by/4.0/"),
+            ("NOAA MRMS", "Radar for the US, Puerto Rico and Guam, through the Dreadcast API. Public domain.", "https://www.nssl.noaa.gov/projects/mrms/"),
+            ("NOAA Enterprise Rain Rate", "Satellite rain estimates where no radar reaches, through the Dreadcast API. Public domain.",
+             "https://www.ospo.noaa.gov/products/atmosphere/err/"),
             ("Open-Meteo", "Weather, air quality and place search, through the Dreadcast API. CC BY 4.0.", "https://open-meteo.com/"),
             ("Copernicus Atmosphere Monitoring Service", "Air quality and dust, through Open-Meteo. Generated using CAMS information.",
              "https://atmosphere.copernicus.eu/"),
             ("GeoNames", "Place names for search, through Open-Meteo. CC BY 4.0.", "https://www.geonames.org/"),
-            ("NOAA MRMS", "Radar for the US, Puerto Rico and Guam, through the Dreadcast API. Public domain.", "https://www.nssl.noaa.gov/projects/mrms/"),
-            ("EUMETNET OPERA", "Radar for Europe, through the Dreadcast API, which resamples it into tiles. CC BY 4.0.",
-             "https://www.eumetnet.eu/observations/weather-radar-network/\nhttps://creativecommons.org/licenses/by/4.0/"),
-            ("NOAA Enterprise Rain Rate", "Satellite rain estimates where no radar reaches, through the Dreadcast API. Public domain.",
-             "https://www.ospo.noaa.gov/products/atmosphere/err/"),
             ("National Weather Service", "Active alerts. US government work, public domain.", "https://www.weather.gov/documentation/services-web-api"),
             ("NOAA SPC", "Day 1 convective outlook.", "https://www.spc.noaa.gov/"),
             ("NOAA NHC", "Tropical cyclones.", "https://www.nhc.noaa.gov/"),

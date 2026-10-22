@@ -24,7 +24,8 @@ public actor InstallToken: APICredential {
     let paths: Paths
     let file: URL
     let cache: DiskCache
-    /// Asks for tokens, so it carries no credential of its own.
+    /// Asks for tokens, so it carries no credential of its own, and no throttle: a network
+    /// out of tokens for the day must not hold up the rest of the API.
     let http: HTTPClient
     private var token: String?
     private var minting: Task<String?, Never>?
@@ -44,6 +45,7 @@ public actor InstallToken: APICredential {
         self.cache = cache
         var http = http
         http.credential = nil
+        http.throttle = nil
         self.http = http
     }
 
@@ -114,7 +116,7 @@ public actor InstallToken: APICredential {
             cache.remove(key: Self.retryKey)
             token = minted
             return minted
-        } catch DreadcastError.httpStatus {
+        } catch DreadcastError.httpStatus, DreadcastError.rateLimited {
             cache.write(Date().addingTimeInterval(Self.refusedRetry), key: Self.retryKey)
             return nil
         } catch {

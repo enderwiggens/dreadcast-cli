@@ -8,13 +8,14 @@ import DreadTerminal
 struct SceneTests {
     static let moon = LunarPhase(at: Date(timeIntervalSince1970: 1_791_259_200))
 
-    @Test func namesAliasesAndProScenes() {
+    @Test func namesAliasesAndAppOnlyScenes() {
         #expect(SceneID.lookup("asteroid") == .scene(.asteroid))
         #expect(SceneID.lookup("Deep Trouble") == .scene(.deepTrouble))
         #expect(SceneID.lookup("beach") == .scene(.clearForNow))
         #expect(SceneID.lookup("ufo") == .scene(.uap))
-        #expect(SceneID.lookup("volcano") == .pro("Volcano Watch"))
-        #expect(SceneID.lookup("black-hole") == .pro("Black Hole"))
+        #expect(SceneID.lookup("volcano") == .appOnly("Volcano Watch"))
+        #expect(SceneID.lookup("black-hole") == .appOnly("Black Hole"))
+        #expect(SceneID.lookup("mountains") == .appOnly("Peak Optimism"))
         #expect(SceneID.lookup("nope") == .unknown)
         #expect(SceneID.allCases.count == 8)
     }

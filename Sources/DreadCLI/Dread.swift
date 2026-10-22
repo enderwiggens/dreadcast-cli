@@ -70,7 +70,7 @@ enum Help {
               --range <15|35|75|150|300>   view radius in miles (default from config, 35)
               --palette <name>             dreadcast, classic or viridis
               --renderer <name>            auto, kitty, iterm2, halfblock or 256
-              --frames <n>                 frames in the loop, 2–12 (default 8)
+              --frames <n>                 frames across the last hour, 2–15 (default 8)
               --still                      show the latest frame without animating
               --once                       play the loop once, then exit
               --no-lightning               hide lightning even when configured

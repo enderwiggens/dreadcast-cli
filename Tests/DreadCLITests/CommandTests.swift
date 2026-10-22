@@ -56,8 +56,9 @@ final class StubProvider: URLProtocol, @unchecked Sendable {
             client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
             return
         }
-        let response = HTTPURLResponse(url: url, statusCode: route.status, httpVersion: "HTTP/1.1",
-                                       headerFields: ["Content-Type": "application/json"])!
+        // A rate limit says how long to wait, as the Dreadcast API does.
+        let headers = ["Content-Type": "application/json"].merging(route.status == 429 ? ["Retry-After": "120"] : [:]) { a, _ in a }
+        let response = HTTPURLResponse(url: url, statusCode: route.status, httpVersion: "HTTP/1.1", headerFields: headers)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         let body = route.status == 204 ? Data() : route.body.isEmpty ? (binary ?? Data()) : Data(route.body.utf8)
         client?.urlProtocol(self, didLoad: body)
@@ -115,6 +116,33 @@ struct CommandTests {
     }
 
     // MARK: The quick look
+
+    /// `dread prompt` reads the conditions `dread now` cached, without the network.
+    @Test func promptReadsTheCachedConditions() async throws {
+        let env = try await Self.home()
+        _ = try await Self.run(["now", "--plain"], environment: env)
+        let prompt = try await Self.run(["prompt"], environment: env, routes: [:])
+        #expect(prompt.code == .ok)
+        #expect(prompt.out.contains("71°"))
+        #expect(StubProvider.seen.isEmpty)
+    }
+
+    /// A 429 is waited out for as long as `Retry-After` asks, across runs, and the last
+    /// reading shows meanwhile, marked stale.
+    @Test func rateLimitsAreWaitedOut() async throws {
+        let env = try await Self.home()
+        _ = try await Self.run(["now", "--plain"], environment: env, at: "2026-10-05T18:30:00Z")
+        var limited = Self.online
+        limited[Self.current] = (429, #"{"error":{"code":"rate_limited","message":"Too many requests."}}"#)
+        limited[Self.forecast] = limited[Self.current]
+        let first = try await Self.run(["forecast", "--json"], environment: env, routes: limited, at: "2026-10-05T19:30:00Z")
+        #expect(StubProvider.seen.contains { $0.url?.path == "/v1/weather/current" })
+        #expect(first.out.contains("71"))
+        // Within the wait, the API isn't asked again, even with it answering.
+        _ = try await Self.run(["forecast", "--json"], environment: env, at: "2026-10-05T19:31:00Z")
+        #expect(!StubProvider.seen.contains { $0.url?.host == "api.dreadcast.app" })
+    }
+
 
     @Test func nowReportsConditionsAndAlerts() async throws {
         let env = try await Self.home()
@@ -250,6 +278,48 @@ struct CommandTests {
         #expect(hazards.dust == 142.5 && hazards.failures["dust"] == nil)
         let requests = StubProvider.seen.compactMap(\.url).filter { $0.path == "/v1/air/current" }
         #expect(!requests.isEmpty && requests.allSatisfy { $0.query == "lat=27.95&lon=-82.46" })
+    }
+
+    /// Hazards where every source failed aren't cached, and a partial summary is
+    /// fetched again after a minute, so a network blip doesn't stick for fifteen.
+    @Test func failedHazardsAreNotCachedAsFresh() async throws {
+        let env = try await Self.home()
+        let air = #"{"location":{"latitude":27.95,"longitude":-82.46,"timezone":"America/New_York","utc_offset_seconds":-14400},"current":{"time":"2026-10-05T18:00:00Z","interval_seconds":3600,"us_aqi":61,"pm2_5":17.2,"pm10":30.1,"ozone":80.0,"dust":142.5},"source":{"name":"Open-Meteo, with Copernicus Atmosphere Monitoring Service data","fetched_at":"2026-10-05T18:05:00Z","stale":false}}"#
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubProvider.self]
+        let http = HTTPClient(session: URLSession(configuration: configuration))
+        let start = ISODate.parse("2026-10-05T18:30:00Z")!
+        func context(after seconds: TimeInterval) -> Context {
+            Context(arguments: Arguments(command: "outlook"), environment: env,
+                    terminal: TerminalInfo(isOutputTTY: false, isInputTTY: false, columns: 100, rows: 40, colorMode: .none,
+                                           graphics: .none, program: nil, insideMultiplexer: false, reduceMotion: false),
+                    http: http, now: start.addingTimeInterval(seconds))
+        }
+        func dustRequests() -> Int { StubProvider.seen.compactMap(\.url).filter { $0.path == "/v1/air/current" }.count }
+
+        // Every source fails: a failure, and nothing cached.
+        StubProvider.reset(Self.online)
+        let ctx = context(after: 0)
+        let place = try await ctx.resolveLocation()
+        let failed = await ctx.hazards(place)
+        #expect(failed.value == nil && failed.error != nil)
+        #expect(ctx.cached(HazardSummary.self, key: "hazards-\(Context.placeKey(place))") == nil)
+
+        // Only dust answers: a partial summary, kept for a minute.
+        var routes = Self.online
+        routes["api.dreadcast.app/v1/air/current"] = (200, air)
+        StubProvider.reset(routes)
+        let partial = try #require(await context(after: 10).hazards(place).value)
+        #expect(partial.dust == 142.5 && partial.failures["tsunamis"] != nil)
+        _ = await context(after: 40).hazards(place)
+        #expect(dustRequests() == 1)
+        _ = await context(after: 80).hazards(place)
+        #expect(dustRequests() == 2)
+
+        // Every source fails again: the partial summary shows, marked stale.
+        StubProvider.reset(Self.online)
+        let stale = await context(after: 200).hazards(place)
+        #expect(stale.value?.dust == 142.5 && stale.isStale && stale.error != nil)
     }
 
     // MARK: Alerts and exit codes

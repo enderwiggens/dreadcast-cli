@@ -12,7 +12,8 @@
   turns down is dropped and the request retried without one. `dread config` shows
   whether it's on; `dread config set install-token off` deletes it from the API and
   this machine, and `DREADCAST_INSTALL_TOKEN=off` skips it for a run. Needs
-  dreadcast-server #49; an older server is simply asked again a day later.
+  dreadcast-server #49; an older server, or a network out of tokens for the day, is
+  simply asked again a day later, and its other requests go on without one.
 
 - `dread systems` opens the app on its Systems tab: storm cells, alerts, fires, tropical
   storms and more near you, sorted by threat. Piped, or with `--plain`, `--json` or
@@ -32,6 +33,21 @@
 
 ### Changed
 
+- Satellite rain loads from the radar CDN when the API names it there
+  (`satellite.tile_url`, checked against the radar tiles' own origin), so zoomed-out
+  views no longer queue behind the API's per-IP limit. If the CDN fails, the tile
+  comes from the API as before.
+- Asking for one of the app's scenes the terminal doesn't draw (Black Hole, Botanical
+  Takeover, Peak Optimism or Volcano Watch) says it's only in the Dreadcast app,
+  rather than calling it Pro and the terminal's eight "free scenes": since October 16
+  the app makes Peak Optimism free and five of those eight Pro. The README says
+  "Eight of Dreadcast's scenes".
+- `dread radar` and the Radar tab reach back an hour, as the Mac and iPhone apps now do
+  for everyone, instead of half an hour. The CLI asks the API for its hour
+  (`/v2/radar/latest?minutes=60`, up to 15 frames, one per four-minute window) and
+  draws 8 frames spread across it, every other one, so a loop costs what it did.
+  `--frames` takes 2 to 15, always from the oldest to the newest; loops longer than 8
+  frames step faster, 0.45 s a frame. Manifests may now have up to 16 frames.
 - Weather, air quality, dust and place search come from the Dreadcast API
   (`/v1/weather/current` and `/forecast`, `/v1/air/current`, `/v1/places/search`)
   instead of Open-Meteo's free API, which is for non-commercial use only. The data is
@@ -62,6 +78,10 @@
 
 ### Fixed
 
+- When the Dreadcast API or another provider answers 429, dread waits as long as its
+  `Retry-After` asks (up to an hour, a minute when it doesn't say) before asking that
+  host again, across every shell, prompt and status line, and shows the last reading
+  meanwhile, marked stale.
 - The Systems tab said conditions were loading after they had failed to load; it now
   says they're unavailable.
 - On Linux, a request cancelled because another one failed could crash dread inside
@@ -70,6 +90,11 @@
 - `dread credits` ran long source names into their descriptions, as in "National
   Weather ServiceActive alerts". Names now have room, and one too long for the column
   takes a line of its own.
+- After a network blip, `dread outlook` and `dread systems` kept calling tsunamis,
+  volcanoes, smoke and dust unavailable for up to 15 minutes. Hazards where every
+  source failed are no longer cached, so the next run tries again or shows the last
+  summary, marked stale, and a summary missing some sources is fetched again after a
+  minute.
 
 ## 0.3.2 — 2026-10-08
 

@@ -67,8 +67,10 @@ public enum SceneID: String, CaseIterable, Sendable {
         }
     }
 
-    /// Pro themes stay in the app, like the Pro radar palettes.
-    static let proTitles: [String: String] = [
+    /// The app's scenes that the terminal doesn't draw. Black Hole, Botanical Takeover
+    /// and Volcano Watch are Pro in the app; Peak Optimism is free there but has no
+    /// terminal drawing yet.
+    static let appOnlyTitles: [String: String] = [
         "black-hole": "Black Hole", "blackhole": "Black Hole",
         "botanical": "Botanical Takeover", "botanical-takeover": "Botanical Takeover",
         "peak-optimism": "Peak Optimism", "mountains": "Peak Optimism",
@@ -84,14 +86,14 @@ public enum SceneID: String, CaseIterable, Sendable {
 
     public enum Lookup: Equatable {
         case scene(SceneID)
-        case pro(String)
+        case appOnly(String)
         case unknown
     }
 
     public static func lookup(_ name: String) -> Lookup {
         let key = name.lowercased().replacingOccurrences(of: " ", with: "-").replacingOccurrences(of: "_", with: "-")
         if let scene = SceneID(rawValue: key) ?? aliases[key] { return .scene(scene) }
-        if let title = proTitles[key] { return .pro(title) }
+        if let title = appOnlyTitles[key] { return .appOnly(title) }
         return .unknown
     }
 

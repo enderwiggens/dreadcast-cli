@@ -5,8 +5,9 @@ This guide is for Claude, Codex and other AI-assisted tools, and for people.
 ## What this is
 
 `dread` is an open-source Swift command-line tool that shows weather and radar in the
-terminal. It is a standalone companion to Dreadcast: Weather Radar & Forecasts, the Mac app: a
-separate project that shares no code with the app at build time and never requires it.
+terminal. It is a standalone companion to Dreadcast: Weather Radar & Forecasts, the
+iPhone, iPad and Mac app: a separate project that shares no code with the app at
+build time and never requires it.
 
 ## Principles
 
@@ -74,10 +75,10 @@ scripts/docs-images/capture.sh    # regenerate docs/images from live runs (needs
 - Radar comes only from the Dreadcast API, behind `Context.radarLoop`: its
   `/v2/radar/latest` regions (`DreadcastRadar.swift`, following dreadcast-server's
   `docs/API.md`), drawn together in the manifest's order, and NOAA's satellite
-  estimates (`/v2/radar/satellite.png`) only in pixels no region covers. The place's
-  region times the loop and decides "delayed"; the credit names each source in view
-  and the satellite blend's time. A view with no radar pixels loops the blends
-  themselves at their own times, so its age is never a radar frame's. Rain timing (`Context.nowcast`) reads radar alone:
+  estimates (from the CDN at `satellite.tile_url`, else `/v2/radar/satellite.png`)
+  only in pixels no region covers. The place's region times the loop and decides
+  "delayed"; the credit names each source in view and the satellite blend's time.
+  A view with no radar pixels loops the blends themselves at their own times, so its age is never a radar frame's. Rain timing (`Context.nowcast`) reads radar alone:
   where the place's own pixel has no radar it reports `outsideCoverage`, which is not
   a failure, and `dread eta` falls back to the model's 15-minute precipitation
   (`ModelRain`), labeled as such. `Dreadcast.apiBaseURL` (`https://api.dreadcast.app`)

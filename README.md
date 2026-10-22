@@ -23,9 +23,9 @@ dread           # live radar and conditions
 `dread` puts live radar in your terminal, with the weather around it: animated radar
 centered on you, current conditions and the next two hours above it, every active
 warning in full, and a window that keeps itself up to date. It’s the open-source
-companion to **Dreadcast: Weather Radar & Forecasts** for Mac and is laid out the same way, a
-calm instrument panel with the radar first. It doesn’t need the app or an account, and
-it runs on macOS and Linux.
+companion to **Dreadcast: Weather Radar & Forecasts**, the app for iPhone, iPad and
+Mac, and is laid out the same way, a calm instrument panel with the radar first. It
+doesn’t need the app or an account, and it runs on macOS and Linux.
 
 ## Highlights
 
@@ -205,7 +205,7 @@ Every command accepts `--location` (or `-l`), `--units imperial|metric`, `--json
 <summary><b>Radar options</b></summary>
 
 ```sh
-dread radar                    # animate the last eight frames
+dread radar                    # animate the last hour
 dread radar --range 150        # 15, 35, 75, 150 or 300 miles
 dread radar --palette viridis  # dreadcast, classic or viridis
 dread radar --still            # just the latest frame
@@ -255,12 +255,12 @@ else too, from radar to wildfires, so switching shows it in full within moments.
 
 ![The eight scenes at dusk](docs/images/scenes.png)
 
-Dreadcast’s free scenes, redrawn for the terminal. They’re made for a dark screen, so
+Eight of Dreadcast’s scenes, redrawn for the terminal. They’re made for a dark screen, so
 each shows its sunset through the day and its night version from 8 PM, when the full
 situation arrives. Your scene fills the Scene tab (7) and `dread scene`, and heads the
 `dread now` printout whenever no alert is active; when one is, it steps aside.
 
-As in the Mac app, a scene is a whole theme: it brings its own highlight color and its
+As in the app, a scene is a whole theme: it brings its own highlight color and its
 own map colors under the radar. Asteroid Watch glows amber over a dusky purple map; UAP
 Invasion is violet over blue slate. Either can be fixed instead.
 
@@ -387,12 +387,12 @@ Reduce Motion, and `--still` stops animation anywhere.
 
 ## Data and privacy
 
-There’s no account and no analytics. The CLI sends the Dreadcast API a random install
-token so the API can give it limits of its own; `dread config set install-token off`
-deletes it. Radar comes from the Dreadcast API wherever it
-covers your place, and the API never receives your location; everything else is asked
-of each provider directly. Coordinates are rounded to about 1 km before they’re stored
-or sent. Lightning credentials stay in the macOS Keychain, or in a file only you can
+There’s no account and no analytics. Weather, air quality, place search and radar come
+from the Dreadcast API; everything else is asked of each provider directly. The CLI
+sends the API a random install token so the API can give it limits of its own;
+`dread config set install-token off` deletes it. Coordinates are rounded to about 1 km
+before they’re stored or sent, and radar tiles show roughly the area you’re viewing.
+Lightning credentials stay in the macOS Keychain, or in a file only you can
 read on Linux.
 
 Details: [docs/PRIVACY.md](docs/PRIVACY.md) and
@@ -403,8 +403,8 @@ Details: [docs/PRIVACY.md](docs/PRIVACY.md) and
 
 | Data | Provider |
 | --- | --- |
-| Conditions, forecasts, air quality, place search | Through the Dreadcast API: [Open-Meteo](https://open-meteo.com/) (CC BY 4.0), with [CAMS](https://atmosphere.copernicus.eu/) air quality and [GeoNames](https://www.geonames.org/) places |
-| Radar | Through the Dreadcast API: [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) for the US, Puerto Rico and Guam, and [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) for Europe ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), resampled). [NOAA Enterprise Rain Rate](https://www.ospo.noaa.gov/products/atmosphere/err/) satellite estimates elsewhere |
+| Conditions, forecasts, air quality, place search | The Dreadcast API, from [Open-Meteo](https://open-meteo.com/) (CC BY 4.0), with [CAMS](https://atmosphere.copernicus.eu/) air quality and [GeoNames](https://www.geonames.org/) places |
+| Radar | Dreadcast Radar, from the Dreadcast API, built from [NOAA MRMS](https://www.nssl.noaa.gov/projects/mrms/) for the US, Puerto Rico and Guam and [EUMETNET OPERA](https://www.eumetnet.eu/observations/weather-radar-network/) for Europe ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), resampled), with [NOAA Enterprise Rain Rate](https://www.ospo.noaa.gov/products/atmosphere/err/) satellite estimates elsewhere |
 | Alerts | [National Weather Service](https://www.weather.gov/) |
 | Severe outlook, tropical storms | NOAA SPC and NHC |
 | Wildfires | NIFC |
@@ -429,7 +429,7 @@ alerts, the severe outlook and wildfires come from US agencies, so they cover th
 United States, and the app says so instead of showing an empty list.
 
 **Do I need the Dreadcast app?**
-No. This is a separate project that shares no code with the Mac app and never needs it.
+No. This is a separate project that shares no code with the app and never needs it.
 
 **Why does the radar look blocky?**
 Terminals draw two pixels per character cell, so the app’s radar is pixel art. In Kitty,

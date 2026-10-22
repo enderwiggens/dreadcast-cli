@@ -247,6 +247,9 @@ struct DreadcastRadarTests {
             }
         }
         #expect(!rejects(F.json(newest: F.now)))
+        #expect(!rejects(F.json(newest: F.now, frames: 15)), "the hour the CLI asks for")
+        #expect(!rejects(F.json(newest: F.now, frames: 16)), "the app's longest loops")
+        #expect(rejects(F.json(newest: F.now, frames: 17)))
         #expect(rejects(Data("not json".utf8)))
         #expect(rejects(F.json(newest: F.now, host: "radar.example.com")))
         #expect(rejects(F.json(newest: F.now, host: "dreadcast.app.example.com")))
@@ -451,6 +454,27 @@ struct DreadcastRadarTests {
             && tight.hasSuffix(" · radar delayed · 25 min ago"))
     }
 
+    @Test func framesSpreadAcrossTheHour() {
+        // The API's hour: 15 frames, one per four-minute window, each scan as far into its
+        // window as production's were on October 17, so two to six minutes apart.
+        let offsets: [Double] = [235, 133, 116, 119, 230, 220, 228, 131, 239, 131, 135, 118, 235, 118, 123]
+        let hour = (0..<15).map { F.now.addingTimeInterval(Double($0 - 15) * 240 + offsets[$0]) }
+        #expect(Context.spread(hour, count: 8) == stride(from: 0, through: 14, by: 2).map { hour[$0] }, "the default: every other frame")
+        #expect(Context.spread(hour, count: 15) == hour)
+        #expect(Context.spread(hour, count: 2) == [hour[0], hour[14]])
+        for count in 2...15 {
+            let picked = Context.spread(hour, count: count)
+            #expect(picked.count == count && picked.first == hour[0] && picked.last == hour[14], "\(count) frames")
+            #expect(zip(picked, picked.dropFirst()).allSatisfy { $0 < $1 }, "\(count) frames in order")
+        }
+        // Two frames can share the place's scan, so its region lists fewer.
+        let fourteen = Array(hour.dropLast())
+        #expect(Context.spread(fourteen, count: 8).count == 8 && Context.spread(fourteen, count: 8).first == fourteen[0])
+        #expect(Context.spread(fourteen, count: 2) == [fourteen[0], fourteen[13]])
+        #expect(Context.spread(Array(hour.prefix(3)), count: 8) == Array(hour.prefix(3)), "after an outage, what there is")
+        #expect(Context.spread(hour, count: 1) == [hour[14]])
+    }
+
     @Test func framesArePickedNewestFirstAndSpacedOut() {
         let times = (0..<8).map { F.now.addingTimeInterval(Double($0 - 7) * 240) }
         let every = Context.pick(times, time: { $0 }, count: 4, spacing: 0)
@@ -495,6 +519,8 @@ extension CommandTests {
         Self.serveRadar(F.json(newest: newest, stored: stored), tile: F.tile(red: F.red(dbz: 45), green: 6))
 
         let loop = try await ctx.radarLoop(for: F.tampa, viewport: viewport, frames: 2)
+        let manifests = StubProvider.seen.compactMap(\.url).filter { $0.path == "/v2/radar/latest" }
+        #expect(!manifests.isEmpty && manifests.allSatisfy { $0.query == "minutes=60" }, "the last hour, as the app shows")
         #expect(loop.credit == "NOAA MRMS")
         #expect(loop.coversPlace && !loop.delayed)
         #expect(loop.fields.count == 2)
@@ -565,7 +591,49 @@ extension CommandTests {
         #expect(!StubProvider.seen.contains { $0.url?.host == F.tileHost })
     }
 
-    /// Inside a region's bounds where no radar reaches the whole view, as around Rome,
+    /// With `satellite.tile_url` on the radar tiles' own origin, satellite rain comes from
+    /// the CDN, and rows wholly past 70°N or 60°S, which have no tiles there, aren't asked
+    /// for. A CDN that fails hands the tile back to the API.
+    @Test func satelliteTilesComeFromTheCDNWhenNamed() async throws {
+        typealias F = RadarAPIFixture
+        let cdn = "https://\(F.tileHost)/mrms/satellite/{snapshot}/{z}/{x}/{y}.png"
+        func manifest(_ url: String) -> Data {
+            F.json(newest: Date(), satellite: true) { object in
+                var block = object["satellite"] as! [String: Any]
+                block["tile_url"] = url
+                object["satellite"] = block
+            }
+        }
+        #expect(try DreadcastRadarManifest.decode(manifest(cdn), now: Date()).satellite?.tileURL == cdn)
+        for other in ["https://elsewhere.example/mrms/satellite/{snapshot}/{z}/{x}/{y}.png",
+                      "https://\(F.tileHost)/mrms/satellite/{snapshot}/{z}/{x}/{y}.png?x=1",
+                      "https://\(F.tileHost)/other/satellite/{snapshot}/{z}/{x}/{y}.png"] {
+            let decoded = try DreadcastRadarManifest.decode(manifest(other), now: Date())
+            #expect(decoded.satellite != nil && decoded.satellite?.tileURL == nil)
+        }
+        #expect(DreadcastRadarManifest.Satellite.rowHasData(z: 6, y: 32))
+        #expect(!DreadcastRadarManifest.Satellite.rowHasData(z: 6, y: 0))
+        #expect(!DreadcastRadarManifest.Satellite.rowHasData(z: 6, y: 63))
+
+        defer { StubProvider.lock.withLock { StubProvider.tileBody = nil; StubProvider.binaries = [:] } }
+        let viewport = RadarViewport(center: F.tokyo.coordinate, rangeMiles: 35, width: 40, height: 30)
+        let ctx = Self.radarContext(try await Self.home(location: "35.68,139.69"))
+        Self.serveRadar(manifest(cdn), tile: F.satelliteTile(dbz: 35))
+        let loop = try await ctx.radarLoop(for: F.tokyo, viewport: viewport, frames: 2)
+        #expect(loop.fields.allSatisfy { $0.value(x: 20, y: 15) == 35 })
+        #expect(Self.satelliteRequests.isEmpty)
+        #expect(StubProvider.seen.contains { $0.url?.host == F.tileHost && $0.url?.path.hasPrefix("/mrms/satellite/") == true })
+
+        let fallback = Self.radarContext(try await Self.home(location: "35.68,139.69"))
+        Self.serveRadar(manifest(cdn), tile: nil)
+        StubProvider.lock.withLock { StubProvider.routes[F.tileHost] = (403, "") }
+        Self.serveSatellite(F.satelliteTile(dbz: 35))
+        let recovered = try await fallback.radarLoop(for: F.tokyo, viewport: viewport, frames: 2)
+        #expect(recovered.fields.allSatisfy { $0.value(x: 20, y: 15) == 35 })
+        #expect(!Self.satelliteRequests.isEmpty)
+    }
+
+
     /// the loop is the satellite blends too.
     @Test func satelliteLoopsWhereNoRadarReachesTheView() async throws {
         typealias F = RadarAPIFixture

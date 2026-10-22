@@ -91,6 +91,23 @@ extension CommandTests {
         #expect(!FileManager.default.fileExists(atPath: Self.tokenFile(env).path))
     }
 
+    @Test func aNetworkOutOfTokensStillGetsTheWeather() async throws {
+        let env = try await Self.tokenHome()
+        var routes = Self.online
+        routes[Self.installs] = (429, #"{"error":{"code":"too_many_installs","message":"x"}}"#)
+
+        let first = try await Self.run(["now", "--plain"], environment: env, routes: routes)
+        #expect(first.code == .ok)
+        #expect(first.out.contains("71°F"))
+        #expect(StubProvider.seen.filter { $0.url?.path == "/v1/installs" }.count == 1)
+        #expect(StubProvider.seen.contains { $0.url?.path.hasPrefix("/v1/weather") == true })
+
+        // The refused mint holds back only the next mint, not the API.
+        _ = try await Self.run(["now", "--plain"], environment: env, routes: routes, at: "2026-10-05T21:30:00Z")
+        #expect(!StubProvider.seen.contains { $0.url?.path == "/v1/installs" })
+        #expect(StubProvider.seen.contains { $0.url?.path.hasPrefix("/v1/weather") == true })
+    }
+
     @Test func turningTheInstallTokenOffDeletesIt() async throws {
         let env = try await Self.tokenHome()
         InstallToken.update(Self.tokenFile(env)) { $0["https://api.dreadcast.app"] = Self.issued }
