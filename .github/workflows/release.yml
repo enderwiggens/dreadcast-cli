@@ -54,7 +54,7 @@ jobs:
         if: env.MACOS_CERTIFICATE != '' && env.NOTARY_KEY != ''
         run: scripts/notarize.sh dist/dread-macos-universal.zip dist/dread
       - name: Upload
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           files: |
             dist/*.zip
@@ -77,7 +77,7 @@ jobs:
       - name: Smoke test
         run: scripts/smoke-test.sh "$(swift build -c release --swift-sdk x86_64-swift-linux-musl --show-bin-path)/dread"
       - name: Upload
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           files: |
             dist/*.tar.gz
